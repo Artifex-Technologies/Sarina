@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sarina"
+version = "0.1.0"
+description = "Legacy Python modules of Sarina (the agent itself is the Go binary in go/; ML/voice helper is python/sarina_helpers)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Sarina Contributors" }
+]
+keywords = [
+  "agent",
+  "cli",
+  "coding-agent",
+  "local-model",
+  "python",
+  "qwen",
+  "vllm"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Build Tools",
+]
+dependencies = []
+
+[project.optional-dependencies]
+escalation = ["psutil>=5.9"]
+test = ["pytest>=8.0"]
+# Local embeddings (sarina.ml): capture analysis, memory-search. CPU-only,
+# no network needed at inference time -- both packages together are under
+# 30MB on Arch (python-onnxruntime-cpu extra/, python-tokenizers blackarch/),
+# vs. 1GB+ for python-tensorflow. See docs/ECOSYSTEM.md for why TensorFlow
+# itself was rejected for this.
+ml = ["onnxruntime>=1.17", "tokenizers>=0.15"]
+# Local speech I/O (sarina.voice): faster-whisper (STT, CTranslate2 backend)
+# and piper-tts (TTS, onnxruntime backend). Both run fully offline once
+# their model files are staged locally -- no network call at inference
+# time. sarina.voice.audio_io itself has no Python dependency: it shells
+# out to arecord/aplay (alsa-utils), the same subprocess-over-library
+# precedent as sarina/chymaera/firmware.py (git) and
+# sarina/system_resources.py (nvidia-smi).
+voice = ["faster-whisper>=1.0", "piper-tts>=1.2"]
+
+[project.urls]
+Homepage = "https://github.com/ChymaeraLabs/Sarina"
+Repository = "https://github.com/ChymaeraLabs/Sarina"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sarina*"]

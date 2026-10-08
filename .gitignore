@@ -1,0 +1,57 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+archive/
+.omx/
+.clawd-agents/
+
+# Local agent/runtime artifacts
+.claude/
+.claude.json
+.port_sessions/
+
+# Environment files
+.env
+.env.*
+
+# Local benchmark outputs
+benchmark_artifacts/
+jobs/
+output_terminal/
+tb2*.json
+humaneval_results.json
+
+
+test_cases
+e-commerce
+benchmarks/data/*.jsonl
+benchmarks/data/manifest.json
+claude-code-sourcemap-main
+
+# Voice cloning: reference recordings, generated corpora, checkpoints, and
+# the produced voice model are all personal biometric-like data -- never
+# committed by default. See tools/voice_clone/README.md.
+tools/voice_clone/samples/
+tools/voice_clone/corpus/
+tools/voice_clone/corpus_real/
+tools/voice_clone/checkpoints/
+tools/voice_clone/stock_voice/
+tools/voice_clone/OpenVoice/
+tools/voice_clone/cache/
+tools/voice_clone/cache_clean/
+tools/voice_clone/logs/
+tools/voice_clone/exported/
+tools/voice_clone/processed/
+tools/voice_clone/scratch/
+tools/voice_clone/test_audio/
+tools/voice_clone/*.log
+tools/voice_clone/*.onnx
+tools/voice_clone/*.onnx.json
