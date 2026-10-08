@@ -1,7 +1,7 @@
 # Provenance and licensing status
 
 **Status (updated 2026-10-06): the derived code is gone from the working tree and
-the owner chose MIT for the current tree (see `LICENSE`); the git history is still
+the owner chose MPL 2.0 for the current tree (see `LICENSE`); the git history is still
 unresolved.** Written 2026-10-05; the numbers
 below describe the tree *before* the clean-room rewrite.
 
@@ -13,7 +13,7 @@ overlap in `go/` with upstream and with the deleted files, boilerplate only (see
 upstream requires its copyright notice to stay with substantial copies of that
 code, so publishing this repository's history would redistribute it. If the
 project is ever made public, publish a fresh history (a new repository from the
-current tree) rather than this one. Until then keep it private. The MIT licence
+current tree) rather than this one. Until then keep it private. The MPL 2.0 licence
 covers the clean-room current tree only; it does not cover, and cannot clean up,
 the old code that remains in history.
 
@@ -70,7 +70,7 @@ launch, Limbo client), `sarina/desktop/`, `sarina/voice/`, `sarina/ml/`,
 
 ## What follows
 
-- The original layer could be MIT-licensed on its own. The engine cannot be, as it
+- The original layer could be licensed on its own on its own. The engine cannot be, as it
   stands, because it is not this project's to license.
 - Options, not decided: ask the HarnessLab author to add a license (an MIT grant would
   also settle redistribution); or replace the copied engine with a clean

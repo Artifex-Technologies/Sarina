@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Legacy Python modules of Sarina (the agent itself is the Go binary in go/; ML/voice helper is python/sarina_helpers)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "MPL-2.0" }
 authors = [
   { name = "Sarina Contributors" }
 ]
@@ -54,8 +54,8 @@ ml = ["onnxruntime>=1.17", "tokenizers>=0.15"]
 voice = ["faster-whisper>=1.0", "piper-tts>=1.2"]
 
 [project.urls]
-Homepage = "https://github.com/ChymaeraLabs/Sarina"
-Repository = "https://github.com/ChymaeraLabs/Sarina"
+Homepage = "https://github.com/Artifex-Technologies/Sarina"
+Repository = "https://github.com/Artifex-Technologies/Sarina"
 
 [tool.setuptools]
 include-package-data = true

@@ -1,0 +1,14 @@
+# This is on top of OpenVoice's own install (see README.md) -- OpenVoice is
+# installed from a git clone via its own `pip install -e .`, not from PyPI,
+# and that already pulls in everything se_extractor/ToneColorConverter need
+# (torch, librosa, numpy, faster-whisper, ...) via its own setup.py. Do not
+# try to hand-pick a subset of OpenVoice's own dependencies here -- its
+# internal modules import each other in ways not obvious from the outside,
+# and getting that wrong just means a confusing ImportError later.
+#
+# piper-tts[train] is the one thing OpenVoice's install doesn't bring:
+# PyTorch Lightning-based fine-tuning for Piper voices. Pulls in its own
+# torch as well; if pip resolves a different torch version than OpenVoice's
+# install wanted, prefer whichever supports your GPU and reinstall the other
+# package after -- both only need torch's public API, not a specific build.
+piper-tts[train]

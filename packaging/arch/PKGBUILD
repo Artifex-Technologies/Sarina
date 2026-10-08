@@ -1,0 +1,65 @@
+# Maintainer: Sarina Contributors
+#
+# Source of truth for the Arch/AUR package. See packaging/arch/README.md
+# for how to build/install locally and how to publish this to the AUR.
+#
+# Sarina's core is a single static Go binary (go/cmd/sarina). It answers to
+# three names: `sarina`, `sarina-gui` and `sarina-service` (the last two are
+# symlinks; the binary picks its command from the name it was started as).
+# The optional ML/voice helper is a small separate Python package
+# (python/sarina_helpers) installed alongside.
+#
+# NOTE: pkgver/source/sha256sums below are placeholders until a real
+# tagged GitHub release exists — fill them in before publishing.
+
+pkgname=sarina
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Local-model security agent for Chymaera Linux (Go core, optional Python ML/voice helper)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Artifex-Technologies/Sarina"
+license=('MPL2')
+depends=('glibc')
+optdepends=(
+  'python: required for the optional ML/voice helper (sarina-helpers)'
+  'python-onnxruntime: semantic search and desktop-audit classification (helper, `ml` extra)'
+  'alsa-utils: arecord/aplay, required by `sarina voice-chat` for audio I/O'
+  'python-faster-whisper: speech-to-text for `sarina voice-chat` (AUR, not yet packaged)'
+  'piper-tts: text-to-speech for `sarina voice-chat` (AUR, not yet packaged)'
+  'claude-code: hand off tasks to the real Claude Code CLI when local resources are insufficient'
+)
+makedepends=('go' 'python-build' 'python-installer' 'python-wheel' 'python-setuptools')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Artifex-Technologies/Sarina/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "Sarina-$pkgver/go"
+  export CGO_ENABLED=0 GOFLAGS="-trimpath -mod=readonly -modcacherw"
+  go build -ldflags "-s -w" -o sarina ./cmd/sarina
+
+  cd ../python/sarina_helpers
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  cd "Sarina-$pkgver"
+
+  install -Dm755 go/sarina "$pkgdir/usr/bin/sarina"
+  ln -s sarina "$pkgdir/usr/bin/sarina-gui"
+  ln -s sarina "$pkgdir/usr/bin/sarina-service"
+
+  python -m installer --destdir="$pkgdir" python/sarina_helpers/dist/*.whl
+
+  install -Dm644 packaging/arch/sarina-service.service \
+    "$pkgdir/usr/lib/systemd/system/sarina-service.service"
+  install -Dm644 packaging/arch/sarina.sysusers \
+    "$pkgdir/usr/lib/sysusers.d/sarina.conf"
+  install -Dm644 packaging/arch/service.env.example \
+    "$pkgdir/etc/sarina/service.env.example"
+  install -Dm644 README.md \
+    "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 LICENSE \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 packaging/skills/ecosystem-troubleshoot/SKILL.md \
+    "$pkgdir/usr/share/sarina/skills/ecosystem-troubleshoot/SKILL.md"
+}

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="sarina-token" content="__SARINA_TOKEN__">
+<title>Sarina console</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app" class="app">
+  <aside id="sidebar" class="sidebar" aria-label="Sessions">
+    <div class="side-head">
+      <button id="new-chat" class="btn primary" type="button">New chat</button>
+      <button id="close-side" class="btn icon only-narrow" type="button" aria-label="Close sessions">&times;</button>
+    </div>
+    <label class="sr-only" for="session-search">Search sessions</label>
+    <input id="session-search" class="field" type="search" placeholder="Search sessions" autocomplete="off">
+    <ul id="session-list" class="session-list" aria-live="polite"></ul>
+    <p id="session-empty" class="muted small hidden">No saved sessions yet.</p>
+  </aside>
+  <div id="scrim" class="scrim hidden"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button id="open-side" class="btn icon only-narrow" type="button" aria-label="Show sessions">&#9776;</button>
+      <h1 class="brand">Sarina</h1>
+      <span id="run-pill" class="pill" role="status" aria-live="polite">idle</span>
+      <span id="perm-pill" class="pill perm" title="What the agent is allowed to do">read-only</span>
+      <span id="conn-pill" class="pill conn" title="Model backend connection">backend ?</span>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" class="tab" data-tab="chat" aria-selected="true">Chat</button>
+      <button role="tab" class="tab" data-tab="plan" aria-selected="false">Plan</button>
+      <button role="tab" class="tab" data-tab="memory" aria-selected="false">Memory</button>
+      <button role="tab" class="tab" data-tab="history" aria-selected="false">History</button>
+      <button role="tab" class="tab" data-tab="tiers" aria-selected="false">Tiers</button>
+      <button role="tab" class="tab" data-tab="settings" aria-selected="false">Settings</button>
+    </nav>
+
+    <section id="view-chat" class="view" data-view="chat">
+      <div id="stream" class="stream" aria-live="polite">
+        <div id="welcome" class="welcome">
+          <h2>What are we working on?</h2>
+          <p class="muted">Ask the agent about the workspace shown below. Anything that changes files or runs commands waits for your approval.</p>
+        </div>
+      </div>
+      <div id="approvals" class="approvals" aria-live="assertive"></div>
+      <form id="composer" class="composer" autocomplete="off">
+        <div id="chips" class="chips"></div>
+        <div class="composer-row">
+          <label class="sr-only" for="prompt">Message</label>
+          <textarea id="prompt" class="field prompt" rows="1" placeholder="Message Sarina (Enter sends)" enterkeyhint="send"></textarea>
+          <button id="slash-btn" class="btn icon" type="button" aria-label="Slash commands" title="Slash commands">/</button>
+          <button id="send" class="btn primary" type="submit">Send</button>
+          <button id="stop" class="btn danger hidden" type="button">Stop</button>
+        </div>
+        <ul id="slash-menu" class="slash-menu hidden" role="listbox" aria-label="Slash commands"></ul>
+      </form>
+      <footer class="statusbar" id="statusbar">
+        <span id="sb-cwd" class="trunc"></span>
+        <span id="sb-model" class="trunc"></span>
+        <span id="sb-usage"></span>
+      </footer>
+    </section>
+
+    <section id="view-plan" class="view hidden" data-view="plan">
+      <div class="panel">
+        <div class="row"><h2>Plan</h2><button class="btn small" type="button" data-refresh="plan">Refresh</button></div>
+        <div id="plan-box"></div>
+        <div class="row"><h2>Tasks</h2></div>
+        <div id="tasks-box"></div>
+      </div>
+    </section>
+
+    <section id="view-memory" class="view hidden" data-view="memory">
+      <div class="panel">
+        <div class="row"><h2>Review queue</h2><button class="btn small" type="button" data-refresh="memory">Refresh</button></div>
+        <p class="muted small">Memory the agent proposed to keep. Nothing is saved until you approve it.</p>
+        <div id="review-box"></div>
+        <h2>Curated memory</h2>
+        <div id="memory-box"></div>
+        <h2>Instruction files</h2>
+        <p class="muted small">CLAUDE.md-style files the agent reads at the start of a session.</p>
+        <div id="instr-list" class="chiplist"></div>
+        <div id="instr-editor" class="hidden">
+          <p id="instr-path" class="mono small"></p>
+          <label class="sr-only" for="instr-text">File contents</label>
+          <textarea id="instr-text" class="field mono" rows="12"></textarea>
+          <div class="row">
+            <button id="instr-save" class="btn primary" type="button">Save</button>
+            <button id="instr-delete" class="btn danger" type="button">Delete</button>
+            <span id="instr-msg" class="muted small"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-history" class="view hidden" data-view="history">
+      <div class="panel">
+        <div class="row"><h2>Files and commands the agent touched</h2><button class="btn small" type="button" data-refresh="history">Refresh</button></div>
+        <div id="history-box"></div>
+      </div>
+    </section>
+
+    <section id="view-tiers" class="view hidden" data-view="tiers">
+      <div class="panel">
+        <div class="row"><h2>Compute tiers</h2><button class="btn small" type="button" data-refresh="tiers">Refresh</button></div>
+        <div id="tiers-box"></div>
+      </div>
+    </section>
+
+    <section id="view-settings" class="view hidden" data-view="settings">
+      <form id="settings-form" class="panel" autocomplete="off">
+        <h2>Connection</h2>
+        <div class="grid">
+          <label>Model<input class="field" name="model" type="text"></label>
+          <label>Base URL<input class="field" name="base_url" type="text"></label>
+          <label>API key<input class="field" name="api_key" type="password" placeholder="(unchanged)" autocomplete="new-password"></label>
+          <label>Workspace directory<input class="field" name="cwd" type="text"></label>
+        </div>
+        <h2>Permissions</h2>
+        <p class="muted small">Both start off. Turning one on asks you to confirm, and the current mode is always shown at the top.</p>
+        <div class="grid">
+          <label class="check"><input type="checkbox" name="allow_write"> Allow the agent to change files</label>
+          <label class="check"><input type="checkbox" name="allow_shell"> Allow the agent to run shell commands</label>
+          <label>Per-action approval
+            <select class="field" name="approval_mode">
+              <option value="ask">Ask me before each change or command</option>
+              <option value="auto">Run permitted actions without asking</option>
+            </select>
+          </label>
+        </div>
+        <h2>Run</h2>
+        <div class="grid">
+          <label>Max turns<input class="field" name="max_turns" type="number" min="1" step="1"></label>
+          <label>Temperature<input class="field" name="temperature" type="number" min="0" step="0.1"></label>
+          <label>Timeout per model call (s)<input class="field" name="timeout_seconds" type="number" min="1" step="1"></label>
+          <label class="check"><input type="checkbox" name="stream_model_responses"> Stream the reply as it is written</label>
+        </div>
+        <h2>Budgets</h2>
+        <p class="muted small">Leave blank for no limit.</p>
+        <div class="grid">
+          <label>Total tokens<input class="field" name="max_total_tokens" type="number" min="1" step="1"></label>
+          <label>Input tokens<input class="field" name="max_input_tokens" type="number" min="1" step="1"></label>
+          <label>Output tokens<input class="field" name="max_output_tokens" type="number" min="1" step="1"></label>
+          <label>Tool calls<input class="field" name="max_tool_calls" type="number" min="1" step="1"></label>
+          <label>Model calls<input class="field" name="max_model_calls" type="number" min="1" step="1"></label>
+          <label>Session turns<input class="field" name="max_session_turns" type="number" min="1" step="1"></label>
+          <label>Cost (USD)<input class="field" name="max_total_cost_usd" type="number" min="0" step="0.01"></label>
+        </div>
+        <details class="more">
+          <summary>More</summary>
+          <div class="grid">
+            <label>Reasoning tokens<input class="field" name="max_reasoning_tokens" type="number" min="1" step="1"></label>
+            <label>Delegated tasks<input class="field" name="max_delegated_tasks" type="number" min="1" step="1"></label>
+            <label>Snip history above (tokens)<input class="field" name="auto_snip_threshold_tokens" type="number" min="1" step="1"></label>
+            <label>Compact history above (tokens)<input class="field" name="auto_compact_threshold_tokens" type="number" min="1" step="1"></label>
+            <label>Messages kept when compacting<input class="field" name="compact_preserve_messages" type="number" min="0" step="1"></label>
+            <label class="check"><input type="checkbox" name="disable_claude_md_discovery"> Do not read instruction files</label>
+          </div>
+          <label>Extra directories (one per line)<textarea class="field mono" name="additional_working_directories" rows="3"></textarea></label>
+          <label>System prompt (replaces the default)<textarea class="field" name="system_prompt" rows="3"></textarea></label>
+          <label>Added to the system prompt<textarea class="field" name="append_system_prompt" rows="3"></textarea></label>
+          <label>Override system prompt (used alone)<textarea class="field" name="override_system_prompt" rows="3"></textarea></label>
+          <label>Response schema (JSON)<textarea class="field mono" name="response_schema" rows="5"></textarea></label>
+          <div class="grid">
+            <label>Schema name<input class="field" name="response_schema_name" type="text"></label>
+            <label class="check"><input type="checkbox" name="response_schema_strict"> Strict schema</label>
+          </div>
+        </details>
+        <div class="row">
+          <button class="btn primary" type="submit">Save settings</button>
+          <span id="settings-msg" class="small" role="status"></span>
+        </div>
+        <p id="settings-busy" class="muted small hidden">A run is in progress. Saved changes apply to the next run.</p>
+      </form>
+    </section>
+  </div>
+</div>
+<div id="toast" class="toast hidden" role="status"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

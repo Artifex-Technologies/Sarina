@@ -55,3 +55,5 @@ tools/voice_clone/test_audio/
 tools/voice_clone/*.log
 tools/voice_clone/*.onnx
 tools/voice_clone/*.onnx.json
+# Local progress notes
+progress.md

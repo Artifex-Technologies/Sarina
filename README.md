@@ -1,6 +1,6 @@
 # Sarina
 
-**S**ystemic **A**rtificial **R**easoning & **I**ntelligent **N**etworked **A**ssistant
+***S***ystemic ***A***rtificial ***R***easoning & ***I***ntelligent ***N***etworked ***A***ssistant
 
 A local-model security agent for the Chymaera ecosystem. It talks to any
 OpenAI-compatible model server (Ollama, vLLM, LiteLLM, llama.cpp), calls tools,
@@ -11,7 +11,7 @@ local model is not enough. The core is one static Go binary.
 
 Sarina began as a fork of [ClawCode](https://github.com/HarnessLab/claw-code-agent)
 (itself a port inspired by the Claude Code npm CLI). ClawCode has no license, so
-**this repository is private**; the current tree is licensed MIT (see
+**this repository is private**; the current tree is licensed MPL 2.0 (see
 [LICENSE](LICENSE)). The core has been rewritten from
 scratch in Go (`go/`) from behaviour specs (`docs/spec/`), without reference to
 the old code, and the derived Python has been deleted from the tree (it remains
@@ -156,7 +156,7 @@ systemd unit, sysusers and env template. See its README.
 ## Repository map
 
 ```text
-go/               the agent (module github.com/ChymaeraLabs/Sarina/go)
+go/               the agent (module github.com/Artifex-Technologies/Sarina/go)
 python/           optional ML/voice helper (sarina_helpers)
 docs/spec/        behaviour specs the Go core was built from
 docs/ECOSYSTEM.md cross-repo contract
@@ -167,7 +167,7 @@ sarina/, tests/   legacy original Python modules (reference; superseded by go/ a
 
 ## License
 
-MIT. See [LICENSE](LICENSE). The licence covers the current tree, which is a
+MPL 2.0. See [LICENSE](LICENSE). The licence covers the current tree, which is a
 clean-room rewrite. The git history still contains the old derived code, so if
 this project is ever made public, publish it from a fresh repository (see
 [NOTICE.md](NOTICE.md)).

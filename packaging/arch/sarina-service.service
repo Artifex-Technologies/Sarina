@@ -1,0 +1,26 @@
+[Unit]
+Description=Sarina integration service
+After=network.target
+
+[Service]
+Type=simple
+User=sarina
+Group=sarina
+StateDirectory=sarina
+WorkingDirectory=/var/lib/sarina
+EnvironmentFile=-/etc/sarina/service.env
+ExecStart=/usr/bin/sarina-service \
+  --host 127.0.0.1 \
+  --port 8899 \
+  --session-dir /var/lib/sarina/sessions \
+  --scratchpad-root /var/lib/sarina/scratchpad
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
