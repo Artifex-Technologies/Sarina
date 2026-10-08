@@ -9,10 +9,10 @@ the shape, not yet built), **proposed** (awaiting the owning repo's answer),
 
 | Repo | Role | Owns |
 | --- | --- | --- |
-| [`Chymaera_Linux`](https://github.com/Artifex-Technologies/Chymaera_Linux) | Arch-based security distro; the host | ISO profile, package set, the packaging contract |
-| [`Chymaera_Zero_Firmware`](https://github.com/Artifex-Technologies/Chymaera_Zero_Firmware) | Flipper Zero firmware fork | RPC wire format (`assets/protobuf/`), the BLE budget |
-| [`Chymaera_Zero_App`](https://github.com/Artifex-Technologies/Chymaera_Zero_App) | qFlipper fork; desktop operator console | **The Sarina control API**, datastore, exporters |
-| [`Chymaera_Sentry`](https://github.com/Artifex-Technologies/Chymaera_Sentry) | Go security agent watching Sarina | Its own detection engine; reads Sarina's session files, read-only |
+| [`Chymaera_Linux`](https://github.com/Artifex-Technologies/Chymaera_OS) | Arch-based security distro; the host | ISO profile, package set, the packaging contract |
+| [`Chymaera_Zero_Firmware`](https://github.com/Artifex-Technologies/Argus_Firmware) | Flipper Zero firmware fork | RPC wire format (`assets/protobuf/`), the BLE budget |
+| [`Chymaera_Zero_App`](https://github.com/Artifex-Technologies/Argus_App) | qFlipper fork; desktop operator console | **The Sarina control API**, datastore, exporters |
+| [`Chymaera_Sentry`](https://github.com/Artifex-Technologies/Heimdall) | Go security agent watching Sarina | Its own detection engine; reads Sarina's session files, read-only |
 | `Limbo` | Sandbox that runs guest VMs (Linux/Windows) as seamless windows; quarantine and validation runs | The agent socket Sarina uses (section 8) |
 | `Sarina` (this repo) | Local-model agent shipped in the distro | The client/advisory surfaces below |
 
@@ -289,7 +289,7 @@ as a natural thing for `chymaera-merge-report` to notice, not yet implemented.
 ## 3. Sarina ↔ Chymaera_Zero_App — **live (client implemented)**
 
 **The App owns this contract.** Its spec is
-[`docs/SARINA_API.md`](https://github.com/Artifex-Technologies/Chymaera_Zero_App/blob/main/docs/SARINA_API.md),
+[`docs/SARINA_API.md`](https://github.com/Artifex-Technologies/Argus_App/blob/main/docs/SARINA_API.md),
 implemented in `backend/chymaera/sarina/sarinaserver.cpp`. Sarina implements the
 client half in `sarina/chymaera/console.py` and does not extend the protocol.
 
@@ -413,7 +413,7 @@ not a claim that the shape will never move. A breaking change to the
 `internal/governance`/`internal/api/review.go`, together, in one commit.
 
 Full detail in both repos' 2026-09-26 Coordination Log entries — see
-[`Chymaera_Sentry/CLAUDE.md`](https://github.com/Artifex-Technologies/Chymaera_Sentry/blob/main/CLAUDE.md)
+[`Chymaera_Sentry/CLAUDE.md`](https://github.com/Artifex-Technologies/Heimdall/blob/main/CLAUDE.md)
 §5 for Sentry's side.
 
 ### 4c. Sentry asks Sarina for an advisory — **live, opt-in**

@@ -12,7 +12,7 @@ import (
 const healthy = `
 Chymaera Zero
 firmware_origin_fork : Chymaera
-firmware_origin_git  : https://github.com/Artifex-Technologies/Chymaera_Zero_Firmware.git
+firmware_origin_git  : https://github.com/Artifex-Technologies/Argus_Firmware.git
 firmware_version     : 1.4.3-CHY-0.1.0
 firmware_commit      : abc1234
 hardware_model       : Flipper Zero
@@ -39,7 +39,7 @@ func TestParseDeviceInfo(t *testing.T) {
 	if _, ok := f["Chymaera Zero"]; ok {
 		t.Fatal("banner parsed")
 	}
-	if f["firmware_origin_git"] != "https://github.com/Artifex-Technologies/Chymaera_Zero_Firmware.git" {
+	if f["firmware_origin_git"] != "https://github.com/Artifex-Technologies/Argus_Firmware.git" {
 		t.Fatalf("colon in value lost: %q", f["firmware_origin_git"])
 	}
 	if got := ParseDeviceInfo("a b: c\r\nkey: v\r\n: x"); len(got) != 1 || got["key"] != "v" {
@@ -119,7 +119,7 @@ func TestCommitChecks(t *testing.T) {
 
 func TestAsTextLayout(t *testing.T) {
 	want := "# Chymaera Zero device\n\nfirmware_origin_fork: Chymaera\nfirmware_version: 1.4.3-CHY-0.1.0\nfirmware_commit: abc1234\n" +
-		"firmware_origin_git: https://github.com/Artifex-Technologies/Chymaera_Zero_Firmware.git\nhardware_model: Flipper Zero\nenclave_valid: true\nradio_alive: true\n\nNo warnings.\n\n## Notes\n- tracks upstream release 1.4.3"
+		"firmware_origin_git: https://github.com/Artifex-Technologies/Argus_Firmware.git\nhardware_model: Flipper Zero\nenclave_valid: true\nradio_alive: true\n\nNo warnings.\n\n## Notes\n- tracks upstream release 1.4.3"
 	if got := CheckDeviceInfo(healthyFields(), "").AsText(); got != want {
 		t.Fatalf("got:\n%s", got)
 	}

@@ -9,7 +9,7 @@ from sarina.chymaera.firmware import REBASE_POLICY_BUDGET, classify_path
 HEALTHY_DEVICE_INFO = """
 Chymaera Zero
 firmware_origin_fork : Chymaera
-firmware_origin_git  : https://github.com/Artifex-Technologies/Chymaera_Zero_Firmware.git
+firmware_origin_git  : https://github.com/Artifex-Technologies/Argus_Firmware.git
 firmware_version     : 1.4.3-CHY-0.1.0
 firmware_commit      : abc1234
 hardware_model       : Flipper Zero
@@ -32,7 +32,7 @@ class ParseDeviceInfoTest(unittest.TestCase):
         fields = parse_device_info(HEALTHY_DEVICE_INFO)
         self.assertEqual(
             fields['firmware_origin_git'],
-            'https://github.com/Artifex-Technologies/Chymaera_Zero_Firmware.git',
+            'https://github.com/Artifex-Technologies/Argus_Firmware.git',
         )
 
 
