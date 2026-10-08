@@ -102,11 +102,9 @@ Follow a neighbouring command exactly.
   `sarina/` outside `gui/` and `service/` need a real justification.
 - **Test what you add.** The suite is large and fast; keep it that way, and keep
   it offline — no test may need a network or a model backend.
-- **Licence: MPL 2.0 for the current tree (see `LICENSE`); the git history is the open
-  issue, read `NOTICE.md`.** The old history still contains code from an unlicensed
-  upstream (HarnessLab/claw-code-agent). Do not make this repository public as it
-  stands (publish from a fresh repository), and do not copy upstream code; new code
-  is written from the design.
+- **Licence: MPL 2.0 for the current tree (see `LICENSE`); read `NOTICE.md`.** Do not
+  copy code from the unlicensed upstream (HarnessLab/claw-code-agent); new code is
+  written from the design.
 - **Never commit secrets.** No tokens, keys, or engagement/capture data.
 - **Hardware writes need a human.** See §5 and `docs/ECOSYSTEM.md` §2.
 
@@ -114,8 +112,7 @@ Follow a neighbouring command exactly.
 
 The old agent core was derived from ClawCode, which has no license. It has been
 replaced by a clean-room Go rewrite and the current tree is MPL 2.0-licensed (chosen
-2026-10-06), but the git history still holds the old code, so the repository stays
-private. See [`docs/PROVENANCE.md`](docs/PROVENANCE.md) for the audit.
+2026-10-06). See [`docs/PROVENANCE.md`](docs/PROVENANCE.md) for the audit.
 
 - **Do not add features to a derived file** (>=25% shared in the table). Put new
   code in a new module, with at most a one-line hook into the derived file.
@@ -198,6 +195,15 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-10-08 — Old git history removed; "keep private" restrictions lifted
+- Owner removed the old history that contained the derived ClawCode code. The
+  "do not make public / publish from a fresh repository" notices were removed from
+  `README.md`, `CLAUDE.md`, `NOTICE.md`, `docs/PROVENANCE.md` and
+  `packaging/arch/README.md`. The audit numbers in those files are kept as a record.
+  Re-run the provenance audit before any public release. Earlier log entries below
+  that say the repo is private describe the situation at the time.
+— Signed: Sarina / Claude Sonnet 5.5
 
 ### 2026-10-06 (2) — MIT chosen for the current tree
 - Owner decision: MIT, matching Limbo and Sentry (`LICENSE`, `license` in both

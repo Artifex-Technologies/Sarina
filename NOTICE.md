@@ -1,21 +1,18 @@
 # Provenance and licensing status
 
-**Status (updated 2026-10-06): the derived code is gone from the working tree and
-the owner chose MPL 2.0 for the current tree (see `LICENSE`); the git history is still
-unresolved.** Written 2026-10-05; the numbers
-below describe the tree *before* the clean-room rewrite.
+**Status (updated 2026-10-08): resolved. The derived code is gone from the working
+tree, the old git history has been removed by the owner, and the current tree is
+licensed MPL 2.0 (see `LICENSE`).** Written 2026-10-05; the numbers
+below describe the tree *before* the clean-room rewrite and are kept as a record.
 
 What changed since: the agent core was rewritten from scratch in Go (`go/`) from
 behaviour specs (`docs/spec/`) by implementers who never read the old code, the
-derived Python was deleted (9508cc0, b642b1c), and a re-audit found 0.01% 10-word
+derived Python was deleted, a re-audit found 0.01% 10-word
 overlap in `go/` with upstream and with the deleted files, boilerplate only (see
-`docs/PROVENANCE.md`). What is **not** settled: git history still contains the derived code, and ClawCode's MIT-licensed
-upstream requires its copyright notice to stay with substantial copies of that
-code, so publishing this repository's history would redistribute it. If the
-project is ever made public, publish a fresh history (a new repository from the
-current tree) rather than this one. Until then keep it private. The MPL 2.0 licence
-covers the clean-room current tree only; it does not cover, and cannot clean up,
-the old code that remains in history.
+`docs/PROVENANCE.md`), and the history that contained the derived code has been
+removed, so the repository no longer carries it. The earlier restrictions on
+making the repository public, and on including it in a public ISO, no longer apply
+on provenance grounds.
 
 Original text of this notice (as of 2026-10-05) follows.
 
@@ -78,8 +75,7 @@ launch, Limbo client), `sarina/desktop/`, `sarina/voice/`, `sarina/ml/`,
   used; or keep the repository private and undistributed.
 - Not legal advice. Get it confirmed for the owner's jurisdiction before relying on any
   of this.
-- Until resolved: do not add a `LICENSE` file or a `license =` field, do not make the
-  repository public, and do not include it in a publicly distributed ISO.
+- (Superseded: a `LICENSE` was added and the history removed; see the status above.)
 - Do not copy more code from the upstream projects. New code here should be written
   from the design, not from their source.
 

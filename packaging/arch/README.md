@@ -44,9 +44,8 @@ sudo systemctl enable --now sarina-service
 - `pkgver`/`source`/`sha256sums` in the PKGBUILD are placeholders — there's
   no tagged GitHub release yet. Fill these in (and regenerate the sha256sum)
   once a real `vX.Y.Z` tag exists.
-- `license=('MPL2')` — chosen 2026-10-06 for the clean-room tree. The git history
-  still contains the old derived code, so do not publish this repository's
-  history (see `NOTICE.md`); publish from a fresh repository.
+- `license=('MPL2')` — chosen 2026-10-06 for the clean-room tree. The old derived
+  code has been removed from git history (see `NOTICE.md`).
 - This PKGBUILD's Go build step (same flags, `CGO_ENABLED=0`) was run on
   Arch in WSL and produced a static binary whose `sarina-service` and
   `sarina-gui` symlinks dispatch correctly. The full `makepkg -si`,

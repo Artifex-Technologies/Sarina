@@ -10,14 +10,12 @@ local model is not enough. The core is one static Go binary.
 ## Status and licensing
 
 Sarina began as a fork of [ClawCode](https://github.com/HarnessLab/claw-code-agent)
-(itself a port inspired by the Claude Code npm CLI). ClawCode has no license, so
-**this repository is private**; the current tree is licensed MPL 2.0 (see
+(itself a port inspired by the Claude Code npm CLI). ClawCode has no license; the
+current tree is licensed MPL 2.0 (see
 [LICENSE](LICENSE)). The core has been rewritten from
 scratch in Go (`go/`) from behaviour specs (`docs/spec/`), without reference to
-the old code, and the derived Python has been deleted from the tree (it remains
-in git history, so this repository stays private); see
-[docs/PROVENANCE.md](docs/PROVENANCE.md) and [NOTICE.md](NOTICE.md) for the audit
-and what is still undecided. Credit
+the old code, and the derived Python has been deleted from the tree; see
+[docs/PROVENANCE.md](docs/PROVENANCE.md) and [NOTICE.md](NOTICE.md) for the audit. Credit
 to the ClawCode project and contributors for the original implementation this
 grew from. Sarina is not affiliated with or endorsed by Anthropic.
 
@@ -168,9 +166,7 @@ sarina/, tests/   legacy original Python modules (reference; superseded by go/ a
 ## License
 
 MPL 2.0. See [LICENSE](LICENSE). The licence covers the current tree, which is a
-clean-room rewrite. The git history still contains the old derived code, so if
-this project is ever made public, publish it from a fresh repository (see
-[NOTICE.md](NOTICE.md)).
+clean-room rewrite (see [NOTICE.md](NOTICE.md)).
 
 ## Disclaimer
 

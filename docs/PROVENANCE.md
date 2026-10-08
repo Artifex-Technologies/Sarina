@@ -3,9 +3,10 @@
 Sarina began as a fork of [ClawCode](https://github.com/HarnessLab/claw-code-agent),
 which has **no license** (all rights reserved by default). The derived code
 below has since been replaced by a clean-room rewrite, and the owner chose **MPL 2.0**
-for the current tree on 2026-10-06 (see `LICENSE`). The git history still contains
-the derived code, so this repository must not be made public as it stands. The ClawCode maintainers were contacted several times without a reply;
-silence is not permission.
+for the current tree on 2026-10-06 (see `LICENSE`). The old git history that
+contained the derived code has since been removed (2026-10-08). The ClawCode
+maintainers were contacted several times without a reply; silence is not
+permission, which is why the code was replaced rather than relicensed.
 
 ## Audit (2026-10-04)
 
@@ -38,9 +39,8 @@ re-made in whatever replaces the core.
 3. The planned replacement core is written in Go (matches Chymaera_Sentry and
    Limbo; single static binary for Chymaera_Linux). The ML and voice code stays
    Python as optional helper processes.
-4. Re-run the audit before any license is chosen or the repo is made public. Git
-   history from the first commit contains the derived code and must be dealt
-   with before a public release.
+4. Re-run the audit before any public release. (The git history that contained
+   the derived code has been removed.)
 
 ## Progress (2026-10-05)
 
@@ -87,9 +87,9 @@ Every match inspected is generic boilerplate: the HTML doctype header, the
 standard system-font stack, API-key prefix formats in the redaction patterns,
 Python import lines, a `glob`/`mtime` sort idiom, and a flag default from the
 owner's own voice-chat design. No copied logic, prompts or UI text was found.
-This is a textual check; it does not prove independence of design, and git
-history still contains the derived code until the repository history is dealt
-with before any public release. No license has been chosen.
+This is a textual check; it does not prove independence of design. The git
+history containing the derived code has since been removed, and MPL 2.0 was chosen
+(2026-10-06).
 
 ## Per-file table
 
