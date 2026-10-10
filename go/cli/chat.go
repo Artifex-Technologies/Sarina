@@ -552,6 +552,7 @@ func conversation(env *Env, a *agent.Agent, o *opts, stored *session.Session, fi
 	defer tools.StopAllBackground() // background processes do not outlive the session
 	defer o.closeMCP()              // nor do MCP servers
 	c := &chatIO{env: env}
+	a.SetConfirm(stdinConfirm(env))
 	if o.router != nil {
 		o.router.SetConfirm(stdinConfirm(env))
 	}
@@ -609,6 +610,7 @@ func conversation(env *Env, a *agent.Agent, o *opts, stored *session.Session, fi
 		}
 	}()
 	a.SetPlanDecider(func(plan string) agent.PlanDecision { return askPlanDecision(env, lines, plan) })
+	a.SetConfirm(linesConfirm(env, lines))
 	if o.router != nil {
 		o.router.SetConfirm(linesConfirm(env, lines))
 	}

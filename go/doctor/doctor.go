@@ -1,6 +1,6 @@
 // Package doctor is a strictly read-only checkup of a Sarina installation and
 // of the ecosystem pieces it talks to (model backend, sessions, compute tiers,
-// operator extension files, Limbo, Chymaera Sentry). It exists so a person, or
+// operator extension files, Limbo, Heimdall). It exists so a person, or
 // Sarina's own agent, can find out WHY something is broken from one report.
 //
 // Rules every check follows: nothing is modified, every network call has a
@@ -94,7 +94,7 @@ func Run(ctx context.Context, o Options) []Check {
 	r.tiers(ctx)
 	r.extensions()
 	r.limbo()
-	r.sentry(ctx)
+	r.heimdall(ctx)
 	r.ports()
 	return r.out
 }

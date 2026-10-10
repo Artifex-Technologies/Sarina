@@ -1,0 +1,24 @@
+{
+  "manifest": {
+    "name": "decompile",
+    "os": "linux",
+    "image": {
+      "path": "/var/lib/limbo/images/decompile.qcow2",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "cpus": 4,
+    "memory_mb": 8192,
+    "network": { "mode": "none" },
+    "exchange_dir": "/var/lib/limbo/samples",
+    "clipboard": "off",
+    "disposable": true,
+    "access": { "user": "analyst", "sudo": false },
+    "app": { "name": "decompile", "exec": "true" },
+    "provision": {
+      "ssh_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIREPLACEME decompile@host"
+    }
+  },
+  "ssh_identity": "/etc/limbo/keys/decompile",
+  "max_seconds": 900,
+  "max_output_bytes": 65536
+}

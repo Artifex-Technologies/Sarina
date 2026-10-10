@@ -1,5 +1,5 @@
 // Package session holds the message model, the secret redactor, and the
-// on-disk session file that Chymaera_Sentry reads.
+// on-disk session file that Heimdall reads.
 package session
 
 import (

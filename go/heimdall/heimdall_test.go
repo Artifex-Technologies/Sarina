@@ -1,4 +1,4 @@
-package sentry
+package heimdall
 
 import (
 	"encoding/json"
@@ -24,6 +24,7 @@ func fake(t *testing.T, status int, body string, seen *[]map[string]any) string 
 
 func TestUnconfiguredIsNil(t *testing.T) {
 	t.Setenv(EnvVar, "")
+	t.Setenv(LegacyEnvVar, "")
 	if Consult("x", "memory_proposal", "") != nil {
 		t.Fatal("want nil")
 	}
@@ -62,5 +63,17 @@ func TestMalformedAndServerErrorAreNil(t *testing.T) {
 		if Consult("x", "k", "") != nil {
 			t.Fatalf("%d %q should fail open", tc.status, tc.body)
 		}
+	}
+}
+
+func TestLegacyEnvVarStillWorksAndNewOneWins(t *testing.T) {
+	t.Setenv(EnvVar, "")
+	t.Setenv(LegacyEnvVar, fake(t, 200, `{"decision":"deny","reasons":["legacy"]}`, nil))
+	if v := Consult("x", "k", ""); v == nil || !v.Denied {
+		t.Fatalf("legacy variable not honoured: %+v", v)
+	}
+	t.Setenv(EnvVar, fake(t, 200, `{"decision":"allow"}`, nil))
+	if v := Consult("x", "k", ""); v == nil || v.Denied {
+		t.Fatalf("new variable should win over the legacy one: %+v", v)
 	}
 }

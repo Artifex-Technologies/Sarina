@@ -1,0 +1,4 @@
+# Scripts and the guest-side tools must keep LF line endings even on a Windows checkout.
+limbo-decompile text eol=lf
+*.sh text eol=lf
+*.java text eol=lf

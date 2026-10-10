@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"github.com/Artifex-Technologies/Sarina/go/agent"
@@ -20,6 +21,9 @@ const (
 
 func toolDefinitionSize(t *testing.T, perms config.Permissions) (int, int) {
 	t.Helper()
+	// The budget is for the default tool set; a developer's own council config
+	// would add the optional council_ask tool (see council.TestToolDefinitionIsSmall).
+	t.Setenv("SARINA_COUNCIL_FILE", filepath.Join(t.TempDir(), "none.json"))
 	dir := t.TempDir()
 	rt := config.DefaultRuntime(dir)
 	rt.Permissions = perms

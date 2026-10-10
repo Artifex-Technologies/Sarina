@@ -31,6 +31,12 @@ const (
 	// RuntimePlanActive is the Context.Runtimes key under which the agent
 	// installs a func() bool reporting whether plan mode is on.
 	RuntimePlanActive = "plan_mode_active"
+	// RuntimeOperatorConfirm is the Context.Runtimes key under which a front end
+	// puts a func(prompt string) bool that asks the operator one yes/no question
+	// per call. It is deliberately separate from Approver: an Approver can carry
+	// a "allow for this session" grant, and a tool that sends data off the
+	// machine must be asked about every time. Absent means no one can be asked.
+	RuntimeOperatorConfirm = "operator_confirm"
 )
 
 // ForMode returns the registry as the model should see it. In plan mode only

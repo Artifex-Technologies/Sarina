@@ -348,3 +348,13 @@ func looksLikeKey(s string) bool {
 	}
 	return false
 }
+
+// ParseAllowData parses an allow_data value ("all" or a class list) with def as
+// the default when it is absent; for other operator-owned configs (the council).
+func ParseAllowData(raw json.RawMessage, def AllowData) (AllowData, []string, error) {
+	return parseAllow(raw, def)
+}
+
+// LooksLikeKey reports whether s looks like a pasted key rather than the NAME of
+// an environment variable.
+func LooksLikeKey(s string) bool { return looksLikeKey(s) }

@@ -1,5 +1,5 @@
 // Package service is the integration service (`sarina service`, port 8899): a
-// small bearer-authenticated JSON API that external callers (Chymaera_Sentry,
+// small bearer-authenticated JSON API that external callers (Heimdall,
 // scripts) use to run agent turns in pooled sessions.
 //
 // The wire contract is fixed by docs/spec/05-gui-service.md section 2. The

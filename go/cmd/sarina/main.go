@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/Artifex-Technologies/Sarina/go/chymaera"       // adds the chymaera-* commands
 	_ "github.com/Artifex-Technologies/Sarina/go/chymaera/fleet" // adds the fleet-* commands (CLI only, never tools)
+	_ "github.com/Artifex-Technologies/Sarina/go/council"         // adds the council command (CLI only, never a tool)
 	"github.com/Artifex-Technologies/Sarina/go/cli"
 	_ "github.com/Artifex-Technologies/Sarina/go/desktop" // adds the desktop-audit command
 	_ "github.com/Artifex-Technologies/Sarina/go/doctor"  // adds the doctor command and the read-only sarina_doctor tool

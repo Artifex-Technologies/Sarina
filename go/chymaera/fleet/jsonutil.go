@@ -1,4 +1,4 @@
-// Package fleet is Sarina's side of the agent fleet (Chymaera_Linux contract
+// Package fleet is Sarina's side of the agent fleet (Chymaera_OS contract
 // item 7): fleet-usage writes Sarina's record for Omarchy's agents panel,
 // fleet-status reads the other agents' records (untrusted data), and
 // fleet-launch proposes launching another agent and runs it only after a human

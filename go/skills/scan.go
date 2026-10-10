@@ -9,7 +9,7 @@ type ScanResult = guard.Result
 // interface, so one implementation serves skills, session notes and memory.
 type Scanner = guard.Scanner
 
-// BasicScanner is the shared security gate (package guard) without the Sentry
+// BasicScanner is the shared security gate (package guard) without the Heimdall
 // call: invisible/bidirectional characters, credential shapes and
 // instruction-override phrases. Kept as a name so existing callers compile.
 type BasicScanner struct{}

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Capture shapes copied from a real Chymaera_Zero_App build.
+// Capture shapes copied from a real Argus_App build.
 func nfc(name, uid string) map[string]any {
 	return map[string]any{
 		"id": 1, "type": "nfc", "name": name, "size": 107,

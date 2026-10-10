@@ -1,4 +1,4 @@
-// Package analysis does statistical analysis of Chymaera_Zero_App captures.
+// Package analysis does statistical analysis of Argus_App captures.
 //
 // It works only with what the App already provides through capture.list: each
 // record's "meta" JSON field (see that repo's docs/SARINA_API.md). Sarina does

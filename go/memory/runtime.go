@@ -65,7 +65,7 @@ type Mutation struct {
 type Runtime struct {
 	AgentPath string
 	UserPath  string
-	// Scanner vets every write; nil means guard.Memory() (local checks, then Sentry).
+	// Scanner vets every write; nil means guard.Memory() (local checks, then Heimdall).
 	Scanner guard.Scanner
 }
 

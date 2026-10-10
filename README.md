@@ -58,7 +58,8 @@ those names (the Arch package installs them as symlinks), or run
 | `chat`, `resume` | run a prompt once, hold a conversation, or continue a saved session |
 | `gui` | web console on 127.0.0.1:8765 |
 | `service` | HTTP integration service on 127.0.0.1:8899 |
-| `doctor [--json]` | read-only checkup of the whole setup (model backend, sessions, tiers, config files, Limbo, Sentry); exit 1 on any FAIL; the model can call it as the `sarina_doctor` tool |
+| `doctor [--json]` | read-only checkup of the whole setup (model backend, sessions, tiers, config files, Limbo, Heimdall); exit 1 on any FAIL; the model can call it as the `sarina_doctor` tool |
+| `council QUESTION`, `council status [--probe]` | ask several models the same question and compare the answers; local members answer directly, online ones (Claude, Gemini, ChatGPT, ...) only after you confirm the exact text; also the `council_ask` tool when a council is configured; see `docs/ECOSYSTEM.md` section 9 |
 | `tiers status` | show compute tiers and whether each is reachable |
 | `skill list`, `skill run` | named reusable prompts |
 | `mcp list`, `agents list` | show configured MCP servers and subagent profiles |
@@ -89,7 +90,7 @@ those names (the Arch package installs them as symlinks), or run
 - **Troubleshooting is read-only first.** `sarina doctor` changes nothing and never prints keys or
   tokens. The packaged `ecosystem-troubleshoot` skill (installed in `/usr/share/sarina/skills`, a
   root-owned directory a workspace cannot shadow) walks the agent from a doctor finding to a plan the
-  operator approves; it cannot touch Sentry, Limbo or Sarina's own safety settings on its own.
+  operator approves; it cannot touch Heimdall, Limbo or Sarina's own safety settings on its own.
 - **Tool-less sessions.** `tool_allowlist: []` on the service creates a session
   with zero tools and reports `"tools": 0`; the model request carries no tools.
 
@@ -139,8 +140,8 @@ shell tools.
 
 ## Ecosystem
 
-Sarina is one of five repos: `Chymaera_Linux` (hosts it), `Chymaera_Zero_App`,
-`Chymaera_Zero_Firmware`, `Chymaera_Sentry` (watches it). The integration
+Sarina is one of five repos: `Chymaera_OS` (hosts it), `Argus_App`,
+`Argus_Firmware`, `Heimdall` (watches it). The integration
 contract, ports and rules are in [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) and
 [docs/spec/00-must-preserve.md](docs/spec/00-must-preserve.md). Hardware writes
 always need a human; `fleet-launch` is CLI-only and never a model tool.

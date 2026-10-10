@@ -1,4 +1,4 @@
-"""Semantic grouping of Chymaera_Zero_App captures (for ``chymaera-analyze --model-dir``).
+"""Semantic grouping of Argus_App captures (for ``chymaera-analyze --model-dir``).
 
 Works only on what ``capture.list`` provides: each record's ``name``, ``type``
 and its ``meta`` JSON string. Greedy single-link grouping: simple, deterministic.

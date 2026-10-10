@@ -21,7 +21,7 @@ type sessionScan struct {
 	parsed     int
 	unreadable []string // file names that cannot be parsed as a session
 	retired    []string // files that still carry retired tool names
-	badShape   []string // valid JSON, but not the shape Sentry reads
+	badShape   []string // valid JSON, but not the shape Heimdall reads
 	leaks      []string // files holding a non-empty api_key
 }
 
@@ -71,7 +71,7 @@ func scanSessions(dir string) *sessionScan {
 		if leaksKey(generic) {
 			s.leaks = append(s.leaks, e.Name())
 		}
-		if !sentryShape(generic) {
+		if !heimdallShape(generic) {
 			s.badShape = append(s.badShape, e.Name())
 		}
 		if _, err := session.Parse(raw); err != nil {
@@ -86,8 +86,8 @@ func scanSessions(dir string) *sessionScan {
 	return s
 }
 
-// sentryShape: messages is an array of objects, each with a string role.
-func sentryShape(m map[string]any) bool {
+// heimdallShape: messages is an array of objects, each with a string role.
+func heimdallShape(m map[string]any) bool {
 	msgs, ok := m["messages"].([]any)
 	if !ok {
 		return false
@@ -195,9 +195,9 @@ func (r *runner) sessions() {
 		r.add("session_contract", Fail, fmt.Sprintf("an api_key value is stored in %d session file(s): %s (value not shown)", len(s.leaks), nameList(s.leaks)),
 			"SECRET LEAK: rotate that key, delete or redact the named files, and report it; Sarina never writes the key, so something else did")
 	case len(s.badShape) > 0:
-		r.add("session_contract", Warn, fmt.Sprintf("%d session file(s) do not have the shape Chymaera Sentry reads (messages as objects with a role): %s", len(s.badShape), nameList(s.badShape)),
-			"Sentry reports these as agent_session_unknown_shape (Chymaera_Sentry docs/INTEGRATION-FAILURES.md); compare with docs/spec/01-agent-core.md section 4.2")
+		r.add("session_contract", Warn, fmt.Sprintf("%d session file(s) do not have the shape Heimdall reads (messages as objects with a role): %s", len(s.badShape), nameList(s.badShape)),
+			"Heimdall reports these as agent_session_unknown_shape (Heimdall docs/INTEGRATION-FAILURES.md); compare with docs/spec/01-agent-core.md section 4.2")
 	default:
-		r.add("session_contract", Pass, fmt.Sprintf("%d session file(s) match what Sentry reads and hold no api_key", s.parsed), "")
+		r.add("session_contract", Pass, fmt.Sprintf("%d session file(s) match what Heimdall reads and hold no api_key", s.parsed), "")
 	}
 }

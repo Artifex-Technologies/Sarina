@@ -1,7 +1,11 @@
 # Chymaera Ecosystem — integration contract
 
-Sarina is one of five repos. It is the only one that touches all the others, so
-this file records how they fit together **from Sarina's side**.
+Sarina is one of the Artifex repos (the table below). It is the one that touches
+the others, so this file records how they fit together **from Sarina's side**.
+
+> **Renamed 2026-10-10.** `Chymaera_Sentry` is now `Heimdall`, `Chymaera_Linux` is
+> `Chymaera_OS`, `Chymaera_Zero_App` is `Argus_App`, `Chymaera_Zero_Firmware` is
+> `Argus_Firmware`. Older Coordination Log entries use the old names on purpose.
 
 Status keys: **live** (implemented and verified), **agreed** (both sides accepted
 the shape, not yet built), **proposed** (awaiting the owning repo's answer),
@@ -9,10 +13,12 @@ the shape, not yet built), **proposed** (awaiting the owning repo's answer),
 
 | Repo | Role | Owns |
 | --- | --- | --- |
-| [`Chymaera_Linux`](https://github.com/Artifex-Technologies/Chymaera_OS) | Arch-based security distro; the host | ISO profile, package set, the packaging contract |
-| [`Chymaera_Zero_Firmware`](https://github.com/Artifex-Technologies/Argus_Firmware) | Flipper Zero firmware fork | RPC wire format (`assets/protobuf/`), the BLE budget |
-| [`Chymaera_Zero_App`](https://github.com/Artifex-Technologies/Argus_App) | qFlipper fork; desktop operator console | **The Sarina control API**, datastore, exporters |
-| [`Chymaera_Sentry`](https://github.com/Artifex-Technologies/Heimdall) | Go security agent watching Sarina | Its own detection engine; reads Sarina's session files, read-only |
+| [`Chymaera_OS`](https://github.com/Artifex-Technologies/Chymaera_OS) | Arch-based security distro; the host | ISO profile, package set, the packaging contract |
+| [`Argus_Firmware`](https://github.com/Artifex-Technologies/Argus_Firmware) | Flipper Zero firmware fork | RPC wire format (`assets/protobuf/`), the BLE budget |
+| [`Argus_App`](https://github.com/Artifex-Technologies/Argus_App) | qFlipper fork; desktop operator console | **The Sarina control API**, datastore, exporters |
+| [`Heimdall`](https://github.com/Artifex-Technologies/Heimdall) | Go security agent watching Sarina (formerly Chymaera_Sentry) | Its own detection engine; reads Sarina's session files, read-only |
+| `Labyrinth_OS` | CachyOS-based daily-driver distro for one machine (i9-9900K, 64 GB, RTX 2080 Ti with 11 GB VRAM) meant to replace Windows; the owner's current focus and the second host for Sarina | Its own image and install; `docs/DRIVER_LAB.md` is the Sarina + Limbo driver workflow. Its own `docs/STATUS.md` (2026-10-10) still lists the ISO build pieces as missing |
+| `Daedalus_CAD` | CAD application (Rust) | Not a Sarina contract; listed so the repo set is complete |
 | `Limbo` | Sandbox that runs guest VMs (Linux/Windows) as seamless windows; quarantine and validation runs | The agent socket Sarina uses (section 8) |
 | `Sarina` (this repo) | Local-model agent shipped in the distro | The client/advisory surfaces below |
 
@@ -22,11 +28,20 @@ the shape, not yet built), **proposed** (awaiting the owning repo's answer),
 
 ---
 
-## 1. Sarina ↔ Chymaera_Linux — **live**
+## 1. Sarina ↔ Chymaera_OS — **live**
 
 Sarina ships *in* the distro, as a package built from a submodule.
 
-### The packaging contract (owned by Chymaera_Linux)
+**Two hosts, one Sarina.** Labyrinth_OS vendors the same `sarina-git` PKGBUILD from
+Chymaera_OS, so the packaging contract below serves both, and nothing in Sarina may
+assume one of them. The owner is focused on Labyrinth (replacing Windows on one
+machine), so what Sarina does there matters most right now: helping bring the
+install to a good state, troubleshooting drivers and updates by validating in Limbo
+first (`Labyrinth_OS/docs/DRIVER_LAB.md`), and not fighting games for the 11 GB of
+VRAM (the council runs local members one at a time by default for the same reason).
+Labyrinth's `driver-test` Limbo profile and its "Sarina hook" are not built yet.
+
+### The packaging contract (owned by Chymaera_OS)
 
 `packages/pkgbuilds/sarina-git/PKGBUILD` builds this repo directly and **breaks
 if any of these move**. Verified present as of this commit:
@@ -137,7 +152,7 @@ generated entries currently set no `Icon`, so they take a generic fallback.
 
 ### Agent fleet: Omarchy's agents panel — **live** (`sarina fleet-*`)
 
-Answers `Chymaera_Linux` contract item 7. The distro adopts
+Answers `Chymaera_OS` contract item 7. The distro adopts
 [Omarchy](https://github.com/omacom/omarchy)'s desktop, whose bar has one panel
 showing every AI agent on the machine. The panel is a pure display: each agent
 is one JSON record in `~/.local/state/omarchy/agents/usage/`, and **any file
@@ -165,7 +180,7 @@ power and risk:
    `gemini --yolo`, ...). This launcher has **no way to add such a flag**; each
    agent asks before acting. It prints the proposal, needs a human's `y` (or
    `--yes`), refuses if the prompt changed after the proposal, and appends every
-   attempt to `~/.local/state/sarina/agent-launch.jsonl` for Chymaera Sentry to
+   attempt to `~/.local/state/sarina/agent-launch.jsonl` for Heimdall to
    read — prompt as a SHA-256, a length and a 60-character preview, never in
    full. **It is a CLI command only and is deliberately not a model tool**
    (`tests/test_chymaera_agent_launch.py` checks the tool layer never imports
@@ -176,7 +191,7 @@ Not yet verified against a running Omarchy shell: whether the panel draws
 Sarina's tab correctly. The record matches the fields the panel's QML reads,
 but that was read from source, not observed.
 
-## 2. Sarina ↔ Chymaera_Zero_Firmware — **live (read-only)**
+## 2. Sarina ↔ Argus_Firmware — **live (read-only)**
 
 The firmware project set the boundary: *"anything that writes to hardware should
 stay behind explicit human approval for now."* Sarina honours it.
@@ -219,7 +234,7 @@ medium/high set for their tree: `scripts/version.py`,
 
 ### The BLE budget — a hard constraint on anything Sarina ingests
 
-Streaming targets **BLE to a laptop running Chymaera Linux**, not USB. The
+Streaming targets **BLE to a laptop running Chymaera OS**, not USB. The
 firmware repo owns these numbers:
 
 | Constant | Value |
@@ -286,7 +301,7 @@ as a natural thing for `chymaera-merge-report` to notice, not yet implemented.
 
 ---
 
-## 3. Sarina ↔ Chymaera_Zero_App — **live (client implemented)**
+## 3. Sarina ↔ Argus_App — **live (client implemented)**
 
 **The App owns this contract.** Its spec is
 [`docs/SARINA_API.md`](https://github.com/Artifex-Technologies/Argus_App/blob/main/docs/SARINA_API.md),
@@ -314,7 +329,7 @@ The token may come from `CHYMAERA_CONSOLE_TOKEN` instead of the command line.
 
 **Starting the server without a GUI.** The App ships a headless CLI, which is
 how this works on a server, over SSH, or under WSL where Qt Quick may not
-render — and therefore the path that matters most on Chymaera Linux:
+render — and therefore the path that matters most on Chymaera OS:
 
 ```bash
 qFlipper-cli chymaera serve 44700 <token>   # starts the API, streams the event log
@@ -358,67 +373,67 @@ owns the call.
 
 ---
 
-## 4. Sarina ↔ Chymaera_Sentry — two contracts, opposite directions
+## 4. Sarina ↔ Heimdall — two contracts, opposite directions
 
-### 4a. Sentry reads Sarina's session files — **proposed**
+### 4a. Heimdall reads Sarina's session files — **live (reader-owned)**
 
-Sentry is a separate Go process with no import dependency on Sarina. It
-reads, on a poll loop, the JSON files Sarina's `sarina/session_store.py`
-already writes to a workspace's `.port_sessions/` directory: `session_id`,
-a flat `messages` list, and aggregate `input_tokens`/`output_tokens`.
+Heimdall is a separate Go process with no import dependency on Sarina. It
+polls the agent session files the Go core writes to a workspace's
+`.port_sessions/agent/*.json` (`messages` as objects with a `role`; the API key
+is never written). Heimdall's `agentsource` is the reader; `sarina doctor`'s
+`session_contract` check reports files that do not have the shape it expects.
 
-**This is Sentry's proposal, not yet Sarina's commitment.** The session-file
-shape above is Sarina's internal persistence format, not a published
-contract, and Sarina has not agreed to freeze it for an external reader.
-Until this section's status changes to **agreed**, a future change to
-`session_store.py`'s output shape is not a breaking change on Sarina's
-side — Sentry absorbing it is Sentry's problem. Sarina should simply keep
-doing whatever it already does here; this section exists so a future
-Sarina change is made with the awareness that something outside the repo
-now reads this format, not to freeze it prematurely.
+The shape is Sarina's persistence format, kept stable on purpose because
+something outside the repo now reads it. A change to it needs a
+Coordination Log entry and a matching change on Heimdall's board.
+(The legacy Python `session_store.py` layout, a flat `messages` list directly
+under `.port_sessions/`, is no longer what Heimdall reads.)
 
-Sentry never writes into `.port_sessions/` and never opens a Sarina
+Heimdall never writes into `.port_sessions/` and never opens a Sarina
 process's sockets or files other than this one directory.
 
-### 4b. Sarina consults Sentry's governance API — **live, opt-in**
+### 4b. Sarina consults Heimdall's governance API — **live, opt-in**
 
-The reverse direction, added 2026-09-26: `sarina/sentry_governance.py`
-(stdlib `urllib.request` only) calls Sentry's `POST /v1/review` over
-loopback HTTP, opt-in via the `SENTRY_REVIEW_URL` environment variable.
-`sarina/memory_security.py`'s `scan_memory_text` — the single function
-both memory-write call sites already funnel through — consults it *after*
-its own in-process checks pass, and folds an actual `"deny"` response into
-the same `MemoryScanResult(blocked=True, reason=...)` shape those checks
-already produce. No call site outside `memory_security.py` changed.
+The reverse direction, added 2026-09-26: `go/heimdall` calls Heimdall's
+`POST /v1/review` over loopback HTTP, opt-in via the `HEIMDALL_REVIEW_URL`
+environment variable. The shared scan gate in `go/guard` (used by curated-memory
+writes) consults it *after* its own in-process checks pass, and folds an actual
+`"deny"` response into the same blocked result those checks already produce.
+No call site outside `go/guard` consults it.
 
-**Fails open on Sentry's absence, fails closed on an actual verdict.**
-Unset `SENTRY_REVIEW_URL`, or an unreachable/erroring Sentry, and
-`consult_sentry` returns `None` — `scan_memory_text` falls back to its own
-in-process result exactly as before this integration existed. Sentry is
+**Renamed 2026-10-10:** the variable was `SENTRY_REVIEW_URL`. The old name is
+still read when `HEIMDALL_REVIEW_URL` is unset, so existing deployments keep
+working; new setups should use the new name. (The legacy Python
+`sarina/sentry_governance.py` still reads only the old name.)
+
+**Fails open on Heimdall's absence, fails closed on an actual verdict.**
+Unset `HEIMDALL_REVIEW_URL`, or an unreachable/erroring Heimdall, and
+the consultation returns nothing — the gate falls back to its own
+in-process result exactly as before this integration existed. Heimdall is
 optional infrastructure, not a hard dependency; but a real `"deny"`
 response blocks the write, same as an in-process match would.
 
-**Why this isn't pointless redundancy** even though Sentry currently runs
+**Why this isn't pointless redundancy** even though Heimdall currently runs
 the identical three pattern lists Sarina's own in-process check does: the
-point is that Sentry's copy runs in a separate OS process this repo cannot
+point is that Heimdall's copy runs in a separate OS process this repo cannot
 reach into. A compromised or sufficiently manipulated agent session could
-in principle disable or bypass its own in-process `memory_security.py`
-checks from within its own process; it cannot touch Sentry's.
+in principle disable or bypass its own in-process
+checks from within its own process; it cannot touch Heimdall's.
 
 Marked **live** rather than proposed because both halves are built,
 tested, and verified working together over a real loopback connection —
 not a claim that the shape will never move. A breaking change to the
 `/v1/review` request/response JSON needs updating this section,
-`sarina/sentry_governance.py`'s docstring, and Sentry's own
+`go/heimdall`, and Heimdall's own
 `internal/governance`/`internal/api/review.go`, together, in one commit.
 
 Full detail in both repos' 2026-09-26 Coordination Log entries — see
-[`Chymaera_Sentry/CLAUDE.md`](https://github.com/Artifex-Technologies/Heimdall/blob/main/CLAUDE.md)
-§5 for Sentry's side.
+[`Heimdall/CLAUDE.md`](https://github.com/Artifex-Technologies/Heimdall/blob/main/CLAUDE.md)
+§5 for Heimdall's side.
 
-### 4c. Sentry asks Sarina for an advisory — **live, opt-in**
+### 4c. Heimdall asks Sarina for an advisory — **live, opt-in**
 
-Added 2026-10-04 at the owner's request. When Sentry quarantines a Limbo guest
+Added 2026-10-04 at the owner's request. When Heimdall quarantines a Limbo guest
 (section 8) it may ask Sarina for an opinion for the human who must decide. It
 uses Sarina's service API (`sarina-service`, `POST /v1/sessions` then
 `/chat`) with `tool_allowlist: []`, meaning the session has **no tools at all**;
@@ -426,21 +441,21 @@ bearer token if configured, loopback only. The evidence is sent framed as
 untrusted data (it comes from a guest that may be hostile).
 
 **Why an allowlist and not just `allow_shell=false`:** `AgentPermissions` only
-*deny at call time*; the model is still offered every tool. Sentry's first
+*deny at call time*; the model is still offered every tool. Heimdall's first
 version relied on those flags, and the chain test showed the advisory model was
 offered ~70 tools (`web_fetch`, `memory_add`, `config_set`, `mcp_call_tool` ...),
 most of which those flags do not gate. `tool_allowlist` (additive field on
 `POST /v1/sessions`) removes tools from the session entirely; the response's
-`tools` field reports how many it really has, and Sentry refuses to send evidence
+`tools` field reports how many it really has, and Heimdall refuses to send evidence
 unless that is 0, since an older service silently ignores unknown fields.
 
-**Sarina's answer is an advisory and nothing else.** Sentry stores it on the
+**Sarina's answer is an advisory and nothing else.** Heimdall stores it on the
 quarantine record, where Limbo bounds and cleans it and the human sees it
 labelled as untrusted. It cannot change a record's status or release a guest;
 only a human verdict can. Assume the advisory can be wrong or manipulated; the
 design makes that survivable rather than relying on Sarina resisting it.
 
-This is Sentry initiating contact with Sarina, which Sentry's contract had not
+This is Heimdall initiating contact with Sarina, which Heimdall's contract had not
 allowed before; recorded in both repos. It needed one additive Sarina change,
 the `tool_allowlist` field and `tools` count described above.
 
@@ -464,8 +479,8 @@ CDC or the BLE serial service. Sarina treats that boundary as read-only.
 | --- | --- | --- | --- |
 | 8765 | Sarina web GUI | Sarina | live |
 | 8899 | Sarina integration service | Sarina | live |
-| 44700 | Sarina control API | Chymaera_Zero_App | live |
-| 8930 | Sentry status API (loopback, read-only) | Chymaera_Sentry | live |
+| 44700 | Sarina control API | Argus_App | live |
+| 8930 | Heimdall status API (loopback, read-only) | Heimdall | live |
 
 Claim a port by adding it here in the same commit that binds it.
 
@@ -540,3 +555,88 @@ Verified against a fake agent socket in `tests/test_chymaera_limbo.py` and, from
 Limbo's side, with a real daemon, real sockets and real unprivileged users. Not
 verified: Sarina's model actually choosing to call these tools well, since no
 model backend runs here.
+
+**Decompiling and disassembling untrusted binaries happens only inside a Limbo
+guest** (owner rule, 2026-10-10), whether the reason is malware analysis, driver
+troubleshooting or anything else. Neither Sarina nor Heimdall has a decompiler on the
+host. The draft way to do it is `packaging/limbo/decompile/`: a human-written Limbo
+profile (`decompile`: network none, no sudo, read-only no-exec sample mount) whose
+guest image carries radare2 and Ghidra (both run fully offline), a wrapper
+(`limbo-decompile triage|functions|disasm|decompile`) that never executes the sample
+and returns only capped, cleaned, labelled text, and an operator-invoked skill,
+`static-analysis`. A human puts the sample in Limbo's sample directory; Sarina cannot
+copy files in. Heimdall cannot call the profile (its advisory sessions have no tools
+and it is kept off `agent.sock`); whether it should is an open question for the
+Limbo and Heimdall boards. Draft status: the wrapper's own behaviour is tested, the
+real radare2 and Ghidra invocations are not. Details and the unverified list are in
+that directory's README.
+
+---
+
+## 9. Model council — **live** (`sarina council`, and the `council_ask` tool)
+
+Added 2026-10-10. Several models are asked the same question and their answers
+are shown side by side, because different models often disagree and the
+disagreement is the useful part. The point for the owner: when Sarina cannot work
+something out, or lacks the resources, she can ask Claude, Gemini, ChatGPT or other
+online models for research and a second opinion, and ask local models too. It is
+advice for a person, never action. (The idea is borrowed from freellmapi's
+multi-provider routing; the code is new and does none of its key pooling or
+account rotation, which many providers' terms forbid.)
+
+**She asks before she reaches out.** Anything that leaves this machine goes only
+after the operator approves the exact text, on every call. Local members answer
+without asking.
+
+Operator config: `~/.sarina/council.json` (or `SARINA_COUNCIL_FILE`), never read
+from a workspace; a broken file means an empty council, never a wider
+destination. Example:
+
+```json
+{
+  "members": [
+    {"name": "local-qwen", "base_url": "http://127.0.0.1:11434/v1", "model": "qwen3"},
+    {"name": "claude", "kind": "claude", "model": "<model id>", "api_key_env": "ANTHROPIC_API_KEY"},
+    {"name": "gemini", "base_url": "<Gemini's OpenAI-compatible URL>", "model": "<model id>", "api_key_env": "GEMINI_API_KEY"},
+    {"name": "chatgpt", "base_url": "https://api.openai.com/v1", "model": "<model id>", "api_key_env": "OPENAI_API_KEY"}
+  ],
+  "synthesizer": "local-qwen",
+  "max_tokens": 1024,
+  "timeout_seconds": 90,
+  "local_concurrency": 1,
+  "max_remote_members": 3
+}
+```
+
+Member `kind` is `openai_compat` (the default: Ollama, vLLM, OpenAI, and Gemini or
+OpenRouter or Groq through their OpenAI-compatible endpoints; check each provider's
+docs for the exact URL) or `claude` (Anthropic's Messages API, `base_url` optional).
+The model ids and Gemini URL above are placeholders: look them up, they change.
+
+Ways to use it:
+
+| | |
+| --- | --- |
+| `sarina council [--context-file F] [--members a,b] [--local-only] [--no-synthesis] [--json] QUESTION` | You ask. Each online member asks you to confirm first. |
+| `sarina council status [--probe]` | Config only; `--probe` also checks each member answers with one models-list request, no question sent. |
+| `council_ask` tool | Sarina asks, when stuck. Offered only when a council is configured (it costs about 480 characters of tool definition per request). Takes one `question`, at most 6000 characters, so there is no way to attach files. |
+
+| Rule | How it is enforced |
+| --- | --- |
+| Members get **no tools** | Requests are built with no tool definitions; tests read the wire body, for both the OpenAI-shaped and Claude members. |
+| **Local vs online is derived from the URL**, not a flag | Only loopback hosts are local. A LAN address is online. A `claude` member with no `base_url` is online. |
+| **Online members are asked about on every `council_ask` call**, showing each member's host and the exact text | Through the dedicated `tools.RuntimeOperatorConfirm` channel, **not** the `Approver`: the GUI's "allow for this session" grant would turn a per-call question into a standing yes, and a test fails if `tool.go` touches the Approver. |
+| **No way to ask means no online contact** | Service sessions, headless runs and the GUI (not wired to this channel yet) get local members only, and the reply says online members were not asked. The interactive CLI and one-shot `sarina chat` can ask. |
+| Online members default to `allow_data: [no_secrets, no_captures]` | Same sanitiser as compute tiers (`tiers.Sanitize`); capture dumps refuse the member outright. |
+| Keys are env-var **names** in the config | A pasted key is rejected; keys are scrubbed from error text. |
+| Answers are **untrusted text** | Control characters and terminal escapes stripped, length capped, every answer labelled; nothing is run or applied. |
+| The comparison is done by a **local** member only | The synthesizer reads every answer, so an online synthesizer is a config error. Answers are fenced and the model is told they are data. It lists agreement, disagreement and what to verify; it does not vote. |
+| Budget | At most `max_remote_members` online members per run (default 3), `max_tokens` per answer, and the token total is printed. The operator's yes is the real cost control; there is no price table. |
+| Local members share the GPU | `local_concurrency` (default 1) local members run at once, so a 2080 Ti is not asked to hold several models. |
+| Only `cmd/sarina` imports the package | Checked by a test, so no other code path can reach the members. |
+
+**Not built, deliberately:** provider-hosted web search or other server-side tools
+(each provider does it differently and none was verified here, so a "research"
+mode that browses is still future work; today the online models answer from what
+they know). Streaming (a comparison reads whole answers anyway). A price table.
+Wiring the GUI's approval screen to the confirm channel.

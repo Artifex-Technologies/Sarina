@@ -187,7 +187,7 @@ func mustOne(t *testing.T, dir string) string {
 	return es[0].Name()
 }
 
-func TestSentryContractShapeAndKeyLeak(t *testing.T) {
+func TestHeimdallContractShapeAndKeyLeak(t *testing.T) {
 	dir := t.TempDir()
 	saveSession(t, dir, nil)
 	cs := run(t, nil, Options{SessionDir: dir})
@@ -195,7 +195,7 @@ func TestSentryContractShapeAndKeyLeak(t *testing.T) {
 		t.Fatalf("a normal session must pass (the key is never written): %+v", c)
 	}
 
-	// messages as bare strings is the shape Sentry cannot decode as objects with a role.
+	// messages as bare strings is the shape Heimdall cannot decode as objects with a role.
 	os.WriteFile(filepath.Join(dir, "old.json"), []byte(`{"session_id":"old","messages":["plain string"]}`), 0o600)
 	cs = run(t, nil, Options{SessionDir: dir})
 	if c := byID(t, cs, "session_contract"); c.Status != Warn || !strings.Contains(c.Finding, "old.json") {
@@ -380,16 +380,16 @@ func TestLimboWorldWritableSocketFails(t *testing.T) {
 	}
 }
 
-// ---- Sentry ----------------------------------------------------------------------
+// ---- Heimdall ----------------------------------------------------------------------
 
-func TestSentryUnsetIsSkippedAndSaysFailOpen(t *testing.T) {
-	c := byID(t, run(t, nil, Options{}), "sentry")
+func TestHeimdallUnsetIsSkippedAndSaysFailOpen(t *testing.T) {
+	c := byID(t, run(t, nil, Options{}), "heimdall")
 	if c.Status != Skip || !strings.Contains(c.Finding, "fail-open") {
 		t.Fatalf("%+v", c)
 	}
 }
 
-func TestSentryHealthUsesHealthzAndSendsNoMemoryText(t *testing.T) {
+func TestHeimdallHealthUsesHealthzAndSendsNoMemoryText(t *testing.T) {
 	var paths []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.Method+" "+r.URL.String())
@@ -400,7 +400,7 @@ func TestSentryHealthUsesHealthzAndSendsNoMemoryText(t *testing.T) {
 		w.WriteHeader(500)
 	}))
 	defer srv.Close()
-	c := byID(t, run(t, map[string]string{"SENTRY_REVIEW_URL": srv.URL + "/v1/review"}, Options{}), "sentry")
+	c := byID(t, run(t, map[string]string{"HEIMDALL_REVIEW_URL": srv.URL + "/v1/review"}, Options{}), "heimdall")
 	if c.Status != Pass {
 		t.Fatalf("%+v", c)
 	}
@@ -409,20 +409,20 @@ func TestSentryHealthUsesHealthzAndSendsNoMemoryText(t *testing.T) {
 	}
 }
 
-func TestSentryProblemsWarnAndCiteTheRunbook(t *testing.T) {
+func TestHeimdallProblemsWarnAndCiteTheRunbook(t *testing.T) {
 	dead := httptest.NewServer(http.NotFoundHandler())
 	url := dead.URL
 	dead.Close()
-	c := byID(t, run(t, map[string]string{"SENTRY_REVIEW_URL": url + "/v1/review"}, Options{}), "sentry")
-	if c.Status != Warn || !strings.Contains(c.Remedy, "Chymaera_Sentry docs/INTEGRATION-FAILURES.md") || !strings.Contains(c.Finding, "fail-open") {
+	c := byID(t, run(t, map[string]string{"HEIMDALL_REVIEW_URL": url + "/v1/review"}, Options{}), "heimdall")
+	if c.Status != Warn || !strings.Contains(c.Remedy, "Heimdall docs/INTEGRATION-FAILURES.md") || !strings.Contains(c.Finding, "fail-open") {
 		t.Fatalf("%+v", c)
 	}
-	notSentry := httptest.NewServer(http.NotFoundHandler())
-	defer notSentry.Close()
-	if c := byID(t, run(t, map[string]string{"SENTRY_REVIEW_URL": notSentry.URL + "/v1/review"}, Options{}), "sentry"); c.Status != Warn || !strings.Contains(c.Finding, "404") {
+	notHeimdall := httptest.NewServer(http.NotFoundHandler())
+	defer notHeimdall.Close()
+	if c := byID(t, run(t, map[string]string{"HEIMDALL_REVIEW_URL": notHeimdall.URL + "/v1/review"}, Options{}), "heimdall"); c.Status != Warn || !strings.Contains(c.Finding, "404") {
 		t.Fatalf("%+v", c)
 	}
-	if c := byID(t, run(t, map[string]string{"SENTRY_REVIEW_URL": "not a url"}, Options{}), "sentry"); c.Status != Warn {
+	if c := byID(t, run(t, map[string]string{"HEIMDALL_REVIEW_URL": "not a url"}, Options{}), "heimdall"); c.Status != Warn {
 		t.Fatalf("%+v", c)
 	}
 }
@@ -450,13 +450,13 @@ func TestPortsReportFreeAndInUse(t *testing.T) {
 
 func TestNoSecretsAnywhereInTheReport(t *testing.T) {
 	srv := backendServer(t, `{"data":[{"id":"m"}]}`)
-	sentryTok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) }))
-	defer sentryTok.Close()
+	heimdallTok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) }))
+	defer heimdallTok.Close()
 	env := map[string]string{
 		"OPENAI_BASE_URL":   strings.Replace(srv.URL, "http://", "http://user:"+canary+"@", 1) + "/v1",
 		"OPENAI_MODEL":      "m",
 		"OPENAI_API_KEY":    canary,
-		"SENTRY_REVIEW_URL": strings.Replace(sentryTok.URL, "http://", "http://u:"+canary+"@", 1) + "/v1/review?k=" + canary,
+		"HEIMDALL_REVIEW_URL": strings.Replace(heimdallTok.URL, "http://", "http://u:"+canary+"@", 1) + "/v1/review?k=" + canary,
 	}
 	dir := t.TempDir()
 	saveSession(t, dir, nil)
@@ -487,7 +487,7 @@ func TestJSONIsAStableArrayAndTextIsAligned(t *testing.T) {
 			}
 		}
 	}
-	wantIDs := []string{"backend", "sessions", "tiers_config", "ext_skills", "ext_mcp", "ext_policy", "limbo", "sentry", "ports"}
+	wantIDs := []string{"backend", "sessions", "tiers_config", "ext_skills", "ext_mcp", "ext_policy", "limbo", "heimdall", "ports"}
 	have := map[string]bool{}
 	for _, r := range rows {
 		have[r["id"]] = true
@@ -566,6 +566,7 @@ func TestToolIsReadOnlyAndInTheDefaultRegistry(t *testing.T) {
 	ws := t.TempDir()
 	t.Setenv("OPENAI_BASE_URL", "http://127.0.0.1:1/v1")
 	t.Setenv("SARINA_LIMBO_SOCKET", "")
+	t.Setenv("HEIMDALL_REVIEW_URL", "")
 	t.Setenv("SENTRY_REVIEW_URL", "")
 	res := reg.Execute(context.Background(), ToolName, map[string]any{}, &tools.Context{Root: ws, SessionDirectory: filepath.Join(ws, "s")})
 	var rows []Check

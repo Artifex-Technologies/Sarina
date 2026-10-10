@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/limbo"
-	"github.com/Artifex-Technologies/Sarina/go/sentry"
+	"github.com/Artifex-Technologies/Sarina/go/heimdall"
 )
 
 const limboDocs = "Limbo docs/INTEGRATION-FAILURES.md"
@@ -122,34 +122,34 @@ func (r *runner) limbo() {
 	r.add("limbo", Pass, fmt.Sprintf("agent socket answers; %d profile(s)%s", len(profiles), extra), "")
 }
 
-func (r *runner) sentry(ctx context.Context) {
-	const docs = "Chymaera_Sentry docs/INTEGRATION-FAILURES.md"
-	raw := strings.TrimSpace(r.env(sentry.EnvVar))
+func (r *runner) heimdall(ctx context.Context) {
+	const docs = "Heimdall docs/INTEGRATION-FAILURES.md"
+	raw := heimdall.URL(r.env)
 	if raw == "" {
-		r.add("sentry", Skip, sentry.EnvVar+" is unset: no external governance review; memory writes rely on Sarina's own in-process scan (fail-open by design)", "")
+		r.add("heimdall", Skip, heimdall.EnvVar+" is unset: no external governance review; memory writes rely on Sarina's own in-process scan (fail-open by design)", "")
 		return
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		r.add("sentry", Warn, sentry.EnvVar+" is set ("+secretState(raw)+") but is not a usable http(s) URL; the review is skipped (fail-open)",
-			"set it to Sentry's review URL, e.g. http://127.0.0.1:8930/v1/review ("+docs+")")
+		r.add("heimdall", Warn, heimdall.EnvVar+" is set ("+secretState(raw)+") but is not a usable http(s) URL; the review is skipped (fail-open)",
+			"set it to Heimdall's review URL, e.g. http://127.0.0.1:8930/v1/review ("+docs+")")
 		return
 	}
 	where := u.Scheme + "://" + u.Host
-	// Sentry's cheap health endpoint is GET /healthz on the same address; no memory text is sent.
+	// Heimdall's cheap health endpoint is GET /healthz on the same address; no memory text is sent.
 	status, _, err := r.get(ctx, where+"/healthz", nil)
 	switch {
 	case err != nil:
-		r.add("sentry", Warn, "Sentry at "+where+" is not reachable; reviews are skipped (fail-open: memory writes still pass Sarina's own scan)",
-			"start chymaera-sentry or correct "+sentry.EnvVar+"; `journalctl -u chymaera-sentry -n 50` ("+docs+", section 'Sarina consulting Sentry')")
+		r.add("heimdall", Warn, "Heimdall at "+where+" is not reachable; reviews are skipped (fail-open: memory writes still pass Sarina's own scan)",
+			"start heimdall or correct "+heimdall.EnvVar+"; `journalctl -u heimdall -n 50` ("+docs+", section 'Sarina consulting Heimdall')")
 	case status < 200 || status > 299:
-		r.add("sentry", Warn, fmt.Sprintf("Sentry at %s answered HTTP %d on /healthz; the address may not be Sentry's API", where, status),
-			"check "+sentry.EnvVar+" matches Sentry's api_addr, default 127.0.0.1:8930 ("+docs+")")
+		r.add("heimdall", Warn, fmt.Sprintf("Heimdall at %s answered HTTP %d on /healthz; the address may not be Heimdall's API", where, status),
+			"check "+heimdall.EnvVar+" matches Heimdall's api_addr, default 127.0.0.1:8930 ("+docs+")")
 	case !strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/v1/review"):
-		r.add("sentry", Warn, "Sentry at "+where+" is healthy, but the URL path is not /v1/review, so consultations will fail open",
-			"set "+sentry.EnvVar+" to http://HOST:PORT/v1/review ("+docs+")")
+		r.add("heimdall", Warn, "Heimdall at "+where+" is healthy, but the URL path is not /v1/review, so consultations will fail open",
+			"set "+heimdall.EnvVar+" to http://HOST:PORT/v1/review ("+docs+")")
 	default:
-		r.add("sentry", Pass, "Sentry at "+where+" answers /healthz; governance review is active (a 'deny' verdict blocks the write)", "")
+		r.add("heimdall", Pass, "Heimdall at "+where+" answers /healthz; governance review is active (a 'deny' verdict blocks the write)", "")
 	}
 }
 

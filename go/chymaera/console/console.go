@@ -1,4 +1,4 @@
-// Package console is the client for the Chymaera_Zero_App Sarina control API.
+// Package console is the client for the Argus_App Sarina control API.
 //
 // The wire format is owned by that repo (docs/SARINA_API.md): newline-delimited
 // JSON over loopback TCP, one request object per line, one response object per

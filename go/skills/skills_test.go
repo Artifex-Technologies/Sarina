@@ -371,3 +371,23 @@ func TestShippedTroubleshootSkillLoads(t *testing.T) {
 		}
 	}
 }
+
+// The static-analysis skill may reach only the two Limbo tools, and the model may not
+// start it on its own: a human decides when a sample is looked at.
+func TestShippedStaticAnalysisSkillIsNarrow(t *testing.T) {
+	dir := filepath.Join("..", "..", "packaging", "skills")
+	if _, err := os.Stat(filepath.Join(dir, "static-analysis", "SKILL.md")); err != nil {
+		t.Skip("packaging/skills/static-analysis not present")
+	}
+	c := Discover(Options{Home: t.TempDir(), SystemDir: dir, Getenv: func(string) string { return "" }})
+	if len(c.Problems) > 0 {
+		t.Fatalf("problems: %+v", c.Problems)
+	}
+	s, ok := c.Get("static-analysis")
+	if !ok || s.ModelInvocable || !s.HasAllowed {
+		t.Fatalf("skill missing, or the model can start it: %+v", s)
+	}
+	if got := slices.Clone(s.AllowedTools); !slices.Equal(slices.Sorted(slices.Values(got)), []string{"limbo_profiles", "limbo_validate"}) {
+		t.Fatalf("allowed_tools = %v, want exactly the two Limbo tools", s.AllowedTools)
+	}
+}

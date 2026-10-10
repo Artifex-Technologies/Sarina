@@ -24,7 +24,7 @@ import (
 //   - proposes first: PlanLaunch is pure, nothing runs until Launch is called
 //     with confirmed=true;
 //   - is reachable only from the fleet-launch CLI command, never as a model tool;
-//   - audits every attempt, confirmed or refused, to a log Chymaera Sentry can
+//   - audits every attempt, confirmed or refused, to a log Heimdall can
 //     read (the prompt is stored as a hash, a length and a short preview).
 
 const (

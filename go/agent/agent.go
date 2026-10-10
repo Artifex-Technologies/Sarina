@@ -70,6 +70,9 @@ type Options struct {
 	// Approver, when set, is asked before each state-changing tool call (see
 	// tools.Approver). Interactive front ends use it; nil asks nothing.
 	Approver tools.Approver
+	// Confirm, when set, lets a tool ask the operator one yes/no question per call
+	// (tools.RuntimeOperatorConfirm). Nil means no one can be asked.
+	Confirm func(prompt string) bool
 }
 
 // Agent runs prompts against a model. It is reusable across turns of a chat via Resume.
@@ -138,6 +141,26 @@ func New(opts Options) (*Agent, error) {
 	return a, nil
 }
 
+// SetConfirm installs the per-call operator question (see Options.Confirm).
+func (a *Agent) SetConfirm(f func(prompt string) bool) {
+	a.opts.Confirm = f
+	if a.toolCtx != nil && a.toolCtx.Runtimes != nil { // only our own key: other runtimes were attached since
+		if f != nil {
+			a.toolCtx.Runtimes[tools.RuntimeOperatorConfirm] = f
+		} else {
+			delete(a.toolCtx.Runtimes, tools.RuntimeOperatorConfirm)
+		}
+	}
+}
+
+func (a *Agent) runtimes() map[string]any {
+	m := map[string]any{tools.RuntimePlanActive: func() bool { return a.plan.Active() }}
+	if a.opts.Confirm != nil {
+		m[tools.RuntimeOperatorConfirm] = a.opts.Confirm
+	}
+	return m
+}
+
 // SetEventHook installs a live event listener (used for streaming output).
 func (a *Agent) SetEventHook(f func(map[string]any)) { a.opts.OnEvent = f }
 
@@ -165,7 +188,7 @@ func (a *Agent) rebuildTools(cwd string) error {
 		Permissions:      a.opts.Runtime.Permissions,
 		Registry:         a.registry,
 		SessionDirectory: a.opts.Runtime.SessionDirectory,
-		Runtimes:         map[string]any{tools.RuntimePlanActive: func() bool { return a.plan.Active() }},
+		Runtimes:         a.runtimes(),
 		SessionEnv:       a.opts.SessionEnv,
 		Approver:         a.opts.Approver,
 	}

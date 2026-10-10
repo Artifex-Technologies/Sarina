@@ -16,7 +16,7 @@ func Tools() []tools.Tool {
 		Class: tools.ClassReadOnly,
 		Spec: llm.ToolSpec{
 			Name: ToolName,
-			Description: "Read-only checkup of this Sarina setup (model backend, sessions, tiers, config files, Limbo, Sentry). " +
+			Description: "Read-only checkup of this Sarina setup (model backend, sessions, tiers, config files, Limbo, Heimdall). " +
 				"Returns a JSON array of {id,status,finding,remedy}; start here when something is broken.",
 			Parameters: map[string]any{"type": "object", "properties": map[string]any{}},
 		},

@@ -15,7 +15,7 @@
 pkgname=sarina
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="Local-model security agent for Chymaera Linux (Go core, optional Python ML/voice helper)"
+pkgdesc="Local-model security agent for Chymaera OS (Go core, optional Python ML/voice helper)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Artifex-Technologies/Sarina"
 license=('MPL2')

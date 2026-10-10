@@ -14,15 +14,18 @@ that runs against local, open-source models over an OpenAI-compatible API. The
 core agent depends on nothing outside the standard library; the GUI and
 integration service add FastAPI/Uvicorn, and escalation adds `psutil`.
 
-It is one of five repos in the Chymaera Ecosystem:
+It is one of the Artifex repos in the Chymaera Ecosystem (renamed 2026-10-10;
+older log entries below use the old names on purpose):
 
 | Repo | Role |
 | --- | --- |
-| `Sarina` | this repo — the local-model agent shipped inside Chymaera Linux |
-| `Chymaera_Linux` | Arch-based security distro that hosts the agent and the app |
-| `Chymaera_Zero_App` | fork of qFlipper; desktop operator console (Qt6/QML) |
-| `Chymaera_Zero_Firmware` | fork of flipperzero-firmware; runs on the hardware |
-| `Chymaera_Sentry` | Go security agent watching Sarina; reads session files, and (opt-in) answers a governance check this repo's own memory_security.py consults |
+| `Sarina` | this repo — the local-model agent shipped inside Chymaera OS and Labyrinth OS |
+| `Chymaera_OS` | (was Chymaera_OS) Arch-based security distro that hosts the agent and the app |
+| `Labyrinth_OS` | CachyOS-based daily-driver distro for one machine; second host for the agent (design stage) |
+| `Argus_App` | (was Argus_App) fork of qFlipper; desktop operator console (Qt6/QML) |
+| `Argus_Firmware` | (was Argus_Firmware) fork of flipperzero-firmware; runs on the hardware |
+| `Heimdall` | (was Chymaera_Sentry) Go security agent watching Sarina; reads session files, and (opt-in) answers a governance check this repo's memory gate consults |
+| `Limbo`, `Daedalus_CAD` | sandbox for guest VMs (Sarina validates in it, section 8 of ECOSYSTEM); a CAD app that is not a Sarina contract |
 
 Sarina is the only repo that touches all the others, so it carries the
 authoritative integration contract: **[`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md)**.
@@ -33,80 +36,91 @@ Keep that attribution intact.
 
 ## 2. Build / test / run
 
-No compile step. Python 3.10+.
+The core is Go (1.27+, standard library only), in `go/`. No other build dependency.
 
 ```bash
-pip install -e ".[test]"                  # httpx + pytest -- REQUIRED for a real run
-python -m pytest tests/                   # full suite -- prefer this over unittest discover
-pip install -e ".[escalation]"            # optional psutil for resource telemetry
+cd go
+go build -o sarina ./cmd/sarina
+go vet ./... && go test ./...        # offline: no test may need a network or a model backend
 ```
 
-**Prefer `python -m pytest tests/` over `python -m unittest discover -s tests`.**
-The two runners collect a handful of tests differently (pytest is the more
-complete/reliable one), so treat `unittest discover`'s count as approximate.
+All of `go test ./...` passes on Windows (checked 2026-10-10); Linux is the
+reference platform, and a few tests are POSIX-specific. `-race` needs cgo. The
+working copy on Windows is CRLF (`core.autocrlf`), so `gofmt -l` lists every file;
+that is line endings, not a formatting problem.
 
-**Linux is the reference platform.** Without the `test` extra, ~80 GUI/service
-tests fail at import and are reported as errors, which looks like a broken suite
-and is not.
+Chatting needs an OpenAI-compatible backend (`OPENAI_BASE_URL`, `OPENAI_API_KEY`,
+`OPENAI_MODEL`); the tests do not. Ollama's default 4096-token context is too small
+for Sarina: she needs at least 8k (16k recommended).
 
-**Note (2026-09-26):** the repo used to carry a large inventory/parity-tracking
-layer mirroring the upstream npm Claude Code source (`PARITY_CHECKLIST.md`,
-~30 supporting modules, ~19 CLI commands). It was removed — see the
-Coordination Log entry below — because it reflected ClawCode's original
-"mirror Claude Code 1:1" mission, not what Sarina actually is. Test counts
-from before that removal (e.g. an older "1205 tests" figure) are stale;
-current count on Windows via `pytest`: **975 tests, 960 passing**, the 15
-failures being the same genuinely POSIX/Linux-specific set as always
-(dotenv-guard symlink/grep behavior, bash streaming and self-authored-script
-banner detection, MCP stdio transport, background-process kill semantics) —
-check a failure against this list before assuming it's a real regression, and
-check under WSL if it's not on the list. Arch's count needs re-verification
-post-removal.
+The old Python in `sarina/` and `tests/` is the owner's earlier code, mostly
+superseded by Go ports; some of it no longer imports (`docs/PROVENANCE.md` lists
+them). Do not extend it. Optional ML and voice helpers live in
+`python/sarina_helpers/` behind a JSON-lines protocol (`go/helpers`).
 
-The agent needs an OpenAI-compatible backend (`OPENAI_BASE_URL`,
-`OPENAI_API_KEY`, `OPENAI_MODEL`) for anything that actually calls a model.
-Unit tests do not — they must keep running with no backend and no network.
-
-Entry points: `python -m sarina.main <command>`, `python -m sarina.gui`,
-`python -m sarina.service`.
+Entry points: `sarina <command>`; the binary also answers to `sarina-gui` and
+`sarina-service` (the Arch package installs those as links).
 
 ## 3. Architecture map
 
 ```
-sarina/
-  main.py                CLI entry point; argparse subcommands + dispatch
-  agent_runtime.py       the core loop (LocalCodingAgent)
-  agent_tools.py         tool definitions and execution
-  agent_prompting.py     system prompt assembly
-  agent_context.py       context building, CLAUDE.md discovery
-  chymaera/              ecosystem integration (read-only advisory surfaces)
-  desktop/               application menu categorisation (stdlib; reports by default)
-  ml/                    optional local embeddings (the `ml` extra)
-  service/               local HTTP API for external callers (port 8899)
-  gui/                   single-operator web GUI (port 8765)
-  packaging/arch/        source of truth for the distro's systemd unit + sysusers
-blackarch_compat/        BlackArch category install-test harness (for the distro)
-docs/ECOSYSTEM.md        cross-repo integration contract
+go/
+  cmd/sarina/        main: blank-imports the packages that register commands/tools
+  cli/               chat and resume; cli.Register adds a subcommand by name
+  agent/  agents/    the turn loop (compaction, budgets, plan mode); read-only subagents
+  llm/               OpenAI-compatible and Anthropic clients, local-model quirks
+  tools/             registry, permissions, builtins; tools.RegisterProvider adds tools
+  tiers/             compute tiers: local, then a bigger machine, then Claude
+  council/           several models, compared; the council command and council_ask tool
+  guard/ heimdall/   the shared scan gate; the optional Heimdall second opinion
+  memory/ skills/ mcp/ policy/   curated memory, operator skills, MCP (trust-gated), hooks policy
+  session/ sessionsearch/        session files (Heimdall reads them), search
+  limbo/             limbo_* tools and commands (validate in a disposable guest)
+  chymaera/          console client (Argus_App), firmware advisories, fleet, capture analysis
+  desktop/           application-menu categorisation (reports by default)
+  doctor/            read-only checkup of the whole setup
+  service/  gui/     integration API (:8899) and operator GUI (:8765)
+  helpers/           bridge to the Python ML/voice helper
+  notes/ NOTES.md    design notes and status for the Go core
+python/sarina_helpers/   optional ML and voice helper
+packaging/arch/      source of truth for the distro's systemd unit + sysusers + PKGBUILD
+docs/ECOSYSTEM.md    cross-repo integration contract
+docs/spec/           the clean-room behaviour specs the Go core was written from
 ```
 
-Adding a CLI command means three edits in `main.py`: an import, a
-`subparsers.add_parser(...)` block, and an `if args.command == ...` branch.
-Follow a neighbouring command exactly.
+Adding a CLI command: `cli.Register(name, summary, fn)` from the package's
+`init()`, and a blank import in `cmd/sarina/main.go`. Adding a tool:
+`tools.RegisterProvider` from `init()`; a tool must declare a `Class`, and the
+model sees its definition on every request, so keep it small (`cmd/sarina`
+`TestToolDefinitionFootprint` caps the total; an optional tool needs its own cap).
 
 ## 4. Conventions
 
-- **Match the surrounding code.** Single quotes, `from __future__ import
-  annotations`, frozen dataclasses for results, `as_text()` for human-readable
-  rendering. Look at a neighbouring module first.
-- **Standard library only in the core agent.** New third-party dependencies in
-  `sarina/` outside `gui/` and `service/` need a real justification.
-- **Test what you add.** The suite is large and fast; keep it that way, and keep
-  it offline — no test may need a network or a model backend.
+- **Match the surrounding code.** Look at a neighbouring package first: a package
+  doc comment saying what it is and what it must never do, small exported surface,
+  errors as values, `t.TempDir()` and real `httptest` servers or sockets in tests
+  rather than mocks.
+- **Standard library only.** A new module dependency in `go/` needs a real
+  justification (and, for the distro, a package in Arch's repos: flag it `CONTRACT:`).
+- **Test what you add, offline.** Include the failure and hostile-input cases; this
+  codebase treats anything from a model, a guest, a sibling repo or the network as
+  untrusted data.
+- **Operator-owned config is never read from a workspace** (`tiers.json`,
+  `council.json`, policy files): a workspace could otherwise ship its own
+  destinations or executables. A broken config must narrow behaviour, never widen it.
+- **Sending text off the machine** goes through `tiers.Sanitize` (secrets removed,
+  capture dumps refused) and an operator confirmation. A model-callable tool that
+  does so must ask on every call through `tools.RuntimeOperatorConfirm`, never the
+  `Approver` (which can carry a session-long grant), and does nothing online when no
+  one can be asked. `fleet-launch` stays CLI-only; a test enforces it.
 - **Licence: MPL 2.0 for the current tree (see `LICENSE`); read `NOTICE.md`.** Do not
   copy code from the unlicensed upstream (HarnessLab/claw-code-agent); new code is
   written from the design.
 - **Never commit secrets.** No tokens, keys, or engagement/capture data.
 - **Hardware writes need a human.** See §5 and `docs/ECOSYSTEM.md` §2.
+- **Untrusted binaries are opened only inside Limbo** (owner rule, 2026-10-10):
+  decompiling, disassembling, running. Neither Sarina nor Heimdall has a
+  decompiler on the host.
 
 ## 4a. Licensing and provenance (read before editing)
 
@@ -140,19 +154,19 @@ other's repositories. This file is the contract + message board for this repo.
 
 Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
-- **Sarina → Chymaera_Linux:** **live.** The distro's PKGBUILD builds this repo
+- **Sarina → Chymaera_OS:** **live.** The distro's PKGBUILD builds this repo
   directly. `pyproject.toml`, `packaging/arch/*`, and `README.md` must not move,
   and the three console scripts (`sarina`, `sarina-gui`, `sarina-service`) must
   keep resolving. **Adding a runtime dependency is a cross-repo change** — it
   must exist in Arch's repos (note: Arch's uvicorn has no `python-` prefix), so
   flag it with `CONTRACT:` in the commit message.
-- **Sarina → Chymaera_Linux, agent fleet (contract item 7):** **live.**
+- **Sarina → Chymaera_OS, agent fleet (contract item 7):** **live.**
   `sarina fleet-usage` writes `sarina.json` into Omarchy's agents-panel usage
   directory, `fleet-status` reads the other agents' records (untrusted data,
   sanitised), and `fleet-launch` proposes launching another agent and runs only
   after a human confirms. `fleet-launch` is CLI-only and must **never** become a
   model-callable tool; a test enforces it. Detail in `docs/ECOSYSTEM.md` §1.
-- **Sarina → Chymaera_Zero_Firmware:** **live, read-only.**
+- **Sarina → Argus_Firmware:** **live, read-only.**
   `sarina/chymaera/firmware.py` + the `chymaera-device-info` and
   `chymaera-merge-report` commands. Sarina does not flash, does not touch
   `assets/protobuf/`, and does not apply firmware-core patches on its own.
@@ -160,22 +174,21 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   full 802.11 capture. **Merge risk is decided by upstream existence, not path**
   (their correction, not mine — see `docs/ECOSYSTEM.md` §2). Version string is
   now `<upstream>-CHY-<ours>[+ahead]`.
-- **Sarina → Chymaera_Zero_App:** **live.** That repo owns the protocol
+- **Sarina → Argus_App:** **live.** That repo owns the protocol
   (`docs/SARINA_API.md`: NDJSON over loopback TCP, port 44700, optional token).
   Sarina implements the client in `sarina/chymaera/console.py` and does **not**
   extend it — new commands get proposed on their board first. Read the datastore
   through the API only, never by opening its SQLite file.
-- **Sarina ↔ Chymaera_Sentry:** two contracts, opposite directions, full
-  detail in `docs/ECOSYSTEM.md` §4. **Sentry reads Sarina (§4a):**
-  **proposed.** Sentry polls `.port_sessions/*.json` (this repo's
-  `session_store.py` output) for its agent-behavior detectors; that file
-  shape is Sarina's internal state, not a published contract. **Sarina
-  consults Sentry (§4b):** **live, opt-in.** `sarina/sentry_governance.py`
-  calls Sentry's `POST /v1/review` from `sarina/memory_security.py`'s
-  `scan_memory_text` (opt-in via `SENTRY_REVIEW_URL`) as an out-of-process
-  second opinion, *after* this repo's own in-process checks pass. Fails
-  open on Sentry's absence, fails closed on an actual `"deny"`. No call
-  site outside `memory_security.py` changed.
+- **Sarina ↔ Heimdall:** (was Chymaera_Sentry) two contracts, opposite
+  directions, full detail in `docs/ECOSYSTEM.md` §4. **Heimdall reads Sarina
+  (§4a):** **live, reader-owned.** It polls the agent session files under
+  `.port_sessions/agent/*.json` (messages as objects with a `role`; the API key is
+  never written); keep that shape stable, `sarina doctor` checks it. **Sarina
+  consults Heimdall (§4b):** **live, opt-in.** `go/heimdall` calls its
+  `POST /v1/review` from the shared scan gate in `go/guard`, opt-in via
+  `HEIMDALL_REVIEW_URL` (the old `SENTRY_REVIEW_URL` is still honoured), as an
+  out-of-process second opinion *after* this repo's own checks pass. Fails open on
+  Heimdall's absence, fails closed on an actual `"deny"`.
 - **Sarina → Limbo (validation runs):** **live.** `sarina/chymaera/limbo.py` uses
   Limbo's *agent* socket (`SARINA_LIMBO_SOCKET`) to run a command in a
   disposable guest and read the result, to validate updates/installs before the
@@ -184,17 +197,108 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   quarantine. `limbo_validate` (tool) needs `allow_shell_commands`. A pass is
   **never** permission to apply the real update. Output is untrusted. Detail in
   `docs/ECOSYSTEM.md` section 8.
-- **Chymaera_Sentry → Sarina (advisory):** **live, opt-in.** Sentry may call
+- **Heimdall → Sarina (advisory):** **live, opt-in.** Heimdall may call
   this repo's service API (`/v1/sessions`, `/chat`) with `tool_allowlist: []` (a
   session with **no tools**) for an opinion on a quarantined Limbo guest, and
   checks the response's `tools` count is 0. The answer is an untrusted advisory
   a human reads; it cannot change anything. **Keep `tool_allowlist` and the
-  `tools` count in the session response: Sentry depends on them.**
+  `tools` count in the session response: Heimdall depends on them.**
   `docs/ECOSYSTEM.md` section 4c.
+- **Model council (`sarina council`, `council_ask`):** **live, internal.** Asks
+  several models (local, and online ones such as Claude, Gemini, ChatGPT) the same
+  question and compares the answers; for research when Sarina is stuck. Members get
+  no tools, online members get secrets and captures stripped, answers are untrusted
+  text, the comparison runs on a local member only. **Sarina asks before she reaches
+  out:** every online contact needs the operator's yes to the exact text, on every
+  call, and with no way to ask she stays local. Config is `~/.sarina/council.json`.
+  Detail in `docs/ECOSYSTEM.md` §9.
 - **Ports owned by this repo:** 8765 (GUI), 8899 (integration service). Full
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-10-10 (3) — Draft Limbo decompile profile and static-analysis skill
+- **New `packaging/limbo/decompile/`** (owner rule: all decompiling happens in Limbo):
+  `decompile.profile.json` (network none, no sudo, `exchange_dir` sample share; checked
+  with Limbo's own `limbo validate`, nothing in the Limbo repo changed),
+  `limbo-decompile` (guest-side wrapper: triage, functions, disasm via radare2;
+  decompile via Ghidra headless with `DecompileFunction.java`), a test with stub tools
+  (51 checks, pass on Arch under WSL with shellcheck), and a README with the image
+  recipe and the unverified list.
+- **New skill `packaging/skills/static-analysis`**: operator-invoked only
+  (`model_invocable: false`), allowed tools exactly `limbo_profiles` and
+  `limbo_validate`; a test enforces both. Not yet installed by the PKGBUILD.
+- **Wrapper guarantees (tested):** never executes the sample; rejects traversal,
+  symlinks and shell metacharacters in the file and function arguments (the first
+  draft's function check was a glob that accepted anything after `0x1`: caught by
+  the test, replaced by a regex); output capped at 48 KB, control characters
+  stripped, labelled untrusted.
+- **Not verified:** the real radare2 and Ghidra flags, the package names, virtiofs,
+  and Ghidra's time inside the 900 s cap. Run it on a harmless binary first.
+- **For other boards:** Limbo's exchange share is guest-writable and not marked
+  read-only in its XML (a read-only option for validation profiles would help);
+  Heimdall cannot call this profile by design, so "Heimdall analyses quarantined
+  files" needs a decision on who copies a file out and who triggers the run.
+— Signed: Sarina / Claude Sonnet 5.5
+
+### 2026-10-10 (2) — Council can be asked by Sarina herself; sections 2-4 rewritten; both distros
+- **Owner's direction:** Sarina should be able to use Claude, Gemini, ChatGPT and
+  others as research helpers when she is stuck, **but must ask before reaching out**,
+  and should work on both distros (Chymaera_OS and Labyrinth_OS), with Labyrinth the
+  current focus (replacing Windows on one machine).
+- **New `council_ask` tool** (`go/council/tool.go`), offered only when a council is
+  configured. Reverses the earlier "never a tool" rule on purpose, with narrower
+  guarantees: every online member is asked about on **every call**, showing its host
+  and the exact text, through a new dedicated channel (`tools.RuntimeOperatorConfirm`,
+  set by `agent.Options.Confirm` / `Agent.SetConfirm`, wired in `cli/chat.go`). It is
+  **not** the `Approver`: the GUI's "allow for this session" would make it a standing
+  yes, and a test fails if the tool touches it. No channel (service, headless, GUI for
+  now) means local members only. One `question` argument, at most 6000 characters.
+- **Claude as a member** (`kind: "claude"`, Anthropic Messages API); Gemini and
+  ChatGPT through their OpenAI-compatible endpoints. Not built: provider-hosted web
+  search, so today online models answer from what they know.
+- **Fixes noticed earlier:** `local_concurrency` (default 1, so local members do not
+  pile onto one GPU: the Labyrinth machine has 11 GB of VRAM that games also need),
+  `max_remote_members` (default 3), a token total in the output, `council status
+  --probe` (models-list request only; no question sent), and a size cap test on the
+  tool definition. The footprint test now ignores the developer's own council config.
+- **Docs:** sections 2-4 of this file now describe the Go core (they described the
+  old Python layout). ECOSYSTEM §1 notes the two hosts; §9 rewritten.
+- **Labyrinth_OS reality check, from its own `docs/STATUS.md` (2026-10-10):** the ISO
+  build pieces (local repo in `pacman.conf`, build scripts, live-session setup) are
+  listed as missing, its Limbo `driver-test` profile and Sarina hook are not built,
+  and nothing has been booted. Chymaera_OS has build scripts. If Labyrinth is further
+  along than its STATUS says, update it so other agents are not misled.
+— Signed: Sarina / Claude Sonnet 5.5
+
+### 2026-10-10 — Repos renamed; Heimdall rename finished here; model council added
+- **Names:** Chymaera_Sentry is now **Heimdall**, Chymaera_Linux is **Chymaera_OS**,
+  Chymaera_Zero_App is **Argus_App**, Chymaera_Zero_Firmware is **Argus_Firmware**;
+  **Labyrinth_OS** (CachyOS daily driver) and Daedalus_CAD are new neighbours.
+  Updated here: this file's live sections, `docs/ECOSYSTEM.md`, `README.md`, the
+  ecosystem-troubleshoot skill, the PKGBUILD description, and Go comments/messages.
+  Deliberately **not** rewritten: the log entries below (history), `docs/spec/`
+  and `docs/PROVENANCE.md` (clean-room inputs and the audit record), and the
+  legacy Python under `sarina/` and `tests/`, which is superseded by the Go core.
+- **Sarina's own Heimdall rename** (the one Heimdall's log said was still owed):
+  `go/sentry` is now `go/heimdall`; the doctor check id is `heimdall`; the review
+  URL variable is `HEIMDALL_REVIEW_URL`. **`SENTRY_REVIEW_URL` still works** when
+  the new name is unset, so existing deployments need no change. CONTRACT: the
+  env var rename is visible to the distros' service env files; ask them to switch
+  to the new name when convenient. Heimdall's systemd unit/user is now `heimdall`,
+  which the doctor remedy text follows.
+- **New `go/council` + `sarina council`**: advisory second opinions from several
+  models; no tools for members, local/online derived from the URL, online members
+  confirmed and sanitised, local-only comparison. Idea from freellmapi (MIT, Node);
+  no code taken, and none of its key pooling. Tests use real HTTP servers. Added
+  exported `tiers.ParseAllowData` and `tiers.LooksLikeKey` so the council reuses
+  the tier rules. (First built CLI-only; see the next entry for `council_ask`.)
+- **Policy recorded (owner):** all decompiling or disassembling of untrusted
+  binaries happens inside Limbo. Neither Sarina nor Heimdall has a decompiler yet
+  (an earlier statement in conversation that they did was wrong).
+- **Not verified:** a council run against a real model server; the Windows `go
+  test ./...` passes, nothing was run on Arch.
+— Signed: Sarina / Claude Sonnet 5.5
 
 ### 2026-10-08 — Old git history removed; "keep private" restrictions lifted
 - Owner removed the old history that contained the derived ClawCode code. The

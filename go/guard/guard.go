@@ -2,7 +2,7 @@
 // somewhere a future prompt reads from (curated memory, skills, session notes,
 // compaction summaries) goes through Gate.Scan: invisible/bidirectional
 // Unicode, instruction-override phrases and credential shapes are refused,
-// and, for a gate with a SentryKind, Chymaera Sentry gets an out-of-process
+// and, for a gate with a HeimdallKind, Heimdall gets an out-of-process
 // second opinion after the local checks pass.
 //
 // Keep every pattern list here. A second copy elsewhere is how gates drift.
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Artifex-Technologies/Sarina/go/sentry"
+	"github.com/Artifex-Technologies/Sarina/go/heimdall"
 )
 
 // Result is a scan verdict.
@@ -30,10 +30,10 @@ type Scanner interface {
 
 // Gate is the shared Scanner.
 type Gate struct {
-	// SentryKind, when set, makes Scan consult Sentry (POST /v1/review) with
+	// HeimdallKind, when set, makes Scan consult Heimdall (POST /v1/review) with
 	// this kind after the local checks pass. Memory uses "memory_proposal".
-	SentryKind string
-	// SessionID is sent along to Sentry (memory sends none today).
+	HeimdallKind string
+	// SessionID is sent along to Heimdall (memory sends none today).
 	SessionID string
 	// AllowLeadingBOM tolerates a byte-order mark at the very start (whole
 	// files read from disk); everywhere else it is blocked.
@@ -41,11 +41,11 @@ type Gate struct {
 }
 
 // Default is the gate for operator-visible local text: all local checks, no
-// Sentry call (every skill load and notes refresh would otherwise wait on it).
+// Heimdall call (every skill load and notes refresh would otherwise wait on it).
 func Default() Gate { return Gate{AllowLeadingBOM: true} }
 
-// Memory is the gate for curated-memory writes: local checks, then Sentry.
-func Memory() Gate { return Gate{SentryKind: "memory_proposal"} }
+// Memory is the gate for curated-memory writes: local checks, then Heimdall.
+func Memory() Gate { return Gate{HeimdallKind: "memory_proposal"} }
 
 var invisibleCodepoints = map[rune]bool{
 	0x200B: true, 0x200C: true, 0x200D: true, 0x2060: true, 0xFEFF: true, 0x00AD: true,
@@ -104,9 +104,9 @@ func (g Gate) Scan(text string) Result {
 			return Result{true, "looks like it contains a credential or secret; those belong outside memory"}
 		}
 	}
-	if g.SentryKind != "" {
-		if v := sentry.Consult(text, g.SentryKind, g.SessionID); v != nil && v.Denied {
-			return Result{true, "Chymaera Sentry flagged this independently: " + strings.Join(v.Reasons, "; ")}
+	if g.HeimdallKind != "" {
+		if v := heimdall.Consult(text, g.HeimdallKind, g.SessionID); v != nil && v.Denied {
+			return Result{true, "Heimdall flagged this independently: " + strings.Join(v.Reasons, "; ")}
 		}
 	}
 	return Result{}
