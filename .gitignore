@@ -39,21 +39,17 @@ claude-code-sourcemap-main
 # Voice cloning: reference recordings, generated corpora, checkpoints, and
 # the produced voice model are all personal biometric-like data -- never
 # committed by default. See tools/voice_clone/README.md.
-tools/voice_clone/samples/
-tools/voice_clone/corpus/
-tools/voice_clone/corpus_real/
-tools/voice_clone/checkpoints/
-tools/voice_clone/stock_voice/
-tools/voice_clone/OpenVoice/
-tools/voice_clone/cache/
-tools/voice_clone/cache_clean/
-tools/voice_clone/logs/
-tools/voice_clone/exported/
-tools/voice_clone/processed/
-tools/voice_clone/scratch/
-tools/voice_clone/test_audio/
-tools/voice_clone/*.log
-tools/voice_clone/*.onnx
-tools/voice_clone/*.onnx.json
+tools/voice_clone/*
 # Local progress notes
 progress.md
+
+# Audio is personal/private -- never committed, anywhere in the tree
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.opus
+*.aac
+*.ckpt
+*.pt
