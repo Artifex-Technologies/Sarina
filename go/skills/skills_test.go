@@ -145,7 +145,7 @@ func TestWorkspaceSkillIgnoredWithoutTheFlag(t *testing.T) {
 		t.Fatalf("tool offered: %v", tool.Spec.Name)
 	}
 	// Also not reachable by pointing the workspace at HOME-less discovery.
-	if got := Discover(Options{Workspace: e.ws, Getenv: func(string) string { return "" }}); len(got.Skills) != 0 {
+	if got := Discover(Options{Workspace: e.ws, SystemDir: t.TempDir(), Getenv: func(string) string { return "" }}); len(got.Skills) != 0 {
 		t.Fatal("workspace skill loaded with no home")
 	}
 }

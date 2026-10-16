@@ -81,7 +81,7 @@ func newHarness(t *testing.T, stdin io.Reader) *harness {
 				return "0" // these fake backends count requests; discovery has its own tests
 			}
 			return ""
-		}, Home: t.TempDir()}
+		}, Home: t.TempDir(), SystemSkillsDir: t.TempDir()} // not the host's /usr/share/sarina/skills
 	return h
 }
 

@@ -23,6 +23,8 @@ type Env struct {
 	Getenv     func(string) string
 	Interrupts <-chan os.Signal // Ctrl-C; nil means "install a real handler"
 	Home       string           // home directory for ~/.sarina; empty means the user's real one
+	// SystemSkillsDir overrides the root-owned skills directory (tests); empty means the packaged default.
+	SystemSkillsDir string
 	// NewClient builds the model transport; nil uses the HTTP client.
 	NewClient func(config.ModelConfig) agent.Completer
 }

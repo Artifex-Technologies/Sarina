@@ -32,7 +32,7 @@ func (o *opts) catalog(env *Env) *skills.Catalog {
 		return o.cat
 	}
 	ws, _ := filepath.Abs(o.cwd)
-	o.cat = skills.Discover(skills.Options{Home: env.homeDir(), Getenv: env.Getenv, Workspace: ws, TrustWorkspace: o.trustWorkspaceSkills})
+	o.cat = skills.Discover(skills.Options{Home: env.homeDir(), SystemDir: env.SystemSkillsDir, Getenv: env.Getenv, Workspace: ws, TrustWorkspace: o.trustWorkspaceSkills})
 	for _, n := range o.cat.Notices {
 		fmt.Fprintf(env.Stderr, "[notice] %s\n", n)
 	}
