@@ -37,7 +37,7 @@ public class DecompileFunction extends GhidraScript {
 			for (int i = 1; i < args.length; i++) {
 				String want = args[i];
 				out.println("=== " + want + " ===");
-				Function f = find(want);
+				Function f = findFunc(want);
 				if (f == null) {
 					out.println("no function found for " + want);
 					continue;
@@ -55,7 +55,7 @@ public class DecompileFunction extends GhidraScript {
 		}
 	}
 
-	private Function find(String want) {
+	private Function findFunc(String want) {
 		if (want.startsWith("0x") || want.startsWith("0X")) {
 			try {
 				Address a = toAddr(Long.parseUnsignedLong(want.substring(2), 16));

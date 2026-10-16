@@ -8,7 +8,8 @@
 #
 # FILE is a path under $LIMBO_SAMPLE_DIR (the read-only exchange mount). FUNC is an
 # address such as 0x401136 (best: addresses from `functions` work in both tools) or a
-# plain symbol name.
+# plain symbol name. Ghidra rebases position-independent binaries to 0x100000, so radare2's 0x1149 is 0x101149 there;
+# use the symbol name when unsure.
 #
 # Rules this script keeps, because the sample is hostile:
 #   - It never executes, loads or runs the sample: only parsers and a decompiler read it.
@@ -38,7 +39,7 @@ die() { echo "limbo-decompile: $*" >&2; exit 2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not installed in this guest image"; }
 
 usage() {
-	sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' >&2
+	sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' >&2
 	exit 2
 }
 
