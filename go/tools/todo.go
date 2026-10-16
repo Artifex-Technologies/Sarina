@@ -742,7 +742,7 @@ func taskCreate() Tool {
 		Requires: PermWrite, Class: ClassMutating,
 		Spec: llm.ToolSpec{
 			Name:        "task_create",
-			Description: "Add a task to YOUR OWN session to-do list (kept by this agent, not a file). If the user asks to add an item to a to-do list that lives in a file (todo.md, TODO.txt ...), edit that file with the file tools instead, then re-read it to confirm.",
+			Description: "Add a task to YOUR OWN session list, not a file (a todo.md is edited with the file tools).",
 			Parameters:  obj(withProps(map[string]any{"task_id": prop("string", "")}), "title"),
 		},
 		Handler: func(ctx context.Context, args map[string]any, tc *Context) (string, map[string]any, error) {

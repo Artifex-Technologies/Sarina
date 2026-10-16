@@ -144,8 +144,12 @@ func WriteFile() Tool {
 			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 				return "", nil, fmt.Errorf("cannot write %s: %v", given, err)
 			}
+			if err := verifyOnDisk(path, content); err != nil {
+				return "", nil, fmt.Errorf("wrote %s but reading it back does not match: %v", given, err)
+			}
 			md["after_sha256"], md["after_size"], md["after_preview"] = sha256Hex(content), len(content), preview(content, 240)
-			return fmt.Sprintf("Wrote %s (%d characters).", relPath(tc.Root, path), len([]rune(content))), md, nil
+			md["verified_on_disk"] = true
+			return fmt.Sprintf("Wrote %s (%d characters). Read back from disk: it matches.", relPath(tc.Root, path), len([]rune(content))), md, nil
 		},
 	}
 }
@@ -218,9 +222,26 @@ func EditFile() Tool {
 				"old_text_preview": preview(oldT, 240), "new_text_preview": preview(newT, 240),
 				"replaced_occurrences": replaced,
 			}
-			return fmt.Sprintf("Edited %s (%d replacement%s).", relPath(tc.Root, path), replaced, plural(replaced)), md, nil
+			if err := verifyOnDisk(path, after); err != nil {
+				return "", nil, fmt.Errorf("edited %s but reading it back does not match: %v", given, err)
+			}
+			md["verified_on_disk"] = true
+			return fmt.Sprintf("Edited %s (%d replacement%s). Read back from disk: it matches.", relPath(tc.Root, path), replaced, plural(replaced)), md, nil
 		},
 	}
+}
+
+// verifyOnDisk reads a file back and checks it holds exactly what was meant to be written, so the agent never reports a change the
+// disk does not have (a full disk, a filesystem that rewrites content, a file replaced meanwhile).
+func verifyOnDisk(path, want string) error {
+	got, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("cannot read it back: %v", err)
+	}
+	if string(got) != want {
+		return fmt.Errorf("it holds %d bytes, expected %d", len(got), len(want))
+	}
+	return nil
 }
 
 func plural(n int) string {

@@ -686,3 +686,19 @@ func TestSelfAuthoredBannerOnRead(t *testing.T) {
 		t.Fatalf("a new context has no memory of earlier writes: %q", r.Content)
 	}
 }
+
+func TestVerifyOnDisk(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "f.txt")
+	if err := os.WriteFile(p, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyOnDisk(p, "hello"); err != nil {
+		t.Errorf("matching content should verify: %v", err)
+	}
+	if err := verifyOnDisk(p, "hellO"); err == nil {
+		t.Error("different content must not verify")
+	}
+	if err := verifyOnDisk(p+".missing", "x"); err == nil {
+		t.Error("a missing file must not verify")
+	}
+}
