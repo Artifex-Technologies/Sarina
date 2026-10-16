@@ -60,6 +60,7 @@ package() {
     "$pkgdir/usr/share/doc/$pkgname/README.md"
   install -Dm644 LICENSE \
     "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-  install -Dm644 packaging/skills/ecosystem-troubleshoot/SKILL.md \
-    "$pkgdir/usr/share/sarina/skills/ecosystem-troubleshoot/SKILL.md"
+  for d in packaging/skills/*/; do
+    install -Dm644 "$d/SKILL.md" "$pkgdir/usr/share/sarina/skills/$(basename "$d")/SKILL.md"
+  done
 }
