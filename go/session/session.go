@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Artifex-Technologies/Sarina/go/config"
 	"github.com/Artifex-Technologies/Sarina/go/llm"
@@ -188,6 +189,19 @@ func (s *Session) Marshal() ([]byte, error) {
 // Path returns the file path for this session under dir.
 func Path(dir, id string) string { return filepath.Join(dir, id+".json") }
 
+// FileMode is the mode of a saved session file: 0600 unless SARINA_SESSION_FILE_MODE says 0640 or 0644 (anything else is
+// ignored). A monitor that runs as another user (Heimdall) can only read sessions that are group-readable; 0640 together
+// with a folder ACL or group for that user is the way to let it, without making the files world-readable.
+func FileMode(getenv func(string) string) os.FileMode {
+	switch strings.TrimSpace(getenv("SARINA_SESSION_FILE_MODE")) {
+	case "0640", "640":
+		return 0o640
+	case "0644", "644":
+		return 0o644
+	}
+	return 0o600
+}
+
 // Save writes the session atomically (temp file + rename, mode 0600) to
 // <dir>/<id>.json and returns the path.
 func (s *Session) Save(dir string) (string, error) {
@@ -222,7 +236,7 @@ func writeAtomic(dest, id string, data []byte) error {
 		cleanup()
 		return err
 	}
-	_ = os.Chmod(tmpName, 0o600)
+	_ = os.Chmod(tmpName, FileMode(os.Getenv))
 	if err := os.Rename(tmpName, dest); err != nil {
 		cleanup()
 		return err

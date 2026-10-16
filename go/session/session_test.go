@@ -382,3 +382,13 @@ func TestNewIDShape(t *testing.T) {
 		seen[id] = true
 	}
 }
+
+func TestFileModeIsPrivateUnlessAskedForGroupReadable(t *testing.T) {
+	env := func(v string) func(string) string { return func(string) string { return v } }
+	cases := map[string]os.FileMode{"": 0o600, "0600": 0o600, "0640": 0o640, "640": 0o640, " 0644 ": 0o644, "0777": 0o600, "666": 0o600, "junk": 0o600}
+	for in, want := range cases {
+		if got := FileMode(env(in)); got != want {
+			t.Errorf("SARINA_SESSION_FILE_MODE=%q: got %o, want %o", in, got, want)
+		}
+	}
+}
