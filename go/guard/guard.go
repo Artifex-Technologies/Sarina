@@ -66,6 +66,8 @@ var injectionPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\b(ignore|disregard|forget|override)\b[^.\n]{0,40}\b(previous|prior|above|earlier|all|any|your)\b[^.\n]{0,40}\b(instructions?|rules|prompts?|guidelines|constraints)\b`),
 	regexp.MustCompile(`(?i)\byou are no longer\b`),
 	regexp.MustCompile(`(?i)\b(reveal|print|show|output)\b[^.\n]{0,30}\b(system prompt|hidden instructions)\b`),
+	regexp.MustCompile(`(?i)\b(system|important|urgent|admin(istrator)?|security) (notice|message|instructions?|directive)s? (to|for) (the )?(ai|assistant|agent|model|llm)\b`),
+	regexp.MustCompile(`(?i)\b(notes?|messages?|instructions?) (to|for) (the )?(ai|assistant|agent|llm|language model)\s*:`),
 	regexp.MustCompile(`(?i)\b(bypass|disable|turn off)\b[^.\n]{0,30}\b(safety|permission|approval|guardrails?)\b`),
 }
 
