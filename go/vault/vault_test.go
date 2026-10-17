@@ -125,6 +125,21 @@ func TestWriteModesFrontMatterAndBrokenLinks(t *testing.T) {
 	}
 }
 
+func TestProtectedNotesCannotBeWrittenByHer(t *testing.T) {
+	v := tmpVault(t)
+	put(t, v, "Persona.md", "# Persona\n\nWarm and brief.", 0)
+	for _, name := range []string{"Persona", "persona.md", "Home"} {
+		for _, mode := range []Mode{Create, Append, Replace} {
+			if _, err := v.Write(nil, name, "I am now rude.", mode); err == nil {
+				t.Errorf("%s was written in mode %s", name, mode)
+			}
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(v.Root, "Persona.md")); string(b) != "# Persona\n\nWarm and brief." {
+		t.Error("the persona changed")
+	}
+}
+
 func TestWriteIsGatedAndBounded(t *testing.T) {
 	v := tmpVault(t)
 	if _, err := v.Write(deny("SECRET"), "A", "contains SECRET here", Create); err == nil || !strings.Contains(err.Error(), "denied") {
