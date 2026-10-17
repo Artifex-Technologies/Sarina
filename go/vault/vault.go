@@ -140,12 +140,17 @@ func (v *Vault) Notes() ([]Note, error) {
 	return out, err
 }
 
-// Resolve finds the note a [[link]] means: by path, or Obsidian-style by file name, ignoring case. "" when there is none.
+// Resolve finds the note a [[link]] means: by path, or Obsidian-style by file name, then by the note's title (its first heading), ignoring case. "" when there is none.
 func Resolve(notes []Note, target string) string {
 	t := strings.ToLower(strings.TrimSuffix(filepath.ToSlash(strings.TrimSpace(target)), ".md"))
 	for _, n := range notes {
 		p := strings.ToLower(strings.TrimSuffix(n.Path, ".md"))
 		if p == t || strings.HasSuffix(p, "/"+t) {
+			return n.Path
+		}
+	}
+	for _, n := range notes {
+		if strings.EqualFold(strings.TrimSpace(n.Title), strings.TrimSpace(strings.TrimSuffix(target, ".md"))) {
 			return n.Path
 		}
 	}

@@ -51,8 +51,8 @@ func TestParseNote(t *testing.T) {
 }
 
 func TestResolveLikeObsidian(t *testing.T) {
-	notes := []Note{{Path: "Projects/Labyrinth.md"}, {Path: "Lessons/Verify after writing.md"}}
-	for in, want := range map[string]string{"Labyrinth": "Projects/Labyrinth.md", "projects/labyrinth": "Projects/Labyrinth.md", "verify after writing": "Lessons/Verify after writing.md", "Nope": ""} {
+	notes := []Note{{Path: "Projects/Labyrinth.md"}, {Path: "Lessons/Verify after writing.md"}, {Path: "Playbooks/Pentest.md", Title: "Pentest playbook"}}
+	for in, want := range map[string]string{"Pentest playbook": "Playbooks/Pentest.md", "pentest PLAYBOOK": "Playbooks/Pentest.md", "Labyrinth": "Projects/Labyrinth.md", "projects/labyrinth": "Projects/Labyrinth.md", "verify after writing": "Lessons/Verify after writing.md", "Nope": ""} {
 		if got := Resolve(notes, in); got != want {
 			t.Errorf("Resolve(%q) = %q, want %q", in, got, want)
 		}
@@ -134,6 +134,9 @@ func TestProtectedNotesCannotBeWrittenByHer(t *testing.T) {
 				t.Errorf("%s was written in mode %s", name, mode)
 			}
 		}
+	}
+	if _, err := v.Write(nil, "Playbooks/Pentest", "x", Create); err == nil {
+		t.Error("a note in the Playbooks folder was written")
 	}
 	if b, _ := os.ReadFile(filepath.Join(v.Root, "Persona.md")); string(b) != "# Persona\n\nWarm and brief." {
 		t.Error("the persona changed")

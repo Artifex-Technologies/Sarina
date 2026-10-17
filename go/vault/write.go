@@ -12,9 +12,9 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/guard"
 )
 
-// Owner-only notes: she can read them (and does, at the start of a spoken question) but never changes them, so a note she was tricked into
+// Owner-only notes (and folders, written with a trailing /): she can read them (and does, at the start of a spoken question) but never changes them, so a note she was tricked into
 // writing cannot rewrite how she talks or what the vault says about itself. Compared case-insensitively against the note's path.
-var Protected = []string{"Persona.md", "Home.md"}
+var Protected = []string{"Persona.md", "Home.md", "Playbooks/"}
 
 // MaxNoteChars bounds one note: a vault note is a note, not a dump.
 const MaxNoteChars = 12000
@@ -51,7 +51,7 @@ func (v *Vault) Write(gate Scanner, name, content string, mode Mode) (WriteResul
 		return WriteResult{}, err
 	}
 	for _, p := range Protected {
-		if strings.EqualFold(rel, p) {
+		if strings.EqualFold(rel, p) || (strings.HasSuffix(p, "/") && strings.HasPrefix(strings.ToLower(rel), strings.ToLower(p))) { // a name ending in / protects the whole folder
 			return WriteResult{}, fmt.Errorf("%s belongs to the owner: you cannot change it (suggest a change to them instead)", rel)
 		}
 	}
