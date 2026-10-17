@@ -168,7 +168,16 @@ func Tools() []tools.Tool {
 					msg = fmt.Sprintf("Updated %s.", res.Path)
 				}
 				if len(res.BrokenLinks) > 0 {
-					msg += " Links to notes that do not exist yet: " + strings.Join(res.BrokenLinks, ", ") + "."
+					notes, _ := v.Notes()
+					var parts []string
+					for _, l := range res.BrokenLinks {
+						if sug := Suggest(notes, l); sug != "" {
+							parts = append(parts, fmt.Sprintf("[[%s]] (did you mean [[%s]]? fix it with mode replace)", l, sug))
+						} else {
+							parts = append(parts, "[["+l+"]]")
+						}
+					}
+					msg += " Links to notes that do not exist yet: " + strings.Join(parts, ", ") + "."
 				}
 				return msg, map[string]any{"action": "vault_write", "path": res.Path, "created": res.Created}, nil
 			},

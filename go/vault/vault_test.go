@@ -208,6 +208,15 @@ func TestAnExactTitleWinsAndAnIndexIsNotEvidence(t *testing.T) {
 	}
 }
 
+func TestSuggestFindsTheNoteAnInventedLinkMeant(t *testing.T) {
+	notes := []Note{{Path: "Lessons/Verify after writing.md", Title: "Verify after writing"}, {Path: "Entities/Gardening.md", Title: "Gardening"}}
+	for link, want := range map[string]string{"Verify writes": "Lessons/Verify after writing", "verify-after-writing": "Lessons/Verify after writing", "Gardening notes": "Entities/Gardening", "Totally different": ""} {
+		if got := Suggest(notes, link); got != want {
+			t.Errorf("Suggest(%q) = %q, want %q", link, got, want)
+		}
+	}
+}
+
 func TestLintFindsBrokenOrphansAndMissingFrontMatter(t *testing.T) {
 	v := tmpVault(t)
 	put(t, v, "A.md", "---\ncreated: x\n---\n\n# A\n\n[[B]] and [[Missing]]", 0)

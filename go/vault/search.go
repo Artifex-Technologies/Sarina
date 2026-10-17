@@ -252,3 +252,42 @@ func Backlinks(notes []Note, path string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// stems are the first four letters of each word: "writes" and "writing" meet at "writ".
+func stems(s string) map[string]bool {
+	m := map[string]bool{}
+	for _, t := range terms(s) {
+		if len(t) > 4 {
+			t = t[:4]
+		}
+		m[t] = true
+	}
+	return m
+}
+
+// Suggest names the existing note a mistyped or invented [[link]] most likely meant ("" when nothing is close): most of the link's
+// words must appear in the note's title or name.
+func Suggest(notes []Note, link string) string {
+	want := stems(link)
+	if len(want) == 0 {
+		return ""
+	}
+	best, bestScore := "", 0.0
+	for _, n := range notes {
+		have := stems(n.Title + " " + strings.TrimSuffix(n.Path[strings.LastIndex(n.Path, "/")+1:], ".md"))
+		shared := 0
+		for w := range want {
+			if have[w] {
+				shared++
+			}
+		}
+		score := float64(shared) / float64(len(want))
+		if shared >= 1 && score > bestScore {
+			best, bestScore = n.Path, score
+		}
+	}
+	if bestScore < 0.5 {
+		return ""
+	}
+	return strings.TrimSuffix(best, ".md")
+}
