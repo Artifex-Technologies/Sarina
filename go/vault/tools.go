@@ -60,7 +60,7 @@ func Tools() []tools.Tool {
 			Class: tools.ClassReadOnly,
 			Spec: llm.ToolSpec{
 				Name:        "vault_search",
-				Description: "Search your linked notes (the vault). Finds by words and by links between notes.",
+				Description: "Search your linked notes (the vault) by words and by links. Read the best note with vault_read before answering.",
 				Parameters: map[string]any{"type": "object", "required": []string{"query"}, "properties": map[string]any{
 					"query":       map[string]any{"type": "string", "description": "Words to look for."},
 					"max_results": map[string]any{"type": "integer", "minimum": 1, "maximum": 20, "description": "Default 8."},
@@ -147,7 +147,7 @@ func Tools() []tools.Tool {
 				Name:        "vault_write",
 				Description: "Write a note in the vault. Facts only, no secrets. Link related notes with [[name]]. Search before creating, to extend a note instead of repeating one.",
 				Parameters: map[string]any{"type": "object", "required": []string{"path", "content"}, "properties": map[string]any{
-					"path":    map[string]any{"type": "string", "description": "Folder/Name, e.g. Lessons/Verify after writing."},
+					"path":    map[string]any{"type": "string", "description": "A name inside the vault, never a full path: Lessons/Verify after writing, or Inbox/Idea."},
 					"content": map[string]any{"type": "string", "description": "Markdown, one idea; at most 12000 characters."},
 					"mode":    map[string]any{"type": "string", "enum": []string{"create", "append", "replace"}, "description": "Default create."},
 				}},

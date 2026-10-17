@@ -153,7 +153,7 @@ func Resolve(notes []Note, target string) string {
 }
 
 // ErrOutside is returned for a path that would leave the vault or touch a hidden file.
-var ErrOutside = errors.New("that path is outside the vault or is a hidden file")
+var ErrOutside = errors.New("not a note name inside the vault: give only a name such as Lessons/Verify after writing or Inbox/Voice test (the vault folder is already known, so never a full path), with no hidden files")
 
 // SafePath turns a note name into a path inside the vault: ".md" is added, hidden files and folders, "..", absolute paths and
 // anything that is not a plain note name are refused. Returns the relative and the absolute path.
