@@ -8,14 +8,15 @@ import (
 
 	_ "github.com/Artifex-Technologies/Sarina/go/chymaera"       // adds the chymaera-* commands
 	_ "github.com/Artifex-Technologies/Sarina/go/chymaera/fleet" // adds the fleet-* commands (CLI only, never tools)
-	_ "github.com/Artifex-Technologies/Sarina/go/council"         // adds the council command (CLI only, never a tool)
 	"github.com/Artifex-Technologies/Sarina/go/cli"
+	_ "github.com/Artifex-Technologies/Sarina/go/council" // adds the council command (CLI only, never a tool)
 	_ "github.com/Artifex-Technologies/Sarina/go/desktop" // adds the desktop-audit command
 	_ "github.com/Artifex-Technologies/Sarina/go/doctor"  // adds the doctor command and the read-only sarina_doctor tool
 	_ "github.com/Artifex-Technologies/Sarina/go/gui"     // adds the gui command
 	_ "github.com/Artifex-Technologies/Sarina/go/helpers" // adds memory-search and voice-chat (Python helper)
 	_ "github.com/Artifex-Technologies/Sarina/go/limbo"   // adds limbo_* tools and limbo-* commands
 	_ "github.com/Artifex-Technologies/Sarina/go/service" // adds the service command
+	_ "github.com/Artifex-Technologies/Sarina/go/vault"   // adds the vault-* commands and, with SARINA_VAULT set, the vault tools
 )
 
 // aliasCommand maps the packaging names to commands: a binary (or link) called
