@@ -16,6 +16,7 @@ import (
 	_ "github.com/Artifex-Technologies/Sarina/go/helpers" // adds memory-search and voice-chat (Python helper)
 	_ "github.com/Artifex-Technologies/Sarina/go/limbo"   // adds limbo_* tools and limbo-* commands
 	_ "github.com/Artifex-Technologies/Sarina/go/reverse" // adds reverse_engineer (REA + Ghidra in a sandbox) when SARINA_REVERSE=on
+	_ "github.com/Artifex-Technologies/Sarina/go/sysinfo" // adds system_status: how the computer is doing, read-only
 	_ "github.com/Artifex-Technologies/Sarina/go/service" // adds the service command
 	_ "github.com/Artifex-Technologies/Sarina/go/vault"   // adds the vault-* commands and, with SARINA_VAULT set, the vault tools
 )
