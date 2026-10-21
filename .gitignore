@@ -53,3 +53,4 @@ progress.md
 *.aac
 *.ckpt
 *.pt
+.obsidian/

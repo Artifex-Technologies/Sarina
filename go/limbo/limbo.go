@@ -21,6 +21,7 @@ package limbo
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -449,6 +450,19 @@ func describeProfiles(m map[string]any) []ProfileInfo {
 // non-zero exit is a RESULT (that is what validation is for); only failing to
 // run at all is an error.
 func (c *Client) Validate(profile, command string, timeoutSeconds int) (RunResult, error) {
+	return c.run(profile, command, nil, timeoutSeconds)
+}
+
+// ValidateBundle is Validate for a run that carries a small tar of source files into the guest (the agent forge's programs). Limbo
+// accepts it only for a profile whose human author allowed bundles, and caps its size.
+func (c *Client) ValidateBundle(profile, command string, bundle []byte, timeoutSeconds int) (RunResult, error) {
+	if len(bundle) == 0 {
+		return RunResult{}, &Error{"the bundle is empty"}
+	}
+	return c.run(profile, command, bundle, timeoutSeconds)
+}
+
+func (c *Client) run(profile, command string, bundle []byte, timeoutSeconds int) (RunResult, error) {
 	if !profileRE.MatchString(profile) {
 		return RunResult{}, &Error{"profile name must be lowercase letters, digits and hyphens"}
 	}
@@ -459,11 +473,16 @@ func (c *Client) Validate(profile, command string, timeoutSeconds int) (RunResul
 	if err != nil {
 		return RunResult{}, err
 	}
-	started, err := c.request(p, "POST", "/v1/runs", struct {
+	body := struct {
 		Profile        string `json:"profile"`
 		Command        string `json:"command"`
 		TimeoutSeconds int    `json:"timeout_seconds"`
-	}{profile, command, timeoutSeconds})
+		Bundle         string `json:"bundle,omitempty"`
+	}{profile, command, timeoutSeconds, ""}
+	if len(bundle) > 0 {
+		body.Bundle = base64.StdEncoding.EncodeToString(bundle)
+	}
+	started, err := c.request(p, "POST", "/v1/runs", body)
 	if err != nil {
 		return RunResult{}, err
 	}

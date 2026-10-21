@@ -1,6 +1,7 @@
 # Agent forge: Sarina writes her own agents, and they run in Limbo (design, 2026-10-20)
 
-Status: design only, nothing built. Ideas come from DeerFlow (MIT, ByteDance), Prime Agent (MIT, Prime Intellect), Soup, Laya and turbovec; none of their code is used. They are references: Sarina's version is written here, in Go, so every line is ours to check.
+Status (2026-10-20): steps 1 and 2 built and unit-tested; not yet run against a real guest. Limbo carries a small tar into a guest (`allow_bundle` profiles only, audited by hash); Sarina's `go/forge` package stores agents, pins approvals to a hash, builds the bundle and runs it through Limbo; tools `forge_list`, `forge_write`, `forge_run` exist only with `SARINA_FORGE=on`; the owner approves with `sarina forge-approve NAME` (needs a real terminal). Of the nine hostile cases below, the ones about names, sizes, symlinks, self-editing after approval, approval from a script, output labelled as evidence and the hourly limit are unit tests; the ones that need a real guest (network, reading the host's home, forking forever, output floods inside the guest) still need a run against Limbo with the `agent-run` profile, which a human has to create (see Limbo's `examples/agent-profile.json` and an image with the interpreters).
+Original status: design only, nothing built. Ideas come from DeerFlow (MIT, ByteDance), Prime Agent (MIT, Prime Intellect), Soup, Laya and turbovec; none of their code is used. They are references: Sarina's version is written here, in Go, so every line is ours to check.
 
 ## What the owner asked for
 Sarina may write agents in whatever language the project calls for, and use Limbo (the disposable sandbox) to run them, while staying as safe as possible for the owner and for end users.
