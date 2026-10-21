@@ -25,7 +25,7 @@ func TestUnknownTopic(t *testing.T) {
 func TestToolIsReadOnly(t *testing.T) {
 	t.Setenv("SARINA_SYSTEM", "on")
 	ts := Tools()
-	if len(ts) != 1 || ts[0].Spec.Name != "system_status" || ts[0].Requires != 0 {
+	if len(ts) != 2 || ts[1].Spec.Name != "system_status" || ts[1].Requires != 0 || ts[0].Requires != 0 {
 		t.Fatalf("bad tool: %+v", ts)
 	}
 }
@@ -34,5 +34,28 @@ func TestOffByDefault(t *testing.T) {
 	t.Setenv("SARINA_SYSTEM", "")
 	if len(Tools()) != 0 {
 		t.Fatal("the tool must be off unless SARINA_SYSTEM=on")
+	}
+}
+
+func TestCrashDetailRefusesOddNames(t *testing.T) {
+	for _, bad := range []string{"", "-1", "a b", "../x", "$(id)", "a;b", "x\ny", "--help"} {
+		if _, err := CrashDetail(context.Background(), bad); err == nil {
+			t.Fatalf("%q must be refused", bad)
+		}
+	}
+}
+
+func TestCrashDetailRuns(t *testing.T) {
+	out, err := CrashDetail(context.Background(), "python3")
+	if err != nil || !strings.Contains(out, "Latest crash") || strings.Contains(out, `\n`) {
+		t.Fatalf("%v %q", err, out)
+	}
+}
+
+func TestNewTopicsExist(t *testing.T) {
+	for _, k := range []string{"crashes", "boot", "audio", "kernel"} {
+		if _, ok := Topics[k]; !ok {
+			t.Fatalf("topic %s missing", k)
+		}
 	}
 }

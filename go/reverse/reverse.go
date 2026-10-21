@@ -133,7 +133,7 @@ func Tools() []tools.Tool {
 		}
 		bin = p
 	}
-	return []tools.Tool{{
+	return []tools.Tool{stageTool(), {
 		Class: tools.ClassReadOnly,
 		Spec: llm.ToolSpec{
 			Name:        "reverse_engineer",
@@ -167,4 +167,25 @@ func Tools() []tools.Tool {
 			return text, map[string]any{"action": "reverse_engineer", "command": str("command"), "path": str("path")}, nil
 		},
 	}}
+}
+
+func stageTool() tools.Tool {
+	return tools.Tool{
+		Requires: tools.PermWrite, Class: tools.ClassMutating,
+		Spec: llm.ToolSpec{
+			Name:        "stage_binary",
+			Description: "Copy an installed program or driver (under /usr, /opt, your program folders) into the analysis folder, read-only, so reverse_engineer can read it. The original is not touched or run. Returns the copy's path.",
+			Parameters: map[string]any{"type": "object", "required": []string{"path"}, "properties": map[string]any{
+				"path": map[string]any{"type": "string", "description": "Full path of the installed program."},
+			}},
+		},
+		Handler: func(ctx context.Context, a map[string]any, tc *tools.Context) (string, map[string]any, error) {
+			p, _ := a["path"].(string)
+			dst, err := Stage(p)
+			if err != nil {
+				return "", nil, err
+			}
+			return "Copied to " + dst + " (read-only). Now use reverse_engineer on that path.", map[string]any{"action": "stage_binary", "path": p, "copy": dst}, nil
+		},
+	}
 }

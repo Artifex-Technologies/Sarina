@@ -49,6 +49,20 @@ var Topics = map[string][]step{
 		{"Services that failed", []string{"systemctl", "--failed", "--no-pager", "--plain"}, 0},
 		{"User services that failed", []string{"systemctl", "--user", "--failed", "--no-pager", "--plain"}, 0},
 	},
+	"crashes": {
+		{"Recent crashes (core dumps)", []string{"coredumpctl", "list", "--no-pager", "-n", "12"}, 0},
+		{"Crash and out-of-memory lines this boot", []string{"journalctl", "-b", "--no-pager", "-n", "25", "-g", "segfault|core dumped|dumped core|out of memory|oom-kill|Killed process|general protection", "-o", "short"}, 0},
+	},
+	"boot": {
+		{"Time to start", []string{"systemd-analyze", "--no-pager"}, 0},
+		{"Slowest services at start", []string{"systemd-analyze", "blame", "--no-pager"}, 12},
+	},
+	"audio": {
+		{"Sound devices and apps", []string{"wpctl", "status"}, 28},
+	},
+	"kernel": {
+		{"Kernel warnings and errors this boot", []string{"journalctl", "-k", "-b", "-p", "warning", "-n", "30", "--no-pager", "-o", "short"}, 0},
+	},
 	"hardware": {
 		{"Temperatures and fans", []string{"sensors"}, 30},
 		{"Graphics card", []string{"nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader"}, 0},
@@ -115,11 +129,11 @@ func Tools() []tools.Tool {
 	if os.Getenv("SARINA_SYSTEM") != "on" {
 		return nil
 	}
-	return []tools.Tool{{
+	return []tools.Tool{crashTool(), {
 		Class: tools.ClassReadOnly,
 		Spec: llm.ToolSpec{
 			Name:        "system_status",
-			Description: "How the computer is doing now (read-only): performance, network, disk, logs, services, hardware. Call it before answering about slowness, internet, errors or health.",
+			Description: "How the computer is doing now (read-only): performance, network, disk, logs, services, hardware, crashes, boot, audio, kernel. Call it before answering about slowness, internet, errors, crashes or health.",
 			Parameters: map[string]any{"type": "object", "required": []string{"topic"}, "properties": map[string]any{
 				"topic": map[string]any{"type": "string", "enum": names()},
 			}},

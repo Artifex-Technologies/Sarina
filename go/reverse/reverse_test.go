@@ -65,11 +65,31 @@ func TestToolIsOfferedOnlyWithTheSandboxInstalled(t *testing.T) {
 	}
 	t.Setenv("LABYRINTH_REA", "/bin/true")
 	ts := Tools()
-	if len(ts) != 1 || ts[0].Spec.Name != "reverse_engineer" || ts[0].Requires != 0 {
+	if len(ts) != 2 || ts[1].Spec.Name != "reverse_engineer" || ts[1].Requires != 0 || ts[0].Spec.Name != "stage_binary" {
 		t.Errorf("tool: %+v", ts)
 	}
 	t.Setenv("SARINA_REVERSE", "")
 	if len(Tools()) != 0 {
 		t.Error("offered without SARINA_REVERSE=on")
+	}
+}
+
+func TestStageCopiesInstalledProgramsOnly(t *testing.T) {
+	t.Setenv("LABYRINTH_REA_SAMPLES", t.TempDir())
+	dst, err := Stage("/usr/bin/true")
+	if err != nil {
+		t.Skipf("no /usr/bin/true here: %v", err)
+	}
+	fi, err := os.Stat(dst)
+	if err != nil || fi.Mode().Perm() != 0o400 {
+		t.Fatalf("copy %v %v", fi, err)
+	}
+	if _, err := SandboxPath(dst); err != nil {
+		t.Fatalf("the copy must be inside the analysis folder: %v", err)
+	}
+	for _, bad := range []string{"/etc/shadow", "/etc/passwd", "/proc/self/environ", "/home/nobody/secret", "/usr/../etc/passwd", "/nonexistent"} {
+		if _, err := Stage(bad); err == nil {
+			t.Fatalf("%s must be refused", bad)
+		}
 	}
 }
