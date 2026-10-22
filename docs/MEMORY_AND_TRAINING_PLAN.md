@@ -13,3 +13,9 @@ Order: wire vecindex into vault_search/memory-search (needs an embedder: the hel
 
 
 Shipping: Sarina is optional. The image only carries her for this build; for everyone else she is a Marketplace component (`sarina` in components.json), installed by choice. Nothing above may become a dependency of the OS or of Yggdrasil.
+
+## Status 2026-10-22
+- vecindex: wired into vault recall (SARINA_SEMANTIC=on, nomic-embed-text through Ollama, per-paragraph vectors, 4-bit index). Done.
+- Laya's idea: built as `sarina route` with the same small embedding model (topics by meaning from example questions) instead of Laya's 400M model; spoken questions use it to decide what to look up. Done.
+- Soup: the data half is built (tools/training: a review sheet the owner ticks, export of ticked examples as chat JSONL) with a starting soup.yaml. No training has been run: it needs a few hundred ticked examples, Soup's training extras and hours of GPU time, and the evals decide whether a tuned model replaces the current one.
+- Prime Agent's refine-with-rollback: not built (her memory-review asks the owner already).

@@ -1,0 +1,19 @@
+# Soup (github.com/MakazhanAlpamys/Soup, Apache-2.0) configuration for a LoRA on Sarina's model, trained only on examples the owner ticked.
+# Not run by anything automatically. It needs the training extras (pip install "soup-cli[train]") and several hours of the graphics card:
+# do not run it while gaming. Check the keys against Soup's docs for the version you install; this is a starting point, not a tested recipe.
+base_model: Qwen/Qwen3-8B
+task: chat
+data:
+  train: ~/.local/share/sarina/training/approved.jsonl
+  format: messages
+training:
+  method: qlora          # 4-bit base, small adapters: fits a 12-16 GB card
+  epochs: 2
+  learning_rate: 1.0e-4
+  lora_r: 16
+  lora_alpha: 32
+  max_seq_len: 4096
+  stream_layers: false   # true for a card with less memory (slower)
+output:
+  dir: ~/.local/share/sarina/training/lora
+  export: gguf           # then: ollama create sarina-tuned -f Modelfile (FROM qwen3:8b, ADAPTER ./lora.gguf)
