@@ -528,6 +528,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				text := ""
 				if claimsToolWork(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]) {
 					text = toolWorkText
+				} else if f := taskInsteadOfFile(prompt, rt.CWD, sess.Messages[min(msgStart, len(sess.Messages)):], hist); f != "" {
+					text = taskInsteadOfFileText(f)
 				} else if f := unbackedFileClaim(answer, hist); f != "" {
 					text = claimCheckText(f)
 				} else if f := unreportedChange(answer, hist); f != "" {

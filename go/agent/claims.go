@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -143,3 +144,39 @@ func claimsToolWork(answer, prompt string, msgs []session.Message) bool {
 }
 
 const toolWorkText = "Check before you finish: your answer describes looking, checking or analysing, but you used no tool in this task, so none of that happened. Use the tools now, or write your answer again saying plainly that you have not looked."
+
+var planningTools = map[string]bool{"task_create": true, "task_update": true, "todo_write": true, "plan_write": true}
+
+// taskInsteadOfFile returns a file the prompt names (and that exists in the workspace) when, in this task, a planning tool was used and no file
+// tool changed that file: "add an item to the todo list in todo.md" answered with her own task list leaves the file untouched.
+func taskInsteadOfFile(prompt, cwd string, msgs []session.Message, history []map[string]any) string {
+	planned := false
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			if planningTools[c.Function.Name] {
+				planned = true
+			}
+		}
+	}
+	if !planned {
+		return ""
+	}
+	for _, m := range claimFileRE.FindAllStringSubmatch(prompt, -1) {
+		name := m[1]
+		p := name
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(cwd, name)
+		}
+		if fi, err := os.Stat(p); err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		if unbackedFileClaim("I changed "+name+".", history) == name {
+			return name
+		}
+	}
+	return ""
+}
+
+func taskInsteadOfFileText(file string) string {
+	return "Check before you finish: the user asked about " + file + ", which is a file, but you used your own task list, which does not change any file. Make the change in " + file + " with the file tools now, then write your whole answer again."
+}

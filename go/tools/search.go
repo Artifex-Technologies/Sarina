@@ -113,6 +113,7 @@ func GlobSearch() Tool {
 			}
 			var matches []string
 			capped := false
+			skippedPrivate := 0
 			walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 				if ctx.Err() != nil {
 					return ctx.Err()
@@ -127,6 +128,7 @@ func GlobSearch() Tool {
 					return nil
 				}
 				if IsPrivate(p) {
+					skippedPrivate++
 					if d.IsDir() {
 						return filepath.SkipDir
 					}
@@ -164,15 +166,19 @@ func GlobSearch() Tool {
 			if walkErr != nil && !errors.Is(walkErr, fs.SkipAll) {
 				return "", nil, walkErr
 			}
+			note := ""
+			if skippedPrivate > 0 {
+				note = "\n[a folder the owner keeps private was skipped: what is in it cannot be seen; say so rather than \"not found\"]"
+			}
 			if len(matches) == 0 {
-				return "(no matches)", nil, nil
+				return "(no matches)" + note, nil, nil
 			}
 			sort.Strings(matches)
 			out := strings.Join(matches, "\n")
 			if capped {
 				out += fmt.Sprintf("\n[stopped at %d matches; use a narrower pattern]", maxGlobMatches)
 			}
-			return TruncateOutput(out, tc.MaxOutputChars), nil, nil
+			return TruncateOutput(out+note, tc.MaxOutputChars), nil, nil
 		},
 	}
 }
@@ -226,6 +232,7 @@ func GrepSearch() Tool {
 			root := realRoot(tc.Root)
 			var out []string
 			truncated := false
+			skippedPrivate := 0
 
 			searchFile := func(p string) {
 				rel := relPath(root, p)
@@ -280,6 +287,7 @@ func GrepSearch() Tool {
 							return filepath.SkipDir
 						}
 						if IsPrivate(p) {
+							skippedPrivate++
 							return filepath.SkipDir
 						}
 						return nil
@@ -302,10 +310,14 @@ func GrepSearch() Tool {
 					return "", nil, werr
 				}
 			}
-			if len(out) == 0 {
-				return "(no matches)", nil, nil
+			note := ""
+			if skippedPrivate > 0 {
+				note = "\n[a folder the owner keeps private was skipped: what is in it cannot be seen; say so rather than \"not found\"]"
 			}
-			text := strings.Join(out, "\n")
+			if len(out) == 0 {
+				return "(no matches)" + note, nil, nil
+			}
+			text := strings.Join(out, "\n") + note
 			if truncated {
 				text += fmt.Sprintf("\n[stopped at %d matches; narrow the pattern or path]", limit)
 			}

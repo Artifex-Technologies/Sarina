@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/Artifex-Technologies/Sarina/go/llm"
 	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
@@ -76,5 +79,21 @@ func TestClaimsToolWork(t *testing.T) {
 	}
 	if claimsToolWork("Paris is the capital of France.", "p", nil) || claimsToolWork("I checked: memory is fine.", "What the computer reports right now (read-only, already looked up for you", nil) {
 		t.Fatal("ordinary answers must pass")
+	}
+}
+
+func TestTaskInsteadOfFile(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "todo.md"), []byte("- [ ] milk\n"), 0o644)
+	used := []session.Message{{Role: "assistant", ToolCalls: []llm.WireToolCall{{Function: llm.FunctionCall{Name: "task_create"}}}}}
+	if f := taskInsteadOfFile("Add an item to the todo list in todo.md", dir, used, nil); f != "todo.md" {
+		t.Fatalf("got %q", f)
+	}
+	wrote := []map[string]any{{"tool_name": "edit_file", "ok": true, "path": filepath.Join(dir, "todo.md")}}
+	if f := taskInsteadOfFile("Add an item to the todo list in todo.md", dir, used, wrote); f != "" {
+		t.Fatalf("got %q", f)
+	}
+	if f := taskInsteadOfFile("Add an item to the todo list in todo.md", dir, nil, nil); f != "" {
+		t.Fatal("no planning tool, nothing to say")
 	}
 }
