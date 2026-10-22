@@ -126,6 +126,12 @@ func GlobSearch() Tool {
 				if p == root {
 					return nil
 				}
+				if IsPrivate(p) {
+					if d.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
 				rel, _ := filepath.Rel(root, p)
 				segs := strings.Split(filepath.ToSlash(rel), "/")
 				if globMatch(pat, segs) {
@@ -204,6 +210,9 @@ func GrepSearch() Tool {
 			if err != nil {
 				return "", nil, err
 			}
+			if err := privateGuard(given, start, "search"); err != nil {
+				return "", nil, err
+			}
 			info, err := os.Stat(start)
 			if err != nil {
 				return "", nil, fmt.Errorf("cannot access %s: %v", given, err)
@@ -268,6 +277,9 @@ func GrepSearch() Tool {
 					if d.IsDir() {
 						switch d.Name() {
 						case ".git", ".hg", ".svn":
+							return filepath.SkipDir
+						}
+						if IsPrivate(p) {
 							return filepath.SkipDir
 						}
 						return nil

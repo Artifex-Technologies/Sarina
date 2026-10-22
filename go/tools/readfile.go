@@ -97,6 +97,9 @@ func ReadFile() Tool {
 			if err := secretGuard(given, path, "read"); err != nil {
 				return "", nil, err
 			}
+			if err := privateGuard(given, path, "read"); err != nil {
+				return "", nil, err
+			}
 			st, err := os.Stat(path)
 			if err != nil {
 				return "", nil, fmt.Errorf("cannot read %s: %v", given, err)
@@ -177,6 +180,9 @@ func ListDir() Tool {
 			}
 			dir, err := ResolveInRoot(tc.Root, given)
 			if err != nil {
+				return "", nil, err
+			}
+			if err := privateGuard(given, dir, "list"); err != nil {
 				return "", nil, err
 			}
 			entries, err := os.ReadDir(dir)

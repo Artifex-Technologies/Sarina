@@ -107,6 +107,9 @@ func WriteFile() Tool {
 			if err := secretGuard(given, path, "write"); err != nil {
 				return "", nil, err
 			}
+			if err := privateGuard(given, path, "write"); err != nil {
+				return "", nil, err
+			}
 			st := stateOf(tc)
 			if isChurnMarkdown(relPath(tc.Root, path)) {
 				st.mu.Lock()
@@ -184,6 +187,9 @@ func EditFile() Tool {
 				return "", nil, err
 			}
 			if err := secretGuard(given, path, "edit"); err != nil {
+				return "", nil, err
+			}
+			if err := privateGuard(given, path, "edit"); err != nil {
 				return "", nil, err
 			}
 			st := stateOf(tc)
