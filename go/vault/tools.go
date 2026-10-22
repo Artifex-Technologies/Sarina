@@ -80,7 +80,7 @@ func Tools() []tools.Tool {
 				if f, ok := a["max_results"].(float64); ok && f >= 1 {
 					n = int(f)
 				}
-				hits := Search(notes, str(a, "query"), n)
+				hits := Recall(v, notes, str(a, "query"), n)
 				if len(hits) == 0 {
 					return "No notes matched.", map[string]any{"action": "vault_search", "hits": 0}, nil
 				}

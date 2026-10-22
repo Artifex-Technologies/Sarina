@@ -86,7 +86,7 @@ func searchCommand(env *cli.Env, args []string) int {
 		fmt.Fprintln(env.Stderr, "sarina vault-search:", err)
 		return 1
 	}
-	hits := Search(notes, strings.Join(rest, " "), 10)
+	hits := Recall(v, notes, strings.Join(rest, " "), 10)
 	for _, h := range hits {
 		fmt.Fprintf(env.Stdout, "%s  [%s]\n  %s\n", h.Path, strings.Join(h.Why, ", "), h.Snippet)
 	}
