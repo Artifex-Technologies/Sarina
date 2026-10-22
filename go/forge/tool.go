@@ -3,6 +3,7 @@ package forge
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ func init() {
 	tools.RegisterProvider(Tools)
 	cli.Register("forge-list", "list the agents Sarina has written, and whether you approved their current version", listCommand)
 	cli.Register("forge-approve", "look at an agent Sarina wrote and approve exactly that version: forge-approve NAME", approveCommand)
+	cli.Register("forge-remove", "delete an agent Sarina wrote (and its approval): forge-remove NAME", removeCommand)
 }
 
 // Enabled reports whether the forge is switched on (SARINA_FORGE=on). Off unless asked for: the tools cost every request some of the model's context,
@@ -150,6 +152,30 @@ func Tools() []tools.Tool {
 func listCommand(env *cli.Env, args []string) int {
 	s := DefaultStore()
 	names, err := s.List()
+	if len(args) == 1 && args[0] == "--json" {
+		type row struct {
+			Name     string `json:"name"`
+			Language string `json:"language"`
+			Purpose  string `json:"purpose"`
+			Command  string `json:"command"`
+			Files    int    `json:"files"`
+			Hash     string `json:"hash"`
+			Approved bool   `json:"approved"`
+			Problem  string `json:"problem,omitempty"`
+		}
+		rows := []row{}
+		for _, n := range names {
+			m, files, lerr := s.Load(n)
+			if lerr != nil {
+				rows = append(rows, row{Name: n, Problem: lerr.Error()})
+				continue
+			}
+			rows = append(rows, row{n, m.Language, m.Purpose, m.Command, len(files), hashOf(m, files)[:12], s.Approved(n), ""})
+		}
+		b, _ := json.Marshal(rows)
+		fmt.Fprintln(env.Stdout, string(b))
+		return 0
+	}
 	if err != nil {
 		fmt.Fprintln(env.Stdout, err)
 		return 1
@@ -209,3 +235,15 @@ func approveCommand(env *cli.Env, args []string) int {
 	return 0
 }
 
+func removeCommand(env *cli.Env, args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(env.Stderr, "usage: sarina forge-remove NAME")
+		return 2
+	}
+	if err := DefaultStore().Remove(args[0]); err != nil {
+		fmt.Fprintln(env.Stderr, err)
+		return 1
+	}
+	fmt.Fprintln(env.Stdout, "Removed "+args[0]+".")
+	return 0
+}
