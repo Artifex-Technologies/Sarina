@@ -1,6 +1,10 @@
 package agent
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
+)
 
 func TestUnbackedFileClaim(t *testing.T) {
 	wrote := []map[string]any{{"tool_name": "edit_file", "ok": true, "path": "/w/todo.md"}}
@@ -36,5 +40,21 @@ func TestUnreportedChange(t *testing.T) {
 	}
 	if got := unreportedChange("Done.", nil); got != "" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestUngroundedQuote(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "check_code: if (len == 6 && s[0] == 'L' && s[5] == '7') puts(\"access granted: labyrinth\")"}}
+	if q := ungroundedQuote("The correct input is `admin123`.", "explain demo.bin", tool); q != "admin123" {
+		t.Fatalf("got %q", q)
+	}
+	if q := ungroundedQuote("It prints \"access granted: labyrinth\".", "explain demo.bin", tool); q != "" {
+		t.Fatalf("a real quote was flagged: %q", q)
+	}
+	if q := ungroundedQuote("Say `admin123` to me.", "hi", nil); q != "" {
+		t.Fatal("without tools nothing is checked")
+	}
+	if q := ungroundedQuote("Read `/tmp/x/demo.bin` again.", "p", tool); q != "" {
+		t.Fatal("paths are not quotes from evidence")
 	}
 }

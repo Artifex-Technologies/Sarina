@@ -27,7 +27,7 @@ func taskByID(t *testing.T, e *env, id string) Task {
 func TestTaskLifecycle(t *testing.T) {
 	e := newEnv(t, writeAll())
 	r := e.ok("task_create", map[string]any{"title": "design", "task_id": "a", "priority": "high", "description": "think", "owner": "me"})
-	if r.Content != "Created task a: design [pending]" || r.Metadata["task_id"] != "a" || r.Metadata["action"] != "task_create" {
+	if !strings.HasPrefix(r.Content, "Created task a: design [pending]. This is your own session list: no file changed.") || r.Metadata["task_id"] != "a" || r.Metadata["action"] != "task_create" {
 		t.Fatalf("create: %+v", r)
 	}
 	for _, k := range []string{"path", "before_sha256", "after_sha256", "before_preview", "after_preview", "before_task_count", "after_task_count", "total_tasks"} {

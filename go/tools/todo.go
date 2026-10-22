@@ -764,7 +764,7 @@ func taskCreate() Tool {
 				if err := checkCycles(*ts, t.TaskID); err != nil {
 					return "", nil, err
 				}
-				return withNotes(fmt.Sprintf("Created task %s: %s [%s]", t.TaskID, t.Title, t.Status), notesFor(*ts, t, "")), &t, nil
+				return withNotes(fmt.Sprintf("Created task %s: %s [%s]. This is your own session list: no file changed. If the user asked to change a file (a todo.md, a list in a document), edit that file with the file tools.", t.TaskID, t.Title, t.Status), notesFor(*ts, t, "")), &t, nil
 			})
 		},
 	}

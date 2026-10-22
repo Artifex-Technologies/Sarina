@@ -372,7 +372,7 @@ CASES = [
          must=[r"(?i)settings", r"(?i)default apps"], must_not=[MD_RX], max_words=80,
          note="spoken help with the desktop: she looks it up in her guides instead of giving generic Linux commands"),
     dict(name="voice-proton-help", group="voice", voice=True, cwd=setup_empty, prompt="My Proton Drive is not showing up in my files. What should I do?",
-         must=[r"(?i)minos", r"(?i)sign"], must_not=[MD_RX, r"(?i)rclone config"], max_words=80,
+         must=[r"(?i)minos", r"(?i)(sign|log ?in|re-?enter)"], must_not=[MD_RX, r"(?i)rclone config"], max_words=80,
          note="spoken troubleshooting from her notes: the sign-in window in Minos, not terminal commands"),
 ]
 

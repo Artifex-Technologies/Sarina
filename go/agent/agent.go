@@ -524,6 +524,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = claimCheckText(f)
 				} else if f := unreportedChange(answer, hist); f != "" {
 					text = unreportedText(f)
+				} else if q := ungroundedQuote(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); q != "" {
+					text = ungroundedText(q)
 				}
 				if text != "" {
 					claimChecked = true

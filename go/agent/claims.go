@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // A small model sometimes finishes by saying it changed a file it never wrote (it used the wrong tool, or none). Before such an answer is
@@ -80,4 +82,46 @@ func unreportedChange(answer string, history []map[string]any) string {
 
 func unreportedText(file string) string {
 	return "Check before you finish: in this task you changed " + file + ", but your answer does not say so. Tell the user plainly what you changed in " + file + " and what it holds now."
+}
+
+var quotedRE = regexp.MustCompile("`([^`\\n]{4,60})`|\"([^\"\\n]{4,60})\"")
+
+// ungroundedQuote returns a literal the answer quotes (in backticks or double quotes) that appears in none of this task's tool output and not in
+// the prompt, when tools were used at all: quoting a string as if it came from the evidence, when it did not, is how a small model invents
+// passwords and messages a program never contained.
+func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
+	var evidence strings.Builder
+	used := false
+	for _, m := range msgs {
+		if m.Role == "tool" {
+			used = true
+			evidence.WriteString(m.Content)
+			evidence.WriteByte('\n')
+		}
+	}
+	if !used {
+		return ""
+	}
+	ev := strings.ToLower(evidence.String())
+	p := strings.ToLower(prompt)
+	for _, m := range quotedRE.FindAllStringSubmatch(answer, -1) {
+		q := m[1]
+		if q == "" {
+			q = m[2]
+		}
+		lq := strings.ToLower(strings.TrimSpace(q))
+		if lq == "" || strings.Contains(ev, lq) || strings.Contains(p, lq) {
+			continue
+		}
+		// a path, a command or a name the model writes in its own words is not a quote from the evidence: only literal-looking text counts
+		if strings.ContainsAny(q, "/\\") || strings.HasPrefix(q, "-") {
+			continue
+		}
+		return q
+	}
+	return ""
+}
+
+func ungroundedText(q string) string {
+	return "Check before you finish: your answer quotes \"" + q + "\", but no tool output in this task contains it. Only state what the tools showed: look again with your tools, or say plainly that you have not seen it."
 }
