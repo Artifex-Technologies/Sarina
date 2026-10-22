@@ -43,7 +43,17 @@ func CrashDetail(ctx context.Context, exe string) (string, error) {
 		b.WriteString(run(ctx, step{argv: []string{"pacman", "-Qo", p}}))
 	}
 	b.WriteString("\n\n## Log lines mentioning it this boot\n")
-	b.WriteString(run(ctx, step{argv: []string{"journalctl", "-b", "--no-pager", "-n", "30", "-g", regexp.QuoteMeta(filepath.Base(exe)), "-o", "short"}}))
+	// only the first line of each entry: the crash entries repeat the whole stack, which is above already
+	var logs []string
+	for _, l := range strings.Split(run(ctx, step{argv: []string{"journalctl", "-b", "--no-pager", "-n", "40", "-g", regexp.QuoteMeta(filepath.Base(exe)), "-o", "short"}}), "\n") {
+		if l != "" && l[0] != ' ' && l[0] != '\t' {
+			logs = append(logs, l)
+		}
+	}
+	if len(logs) > 10 {
+		logs = logs[len(logs)-10:]
+	}
+	b.WriteString(strings.Join(logs, "\n"))
 	b.WriteString("\n\n[Evidence only: what the system recorded. A stack with no symbols means the package has no debug info; say so, and say what you cannot tell. Suggest a cause only as a guess and say how to check it.]")
 	return b.String(), nil
 }
