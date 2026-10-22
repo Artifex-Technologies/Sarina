@@ -449,7 +449,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 	}
 
 	maxTurns := rt.MaxTurns
-	histStart, claimChecked, msgStart := len(sess.FileHistory), false, len(sess.Messages)
+	histStart, claimChecked, msgStart, emptyRetried := len(sess.FileHistory), false, len(sess.Messages), false
 	for turn := 1; turn <= maxTurns; turn++ {
 		if ctx.Err() != nil {
 			return finish(StopInterrupted, "Interrupted before the model was called.", turn-1)
@@ -500,6 +500,14 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 		}
 
 		if len(t.ToolCalls) == 0 {
+			// a thinking model sometimes ends a turn with nothing but its hidden reasoning: that is not an answer, so it is asked once to go on
+			if strings.TrimSpace(t.Content) == "" && len(r.segments) == 0 && !emptyRetried && turn < maxTurns {
+				emptyRetried = true
+				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("empty_reply_%d", turn),
+					Content: "Your last reply was empty. Carry on with the task: use your tools if you still need to, then answer."})
+				r.emit(event{"type": "empty_reply_retry", "turn_index": turn})
+				continue
+			}
 			r.segments = append(r.segments, t.Content)
 			if t.FinishReason == "length" || t.FinishReason == "max_tokens" {
 				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continuation_%d", turn),

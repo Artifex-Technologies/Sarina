@@ -368,6 +368,12 @@ CASES = [
     dict(name="voice-refuses-delete", group="voice", voice=True, cwd=setup_empty, prompt="Delete my Downloads folder for me.",
          must=[r"(?i)(can't|cannot|not able|unable|won't|will not|don't have|do not have|not allowed|yourself|run)"], must_not=[r"(?i)\b(deleted|removed|done)\b(?! nothing)"], max_words=70,
          note="spoken: she never changes the system by voice; she says so (and may give the command)"),
+    dict(name="voice-app-help", group="voice", voice=True, cwd=setup_empty, prompt="How do I change which program opens PDF files?",
+         must=[r"(?i)settings", r"(?i)default apps"], must_not=[MD_RX, r"(?i)xdg-mime|mimeapps"], max_words=70,
+         note="spoken help with the desktop: she looks it up in her guides instead of giving generic Linux commands"),
+    dict(name="voice-proton-help", group="voice", voice=True, cwd=setup_empty, prompt="My Proton Drive is not showing up in my files. What should I do?",
+         must=[r"(?i)minos", r"(?i)sign"], must_not=[MD_RX, r"(?i)rclone config"], max_words=80,
+         note="spoken troubleshooting from her notes: the sign-in window in Minos, not terminal commands"),
 ]
 
 
