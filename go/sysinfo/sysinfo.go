@@ -50,7 +50,7 @@ var Topics = map[string][]step{
 		{"User services that failed", []string{"systemctl", "--user", "--failed", "--no-pager", "--plain"}, 0},
 	},
 	"crashes": {
-		{"Recent crashes (core dumps)", []string{"coredumpctl", "list", "--no-pager", "-n", "12"}, 0},
+		{"Crashes in the last 7 days, newest first (core dumps)", []string{"coredumpctl", "list", "--no-pager", "--reverse", "--since=-7d", "-n", "12"}, 0},
 		{"Crash and out-of-memory lines this boot", []string{"journalctl", "-b", "--no-pager", "-n", "25", "-g", "segfault|core dumped|dumped core|out of memory|oom-kill|Killed process|general protection", "-o", "short"}, 0},
 	},
 	"boot": {
@@ -115,6 +115,8 @@ func Report(ctx context.Context, topic string) (string, error) {
 		return "", fmt.Errorf("no such topic %q: use one of %s", topic, strings.Join(names(), ", "))
 	}
 	var b strings.Builder
+	// the time the report was made, so "today" and "recently" are judged against the dates in it, not guessed
+	fmt.Fprintf(&b, "Now: %s\n\n", time.Now().Format("Mon 2006-01-02 15:04"))
 	for _, s := range steps {
 		fmt.Fprintf(&b, "## %s\n%s\n\n", s.title, run(ctx, s))
 	}
