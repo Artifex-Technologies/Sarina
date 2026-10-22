@@ -55,7 +55,7 @@ func unbackedFileClaim(answer string, history []map[string]any) string {
 
 func claimCheckText(file string) string {
 	return "Check before you finish: your answer says " + file + " was changed, but no file tool changed " + file +
-		" in this task (a to-do or plan tool does not write files). Either make the change now with the file tools, or say plainly that " + file + " was not changed."
+		" in this task (a to-do or plan tool does not write files). Either make the change now with the file tools, or say plainly that " + file + " was not changed. Write your whole answer again, complete, and do not talk about this check."
 }
 
 // unreportedChange returns a file a file-writing tool changed in this task that the answer never mentions, or "": a change the user is not
@@ -81,7 +81,7 @@ func unreportedChange(answer string, history []map[string]any) string {
 }
 
 func unreportedText(file string) string {
-	return "Check before you finish: in this task you changed " + file + ", but your answer does not say so. Tell the user plainly what you changed in " + file + " and what it holds now."
+	return "Check before you finish: in this task you changed " + file + ", but your answer does not say so. Write your whole answer again, complete, and say plainly what you changed in " + file + " and what it holds now."
 }
 
 var quotedRE = regexp.MustCompile("(?:^|[\\s(:,])(?:`([^`\\n]{4,60})`|\"([^\"\\n]{4,60})\")(?:$|[\\s).,:;!?])")
@@ -123,7 +123,7 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 }
 
 func ungroundedText(q string) string {
-	return "Check before you finish: your answer quotes \"" + q + "\", but no tool output in this task contains it. Only state what the tools showed: look again with your tools, or say plainly that you have not seen it."
+	return "Check before you finish: your answer quotes \"" + q + "\", but no tool output in this task contains it. Write your whole answer again, complete: keep everything the tools showed, and either leave that quote out, mark it plainly as your own example, or look it up with your tools first. Do not talk about this check."
 }
 
 var toolClaimRE = regexp.MustCompile(`(?i)\b(the (reverse[- ]engineering |analysis |search )?tool (showed|shows|analy[sz]ed|found|returned|identified|reported)|i (ran|checked|looked (at|up|into)|analy[sz]ed|decompiled|read|searched|inspected|examined)|decompil(ed|ing|ation) (shows|showed|reveals|revealed)|after (analy[sz]ing|decompiling|reading|checking))\b`)
@@ -142,4 +142,4 @@ func claimsToolWork(answer, prompt string, msgs []session.Message) bool {
 	return toolClaimRE.MatchString(answer)
 }
 
-const toolWorkText = "Check before you finish: your answer describes looking, checking or analysing, but you used no tool in this task, so none of that happened. Use the tools now, or say plainly that you have not looked."
+const toolWorkText = "Check before you finish: your answer describes looking, checking or analysing, but you used no tool in this task, so none of that happened. Use the tools now, or write your answer again saying plainly that you have not looked."

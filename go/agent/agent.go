@@ -503,7 +503,9 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 			// a thinking model sometimes ends a turn with nothing but its hidden reasoning: that is not an answer, so it is asked once to go on
 			if strings.TrimSpace(t.Content) == "" && len(r.segments) == 0 && emptyRetries < 2 && turn < maxTurns {
 				emptyRetries++
-				text := "Your last reply was empty. Carry on with the task: use your tools if you still need to, then answer."
+				// seen with Qwen3: it plans the next tool call in its hidden reasoning ("let me start with the analyze command") and then
+				// stops without making it, about one call in seven
+				text := "Your last reply had no text and no tool call. If you planned a tool call, make it now; otherwise answer."
 				if emptyRetries == 2 {
 					// Qwen3 reads /no_think as "answer without the hidden reasoning this time"; other models ignore it
 					text = "Your last two replies were empty. Call the tool you need next; if you cannot, say plainly what you could not do. Do not describe results you have not seen. /no_think"
