@@ -85,7 +85,7 @@ func newOpts(name string, env *Env) *opts {
 	f.StringVar(&o.model, "model", d.Model, "model name (env OPENAI_MODEL)")
 	f.StringVar(&o.baseURL, "base-url", d.BaseURL, "OpenAI-compatible base URL (env OPENAI_BASE_URL)")
 	f.StringVar(&o.apiKey, "api-key", d.APIKey, "API key (env OPENAI_API_KEY); never written to session files")
-	f.Float64Var(&o.temperature, "temperature", 0, "sampling temperature")
+	f.Float64Var(&o.temperature, "temperature", d.Temperature, "sampling temperature (default: SARINA_TEMPERATURE, else 0)")
 	f.Float64Var(&o.timeout, "timeout-seconds", config.DefaultTimeoutSeconds, "per-request timeout")
 	f.Float64Var(&o.inCost, "input-cost-per-million", 0, "USD per million input tokens")
 	f.Float64Var(&o.outCost, "output-cost-per-million", 0, "USD per million output tokens")

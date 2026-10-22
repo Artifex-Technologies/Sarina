@@ -127,7 +127,25 @@ func ModelFromEnv(getenv func(string) string) ModelConfig {
 	if v := getenv("OPENAI_API_KEY"); v != "" {
 		m.APIKey = v
 	}
+	// thinking models (Qwen3 and the like) loop at temperature 0: the same thought over and over until the request times out, and the same
+	// answer to different questions. Their makers recommend about 0.6.
+	if f, err := strconv.ParseFloat(strings.TrimSpace(getenv("SARINA_TEMPERATURE")), 64); err == nil && f >= 0 && f <= 2 {
+		m.Temperature = f
+	}
 	return m
+}
+
+// RequestMaxTokensFromEnv reads SARINA_REQUEST_MAX_TOKENS: the most one model reply may produce (thinking included), so a runaway reply ends
+// instead of running into the request timeout. Zero means "not set".
+func RequestMaxTokensFromEnv(getenv func(string) string) int {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(getenv("SARINA_REQUEST_MAX_TOKENS")))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
 }
 
 // ContextWindowFromEnv reads SARINA_CONTEXT_WINDOW; zero means "not set".

@@ -662,6 +662,9 @@ func (r *run) request() llm.Request {
 	if rt.BudgetConfig.MaxOutputTokens != nil && *rt.BudgetConfig.MaxOutputTokens > 0 {
 		req.MaxTokens = *rt.BudgetConfig.MaxOutputTokens
 	}
+	if n := config.RequestMaxTokensFromEnv(nil); n > 0 && (req.MaxTokens == 0 || n < req.MaxTokens) {
+		req.MaxTokens = n
+	}
 	return req
 }
 
