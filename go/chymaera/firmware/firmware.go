@@ -1,4 +1,4 @@
-// Package firmware holds read-only advisory helpers for the Chymaera Zero
+// Package firmware holds read-only advisory helpers for the Argus firmware (Flipper Zero; formerly called Chymaera Zero)
 // firmware fork: parse device_info and report what a merge from upstream/dev
 // would touch. Nothing here writes to a device; flashing stays a human action.
 package firmware
@@ -18,9 +18,9 @@ import (
 )
 
 // DeviceInfoExpectations are the device_info fields that must hold a specific
-// value on a healthy Chymaera build, in check order.
+// value on a healthy Argus build (the firmware was called Chymaera before), in check order.
 var DeviceInfoExpectations = []struct{ Key, Want string }{
-	{"firmware_origin_fork", "Chymaera"},
+	{"firmware_origin_fork", "Argus"},
 	{"enclave_valid", "true"},
 	{"radio_alive", "true"},
 }
@@ -77,7 +77,10 @@ func splitLines(s string) []string {
 	return strings.Split(s, "\n")
 }
 
-// chymaeraVersion is the current format: <upstream>-CHY-<ours>[+ahead].
+// argusVersion is the current format: ARG-<upstream>r<ours>[+ahead], or ARG-<upstream>-dev before the first tag.
+var argusVersion = regexp.MustCompile(`^ARG-(\d+\.\d+\.\d+)(?:r(\d+)|-(dev))(?:\+(\d+))?$`)
+
+// chymaeraVersion is the format from before the rename: <upstream>-CHY-<ours>[+ahead].
 var chymaeraVersion = regexp.MustCompile(`^(\d+\.\d+\.\d+)-CHY-(dev|\d[\d.]*)(?:\+(\d+))?$`)
 
 // legacyDevBuild is the previous `git describe --tags --always` format.
@@ -97,7 +100,7 @@ func (r DeviceInfoReport) OK() bool { return len(r.Warnings) == 0 }
 
 // AsText renders the report for humans.
 func (r DeviceInfoReport) AsText() string {
-	lines := []string{"# Chymaera Zero device", ""}
+	lines := []string{"# Argus device (Flipper Zero)", ""}
 	if len(r.Fields) == 0 {
 		lines = append(lines, "No device_info fields parsed.")
 		return strings.Join(lines, "\n")
@@ -134,6 +137,8 @@ func CheckDeviceInfo(fields map[string]string, expectedCommit string) DeviceInfo
 		switch {
 		case !ok:
 			warnings = append(warnings, e.Key+" missing from device_info")
+		case e.Key == "firmware_origin_fork" && strings.EqualFold(actual, "Chymaera"):
+			notes = append(notes, "firmware_origin_fork is 'Chymaera': a build from before the firmware was renamed Argus")
 		case strings.ToLower(actual) != strings.ToLower(e.Want):
 			warnings = append(warnings, fmt.Sprintf("%s is %s, expected %s", e.Key, pyfmt.ReprString(actual), pyfmt.ReprString(e.Want)))
 		}
@@ -142,14 +147,22 @@ func CheckDeviceInfo(fields map[string]string, expectedCommit string) DeviceInfo
 	if version, ok := fields["firmware_version"]; ok {
 		if version == "unknown" || version == "" {
 			warnings = append(warnings, "firmware_version is unknown - the build could not describe itself from git at all")
+		} else if a := argusVersion.FindStringSubmatch(version); a != nil {
+			notes = append(notes, "tracks upstream release "+a[1])
+			switch {
+			case a[3] == "dev":
+				notes = append(notes, "no ARG-"+a[1]+"r* tag exists yet, so this build is not a release")
+			case a[4] != "":
+				notes = append(notes, fmt.Sprintf("development build: %s commit(s) since ARG-%sr%s", a[4], a[1], a[2]))
+			}
 		} else if m := chymaeraVersion.FindStringSubmatch(version); m == nil {
 			if legacyDevBuild.MatchString(version) {
 				notes = append(notes, version+" uses the pre-2026-09-12 version format - the device predates the current firmware")
 			} else {
-				notes = append(notes, version+" is not a recognised Chymaera version string")
+				notes = append(notes, version+" is not a recognised Argus version string")
 			}
 		} else {
-			notes = append(notes, "tracks upstream release "+m[1])
+			notes = append(notes, "tracks upstream release "+m[1]+" (version format from before the rename to Argus)")
 			if m[2] == "dev" {
 				notes = append(notes, "no chy-* tag exists yet, so this build is not a release")
 			} else if m[3] != "" {

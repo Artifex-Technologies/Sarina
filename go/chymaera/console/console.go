@@ -74,7 +74,7 @@ func (c *Client) Connect() error {
 	}
 	conn, err := net.DialTimeout("tcp", c.addr(), timeout)
 	if err != nil {
-		return &UnavailableError{fmt.Sprintf("no Chymaera console at %s:%d (%v) - the app must be running with its Sarina server started", c.Host, c.Port, err)}
+		return &UnavailableError{fmt.Sprintf("no Argus App console at %s:%d (%v) - the app must be running with its Sarina server started", c.Host, c.Port, err)}
 	}
 	c.conn = conn
 	c.reader = bufio.NewReader(conn)
@@ -248,7 +248,7 @@ func (c *Client) CaptureImport(path string) (any, error) {
 
 // RenderStatus renders a console status summary for humans.
 func RenderStatus(status map[string]any, captures []map[string]any) string {
-	lines := []string{"# Chymaera console", ""}
+	lines := []string{"# Argus App console", ""}
 	for _, key := range []string{"version", "serverRunning", "serverPort", "sessionActive",
 		"sessionName", "datastorePath", "eventCount"} {
 		if v, ok := status[key]; ok {

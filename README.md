@@ -2,10 +2,32 @@
 
 ***S***ystemic ***A***rtificial ***R***easoning & ***I***ntelligent ***N***etworked ***A***ssistant
 
-A local-model security agent for the Chymaera ecosystem. It talks to any
-OpenAI-compatible model server (Ollama, vLLM, LiteLLM, llama.cpp), calls tools,
-keeps sessions on disk, and can climb to a bigger machine or to Claude when the
-local model is not enough. The core is one static Go binary.
+A local AI assistant that runs on your own computer: a helper and companion for
+[Labyrinth OS](https://github.com/Artifex-Technologies/Labyrinth_OS) (a gaming-focused system based on CachyOS,
+with its own desktop, Yggdrasil) and for Chymaera OS (the security edition, to be renamed
+Niflheim OS). She talks to any OpenAI-compatible model server (Ollama by default; vLLM, LiteLLM,
+llama.cpp), calls tools, keeps sessions and notes on disk, and can move to a bigger machine or to Claude
+when the local model is not enough. The core is one static Go binary.
+
+Sarina is optional: on Labyrinth OS she is installed from Agora, the app store, never forced on anyone.
+
+What she does today:
+
+- **Answers by voice and text.** Super+S (or Ctrl+Alt+S) on the Labyrinth desktop: hold for one question,
+  tap for a conversation; short plain answers, read aloud by her own voice.
+- **Troubleshoots the computer.** She reads how it is doing (performance, network, disks, logs, failed
+  services, boot, sound, kernel, temperatures) and explains it; her spoken answers come with that report
+  already looked up.
+- **Helps with crashes as they happen.** For a program that crashed she names the function, the source
+  file and line and quotes it when the source is on the computer; Labyrinth's crash helper offers to ask her.
+- **Studies programs without running them.** Static analysis with REA and Ghidra in a sandbox (no network,
+  no home folder); an installed program is copied read-only into the analysis folder first.
+- **Remembers in a vault of notes** (an Obsidian folder): she searches it by words and by meaning and
+  writes lessons into it through a safety gate.
+- **Writes her own small programs ("agents")** and runs them only inside Limbo's disposable virtual
+  machines; you approve an agent at a terminal, and any change voids the approval (see
+  [docs/AGENT_FORGE.md](docs/AGENT_FORGE.md)).
+- **Works with the Argus App and firmware** (Flipper Zero tooling) through read-only advisory commands.
 
 ## Status and licensing
 
@@ -26,6 +48,7 @@ grew from. Sarina is not affiliated with or endorsed by Anthropic.
   Tested with Ollama and `qwen3`. Ollama defaults to a 4096-token context, which is too small:
   Sarina needs at least 8k tokens (16k recommended). Raise it with a Modelfile line
   `PARAMETER num_ctx 16384` or `OLLAMA_CONTEXT_LENGTH=16384`, or tell Sarina the real size with `--context-window`.
+- For finding notes by meaning: the small `nomic-embed-text` model in Ollama (about 270 MB, loaded only while searching).
 - Optional: Python 3.10+ for the ML/voice helper (`python/sarina_helpers`).
 - Linux is the reference platform; Windows is supported for development.
 
@@ -49,6 +72,23 @@ The same binary answers to `sarina-gui` and `sarina-service` when started under
 those names (the Arch package installs them as symlinks), or run
 `sarina gui` / `sarina service`.
 
+## Settings
+
+Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.env`):
+
+| Variable | What it does |
+| --- | --- |
+| `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_API_KEY` | the model server and model |
+| `SARINA_TEMPERATURE` | sampling temperature; 0.6 for Qwen3 (at 0 thinking models repeat themselves until they time out) |
+| `SARINA_REQUEST_MAX_TOKENS` | the most one reply may produce, so a runaway reply ends instead of timing out (6000) |
+| `SARINA_VAULT` | her notes folder |
+| `SARINA_SEMANTIC=on` | find notes by meaning as well as by words (needs `nomic-embed-text`) |
+| `SARINA_SYSTEM=on` | the `system_status` and `crash_detail` tools |
+| `SARINA_REVERSE=on` | the sandboxed `reverse_engineer` and `stage_binary` tools (needs `labyrinth-rea`) |
+| `SARINA_FORGE=on` | the agent forge tools (needs Limbo and its `agent-run` profile) |
+| `SARINA_LIMBO_SOCKET` | Limbo's agent socket (`/run/limbo/agent.sock`) |
+| `SARINA_PRIVATE_DIRS` | folders no file tool may read, list, search or write (`:`-separated, `~` allowed) |
+
 ## Commands
 
 `sarina --help` lists everything; `sarina <command> -h` shows flags.
@@ -66,7 +106,11 @@ those names (the Arch package installs them as symlinks), or run
 | `memory-status`, `memory-show`, `memory-review*` | curated memory and its review queue |
 | `session-search`, `memory-search` | lexical and semantic search over saved sessions |
 | `limbo-profiles`, `limbo-validate` | run commands in a disposable Limbo guest |
-| `chymaera-console`, `chymaera-device-info`, `chymaera-merge-report`, `chymaera-analyze` | Chymaera Zero App and firmware advisories (read-only) |
+| `system-status TOPIC`, `crash-detail PROGRAM` | how the computer is doing, and the latest crash of one program (read-only) |
+| `route QUESTION` | what to look up before answering a spoken question, decided by meaning |
+| `vault-init`, `vault-search`, `vault-lint` | her notes: starting folders, search (words and meaning), broken links |
+| `forge-list`, `forge-approve NAME`, `forge-remove NAME` | the agents she wrote; approving needs you at a terminal |
+| `chymaera-console`, `chymaera-device-info`, `chymaera-merge-report`, `chymaera-analyze` | Argus App and Argus firmware (Flipper Zero) advisories, read-only (the command names predate the rename from Chymaera Zero) |
 | `fleet-usage`, `fleet-status`, `fleet-launch` | agent-fleet usage and a confirm-first launcher |
 | `desktop-audit` | audit and repair the application menu (report only unless `--apply`) |
 | `voice-chat` | push-to-talk voice conversation (needs the helper) |
@@ -91,8 +135,26 @@ those names (the Arch package installs them as symlinks), or run
   tokens. The packaged `ecosystem-troubleshoot` skill (installed in `/usr/share/sarina/skills`, a
   root-owned directory a workspace cannot shadow) walks the agent from a doctor finding to a plan the
   operator approves; it cannot touch Heimdall, Limbo or Sarina's own safety settings on its own.
+- **Honesty checks in code, not only in the prompt.** Before an answer is accepted it is checked once
+  against what actually happened in the task: a file it says changed that no tool changed (or a change it
+  leaves out), tool work it describes when no tool ran, text it quotes that no tool output contained, or
+  advice to turn off a security piece. Secret values read from files are blanked from answers.
+- **File tools protect your files.** A file is never replaced unread, never erased or emptied, a binary
+  file is never written as text, and private folders (`SARINA_PRIVATE_DIRS`) stay closed, also to searches.
+- **Spoken questions change nothing.** By voice she has read-only tools and her vault only; she gives you
+  the command instead of running it.
+- **Her agents run only in Limbo.** No network, none of your files, no sudo; output is capped and labelled
+  as untrusted evidence; you approve exact versions; there is no tool that approves anything.
 - **Tool-less sessions.** `tool_allowlist: []` on the service creates a session
   with zero tools and reports `"tools": 0`; the model request carries no tools.
+
+## Evals
+
+`python3 evals/run_evals.py` runs about fifty checks against the real agent: understanding, honesty,
+safety (injections, secrets, private folders), writing files, her vault, reverse engineering, Limbo,
+troubleshooting and crash help, and spoken answers. It writes a Markdown report and a JSON file; the
+reports of past runs are in Labyrinth_OS `docs/sarina-evals/`. `tools/training/` turns her real answers into
+a review sheet you tick, and exports the ticked ones for fine-tuning (nothing is trained by itself).
 
 ## Compute tiers
 
@@ -140,11 +202,18 @@ shell tools.
 
 ## Ecosystem
 
-Sarina is one of five repos: `Chymaera_OS` (hosts it), `Argus_App`,
-`Argus_Firmware`, `Heimdall` (watches it). The integration
-contract, ports and rules are in [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) and
-[docs/spec/00-must-preserve.md](docs/spec/00-must-preserve.md). Hardware writes
-always need a human; `fleet-launch` is CLI-only and never a model tool.
+| Repository | What it is | Sarina's part |
+| --- | --- | --- |
+| `Labyrinth_OS` | the gaming-focused OS (CachyOS base) | packages her (optional), voice, crash helper, daily check-up |
+| `Yggdrasil` | the desktop (panel, Fylgja, Settings, Agora, Minos, compositor) | Super+S, Settings > Sarina's agents |
+| `Chymaera_OS` | the security edition, to be renamed Niflheim OS | hosts her for security work |
+| `Heimdall` | the security watcher | watches her sessions and reviews what she keeps |
+| `Limbo` | disposable virtual machines | where her validation runs and agents execute |
+| `Argus_App`, `Argus_Firmware` | Flipper Zero desktop console and firmware (formerly Chymaera Zero) | read-only advisories, local control API |
+
+The integration contract, ports and rules are in [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) and
+[docs/spec/00-must-preserve.md](docs/spec/00-must-preserve.md). Hardware writes always need a human;
+`fleet-launch` is CLI-only and never a model tool.
 
 ## Packaging
 
@@ -160,6 +229,9 @@ python/           optional ML/voice helper (sarina_helpers)
 docs/spec/        behaviour specs the Go core was built from
 docs/ECOSYSTEM.md cross-repo contract
 docs/PROVENANCE.md licensing audit and rewrite progress
+docs/AGENT_FORGE.md, docs/MEMORY_AND_TRAINING_PLAN.md   the agent forge, and memory, routing and training
+evals/            capability evals (run_evals.py)
+tools/training/   review sheet and export of her answers for fine-tuning
 packaging/arch/   Arch package, systemd unit, env template
 sarina/, tests/   legacy original Python modules (reference; superseded by go/ and python/)
 ```

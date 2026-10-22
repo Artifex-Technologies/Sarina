@@ -233,7 +233,7 @@ func TestUnavailable(t *testing.T) {
 	c.Port, c.Timeout = port, 2*time.Second
 	_, err := c.Ping()
 	var ue *UnavailableError
-	if !errors.As(err, &ue) || !strings.Contains(err.Error(), "no Chymaera console at 127.0.0.1:") {
+	if !errors.As(err, &ue) || !strings.Contains(err.Error(), "no Argus App console at 127.0.0.1:") {
 		t.Fatalf("err = %v", err)
 	}
 
@@ -275,7 +275,7 @@ func TestRenderStatus(t *testing.T) {
 		map[string]any{"version": "1.0", "serverRunning": true, "eventCount": json.Number("2")},
 		[]map[string]any{{"type": "nfc", "name": "badge.nfc", "size": json.Number("512")}},
 	)
-	want := "# Chymaera console\n\nversion: 1.0\nserverRunning: True\neventCount: 2\n\n## Captures (1)\n- [nfc] badge.nfc (512 bytes)"
+	want := "# Argus App console\n\nversion: 1.0\nserverRunning: True\neventCount: 2\n\n## Captures (1)\n- [nfc] badge.nfc (512 bytes)"
 	if text != want {
 		t.Fatalf("got:\n%s", text)
 	}

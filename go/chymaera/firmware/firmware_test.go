@@ -10,10 +10,10 @@ import (
 )
 
 const healthy = `
-Chymaera Zero
-firmware_origin_fork : Chymaera
+Argus
+firmware_origin_fork : Argus
 firmware_origin_git  : https://github.com/Artifex-Technologies/Argus_Firmware.git
-firmware_version     : 1.4.3-CHY-0.1.0
+firmware_version     : ARG-1.4.3r1
 firmware_commit      : abc1234
 hardware_model       : Flipper Zero
 enclave_valid        : true
@@ -33,10 +33,10 @@ func hasSub(list []string, sub string) bool {
 
 func TestParseDeviceInfo(t *testing.T) {
 	f := healthyFields()
-	if f["firmware_origin_fork"] != "Chymaera" || f["firmware_commit"] != "abc1234" || f["radio_alive"] != "true" {
+	if f["firmware_origin_fork"] != "Argus" || f["firmware_commit"] != "abc1234" || f["radio_alive"] != "true" {
 		t.Fatalf("%v", f)
 	}
-	if _, ok := f["Chymaera Zero"]; ok {
+	if _, ok := f["Argus"]; ok {
 		t.Fatal("banner parsed")
 	}
 	if f["firmware_origin_git"] != "https://github.com/Artifex-Technologies/Argus_Firmware.git" {
@@ -61,7 +61,7 @@ func TestWarnings(t *testing.T) {
 	f := healthyFields()
 	f["firmware_origin_fork"] = "flipperdevices"
 	r := CheckDeviceInfo(f, "")
-	if r.OK() || r.Warnings[0] != "firmware_origin_fork is 'flipperdevices', expected 'Chymaera'" {
+	if r.OK() || r.Warnings[0] != "firmware_origin_fork is 'flipperdevices', expected 'Argus'" {
 		t.Fatal(r.Warnings)
 	}
 	f = healthyFields()
@@ -78,7 +78,7 @@ func TestWarnings(t *testing.T) {
 	if r := CheckDeviceInfo(map[string]string{}, ""); !hasSub(r.Warnings, "missing") || len(r.Warnings) != 3 {
 		t.Fatal(r.Warnings)
 	}
-	if got := CheckDeviceInfo(map[string]string{}, "").AsText(); got != "# Chymaera Zero device\n\nNo device_info fields parsed." {
+	if got := CheckDeviceInfo(map[string]string{}, "").AsText(); got != "# Argus device (Flipper Zero)\n\nNo device_info fields parsed." {
 		t.Fatal(got)
 	}
 }
@@ -118,7 +118,7 @@ func TestCommitChecks(t *testing.T) {
 }
 
 func TestAsTextLayout(t *testing.T) {
-	want := "# Chymaera Zero device\n\nfirmware_origin_fork: Chymaera\nfirmware_version: 1.4.3-CHY-0.1.0\nfirmware_commit: abc1234\n" +
+	want := "# Argus device (Flipper Zero)\n\nfirmware_origin_fork: Argus\nfirmware_version: ARG-1.4.3r1\nfirmware_commit: abc1234\n" +
 		"firmware_origin_git: https://github.com/Artifex-Technologies/Argus_Firmware.git\nhardware_model: Flipper Zero\nenclave_valid: true\nradio_alive: true\n\nNo warnings.\n\n## Notes\n- tracks upstream release 1.4.3"
 	if got := CheckDeviceInfo(healthyFields(), "").AsText(); got != want {
 		t.Fatalf("got:\n%s", got)
@@ -311,5 +311,22 @@ func TestUnknownRefIsAnError(t *testing.T) {
 	repo := newRepo(t)
 	if _, err := MergeImpact(repo, "does/not/exist", ""); err == nil || !strings.HasPrefix(err.Error(), "git merge-base HEAD does/not/exist failed:") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestArgusVersionsAndTheOldNames(t *testing.T) {
+	f := healthyFields()
+	f["firmware_version"] = "ARG-1.4.3-dev"
+	if r := CheckDeviceInfo(f, ""); !hasSub(r.Notes, "no ARG-1.4.3r* tag") || !r.OK() {
+		t.Fatalf("%+v", r)
+	}
+	f["firmware_version"] = "ARG-1.4.3r2+8"
+	if r := CheckDeviceInfo(f, ""); !hasSub(r.Notes, "8 commit(s) since ARG-1.4.3r2") {
+		t.Fatalf("%+v", r)
+	}
+	// a device from before the rename is still understood, with a note instead of a warning
+	f["firmware_origin_fork"], f["firmware_version"] = "Chymaera", "1.4.3-CHY-0.1.0"
+	if r := CheckDeviceInfo(f, ""); !r.OK() || !hasSub(r.Notes, "renamed Argus") || !hasSub(r.Notes, "before the rename") {
+		t.Fatalf("%+v", r)
 	}
 }

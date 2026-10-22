@@ -26,10 +26,10 @@ const TokenEnv = "CHYMAERA_CONSOLE_TOKEN"
 const SemanticHelperReason = "semantic grouping needs the Python embedding helper"
 
 func init() {
-	cli.Register("chymaera-console", "show the Chymaera App console status and recent captures", consoleCommand)
-	cli.Register("chymaera-analyze", "statistical triage of recent App captures (duplicate NFC UIDs, rare Sub-GHz frequencies)", analyzeCommand)
-	cli.Register("chymaera-device-info", "check captured device_info text from a Chymaera Zero (--file F or stdin)", deviceInfoCommand)
-	cli.Register("chymaera-merge-report", "report which firmware files a merge from upstream would touch", mergeReportCommand)
+	cli.Register("chymaera-console", "show the Argus App console status and recent captures", consoleCommand)
+	cli.Register("chymaera-analyze", "statistical triage of recent Argus App captures (duplicate NFC UIDs, rare Sub-GHz frequencies)", analyzeCommand)
+	cli.Register("chymaera-device-info", "check captured device_info text from an Argus device (Flipper Zero; --file F or stdin)", deviceInfoCommand)
+	cli.Register("chymaera-merge-report", "report which Argus firmware files a merge from upstream would touch", mergeReportCommand)
 }
 
 // parse runs fs over args; ok=false means the caller should return code.

@@ -73,7 +73,7 @@ func run(args []string, stdin string, env map[string]string) (code int, out, err
 func TestConsoleCommand(t *testing.T) {
 	port, reqs := serve(t, "tok", []any{map[string]any{"type": "nfc", "name": "badge.nfc", "size": 512}})
 	code, out, _ := run([]string{"chymaera-console", "--port", fmt.Sprint(port), "--captures", "3"}, "", map[string]string{TokenEnv: "tok"})
-	want := "# Chymaera console\n\nversion: 1.0\nserverRunning: True\neventCount: 4\n\n## Captures (1)\n- [nfc] badge.nfc (512 bytes)\n"
+	want := "# Argus App console\n\nversion: 1.0\nserverRunning: True\neventCount: 4\n\n## Captures (1)\n- [nfc] badge.nfc (512 bytes)\n"
 	if code != 0 || out != want {
 		t.Fatalf("code %d out:\n%s", code, out)
 	}
@@ -92,7 +92,7 @@ func TestConsoleCommandFailuresExitOne(t *testing.T) {
 	closed := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
 	code, out, _ = run([]string{"chymaera-console", "--port", fmt.Sprint(closed)}, "", nil)
-	if code != 1 || !strings.Contains(out, "no Chymaera console at") {
+	if code != 1 || !strings.Contains(out, "no Argus App console at") {
 		t.Fatalf("code %d out %q", code, out)
 	}
 }
