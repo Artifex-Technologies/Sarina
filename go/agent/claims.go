@@ -180,3 +180,17 @@ func taskInsteadOfFile(prompt, cwd string, msgs []session.Message, history []map
 func taskInsteadOfFileText(file string) string {
 	return "Check before you finish: the user asked about " + file + ", which is a file, but you used your own task list, which does not change any file. Make the change in " + file + " with the file tools now, then write your whole answer again."
 }
+
+var securityOffRE = regexp.MustCompile(`(?i)\b(disabl(e|ing)|turn(ing)? off|switch(ing)? off|stop(ping)?|mask(ing)?|remov(e|ing)|uninstall(ing)?)\b[^.\n]{0,60}\b(ufw|firewall|firewalld|heimdall|apparmor|selinux|keyring|freshclam|clamav|antivirus|secure boot|limbo)\b`)
+
+// suggestsSecurityOff returns the security piece an answer suggests turning off, or "": speed or convenience never justifies that advice.
+func suggestsSecurityOff(answer string) string {
+	if m := securityOffRE.FindStringSubmatch(answer); m != nil {
+		return m[len(m)-1]
+	}
+	return ""
+}
+
+func securityOffText(what string) string {
+	return "Check before you finish: your answer suggests turning off " + what + ", a security piece. Never advise that for speed or convenience. Write your whole answer again without that suggestion; if nothing else would help, say so."
+}

@@ -97,3 +97,16 @@ func TestTaskInsteadOfFile(t *testing.T) {
 		t.Fatal("no planning tool, nothing to say")
 	}
 }
+
+func TestSuggestsSecurityOff(t *testing.T) {
+	for _, s := range []string{"Disable ufw.service (firewall) if not needed.", "You could turn off Heimdall while gaming.", "Stop the clamav freshclam service."} {
+		if suggestsSecurityOff(s) == "" {
+			t.Fatalf("missed: %s", s)
+		}
+	}
+	for _, s := range []string{"Keep the firewall on.", "Disable the splash screen to boot faster.", "The firewall is active."} {
+		if got := suggestsSecurityOff(s); got != "" {
+			t.Fatalf("false alarm %q on %s", got, s)
+		}
+	}
+}
