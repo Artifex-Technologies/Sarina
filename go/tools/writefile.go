@@ -133,6 +133,10 @@ func WriteFile() Tool {
 					return "", nil, fmt.Errorf("cannot read the existing %s: %v", given, err)
 				}
 				before = string(data)
+				if strings.TrimSpace(before) != "" && strings.TrimSpace(content) == "" {
+					// a model that is told there is no delete tool sometimes "deletes" by writing nothing: refuse, so the file survives
+					return "", nil, fmt.Errorf("refused: writing nothing over %s would erase what is in it. There is no tool here to delete or empty files: leave it as it is and tell the user so", given)
+				}
 				md["before_exists"], md["before_sha256"] = true, sha256Hex(before)
 				md["before_size"], md["before_preview"] = len(data), preview(before, 240)
 			default:
@@ -210,6 +214,9 @@ func EditFile() Tool {
 			if replaceAll {
 				replaced = count
 				after = strings.ReplaceAll(before, oldT, newT)
+			}
+			if strings.TrimSpace(before) != "" && strings.TrimSpace(after) == "" {
+				return "", nil, fmt.Errorf("refused: that edit would leave %s empty, which erases it. There is no tool here to delete or empty files: leave it as it is and tell the user so", given)
 			}
 			if err := os.WriteFile(path, []byte(after), info.Mode().Perm()); err != nil {
 				return "", nil, fmt.Errorf("cannot write %s: %v", given, err)

@@ -422,10 +422,12 @@ func TestWriteFile(t *testing.T) {
 		md["after_sha256"] != sha256Hex("héllo") || md["content_length"] != 5 {
 		t.Fatalf("metadata: %v", md)
 	}
-	r = e.ok("write_file", map[string]any{"path": "a/b/c.txt", "content": ""})
-	if e.read("a/b/c.txt") != "" || r.Metadata["before_exists"] != true || r.Metadata["before_sha256"] != sha256Hex("héllo") {
-		t.Fatalf("overwrite with empty content: %v", r.Metadata)
+	r = e.ok("write_file", map[string]any{"path": "a/b/c.txt", "content": "bye"})
+	if e.read("a/b/c.txt") != "bye" || r.Metadata["before_exists"] != true || r.Metadata["before_sha256"] != sha256Hex("héllo") {
+		t.Fatalf("overwrite: %v", r.Metadata)
 	}
+	// writing nothing over a file with content is refused (it was how a model "deleted" files it had no tool to delete)
+	e.fails("write_file", map[string]any{"path": "a/b/c.txt", "content": ""}, "tool_execution_error")
 	e.fails("write_file", map[string]any{"path": "a", "content": "x"}, "tool_execution_error") // a is a directory
 }
 
@@ -700,5 +702,25 @@ func TestVerifyOnDisk(t *testing.T) {
 	}
 	if err := verifyOnDisk(p+".missing", "x"); err == nil {
 		t.Error("a missing file must not verify")
+	}
+}
+
+func TestWritesNeverEraseAFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "keep.txt")
+	os.WriteFile(p, []byte("keep me\n"), 0o644)
+	tc := &Context{Root: dir}
+	if _, _, err := WriteFile().Handler(context.Background(), map[string]any{"path": "keep.txt", "content": ""}, tc); err == nil {
+		t.Fatal("writing nothing over a file must be refused")
+	}
+	if _, _, err := EditFile().Handler(context.Background(), map[string]any{"path": "keep.txt", "old_text": "keep me\n", "new_text": ""}, tc); err == nil {
+		t.Fatal("an edit that empties a file must be refused")
+	}
+	if b, _ := os.ReadFile(p); string(b) != "keep me\n" {
+		t.Fatalf("file changed: %q", b)
+	}
+	// an empty new file is fine
+	if _, _, err := WriteFile().Handler(context.Background(), map[string]any{"path": "new.txt", "content": ""}, tc); err != nil {
+		t.Fatalf("an empty new file must be allowed: %v", err)
 	}
 }

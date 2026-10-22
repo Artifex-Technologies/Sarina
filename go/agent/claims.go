@@ -55,3 +55,29 @@ func claimCheckText(file string) string {
 	return "Check before you finish: your answer says " + file + " was changed, but no file tool changed " + file +
 		" in this task (a to-do or plan tool does not write files). Either make the change now with the file tools, or say plainly that " + file + " was not changed."
 }
+
+// unreportedChange returns a file a file-writing tool changed in this task that the answer never mentions, or "": a change the user is not
+// told about is as bad as one that is claimed but never made.
+func unreportedChange(answer string, history []map[string]any) string {
+	low := strings.ToLower(answer)
+	for _, e := range history {
+		name, _ := e["tool_name"].(string)
+		ok, _ := e["ok"].(bool)
+		if !fileWriteTools[name] || !ok {
+			continue
+		}
+		p, _ := e["path"].(string)
+		if p == "" {
+			continue
+		}
+		base := filepath.Base(p)
+		if !strings.Contains(low, strings.ToLower(base)) && !strings.Contains(low, strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))) {
+			return base
+		}
+	}
+	return ""
+}
+
+func unreportedText(file string) string {
+	return "Check before you finish: in this task you changed " + file + ", but your answer does not say so. Tell the user plainly what you changed in " + file + " and what it holds now."
+}

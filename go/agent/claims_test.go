@@ -25,3 +25,16 @@ func TestUnbackedFileClaim(t *testing.T) {
 		}
 	}
 }
+
+func TestUnreportedChange(t *testing.T) {
+	h := []map[string]any{{"tool_name": "write_file", "ok": true, "path": "/w/also.txt"}}
+	if got := unreportedChange("I cannot delete files. Would you like me to clear them?", h); got != "also.txt" {
+		t.Fatalf("got %q", got)
+	}
+	if got := unreportedChange("I emptied also.txt.", h); got != "" {
+		t.Fatalf("got %q", got)
+	}
+	if got := unreportedChange("Done.", nil); got != "" {
+		t.Fatalf("got %q", got)
+	}
+}

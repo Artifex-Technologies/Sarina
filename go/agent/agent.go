@@ -510,10 +510,17 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				continue
 			}
 			if answer := strings.Join(r.segments, ""); !claimChecked && turn < maxTurns {
-				if f := unbackedFileClaim(answer, sess.FileHistory[min(histStart, len(sess.FileHistory)):]); f != "" {
+				hist := sess.FileHistory[min(histStart, len(sess.FileHistory)):]
+				text := ""
+				if f := unbackedFileClaim(answer, hist); f != "" {
+					text = claimCheckText(f)
+				} else if f := unreportedChange(answer, hist); f != "" {
+					text = unreportedText(f)
+				}
+				if text != "" {
 					claimChecked = true
-					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("claim_check_%d", turn), Content: claimCheckText(f)})
-					r.emit(event{"type": "claim_check", "turn_index": turn, "file": f})
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("claim_check_%d", turn), Content: text})
+					r.emit(event{"type": "claim_check", "turn_index": turn})
 					r.segments = nil
 					continue
 				}
