@@ -125,3 +125,21 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 func ungroundedText(q string) string {
 	return "Check before you finish: your answer quotes \"" + q + "\", but no tool output in this task contains it. Only state what the tools showed: look again with your tools, or say plainly that you have not seen it."
 }
+
+var toolClaimRE = regexp.MustCompile(`(?i)\b(the (reverse[- ]engineering |analysis |search )?tool (showed|shows|analy[sz]ed|found|returned|identified|reported)|i (ran|checked|looked (at|up|into)|analy[sz]ed|decompiled|read|searched|inspected|examined)|decompil(ed|ing|ation) (shows|showed|reveals|revealed)|after (analy[sz]ing|decompiling|reading|checking))\b`)
+
+// claimsToolWork reports an answer that describes tool work ("I checked", "the tool showed") in a task where no tool ran: the answer is made up.
+func claimsToolWork(answer, prompt string, msgs []session.Message) bool {
+	// a spoken question can arrive with the system's report or her guide notes already looked up and placed in it: that is evidence too
+	if strings.Contains(prompt, "already looked up for you") || strings.Contains(prompt, "From your guides") {
+		return false
+	}
+	for _, m := range msgs {
+		if m.Role == "tool" {
+			return false
+		}
+	}
+	return toolClaimRE.MatchString(answer)
+}
+
+const toolWorkText = "Check before you finish: your answer describes looking, checking or analysing, but you used no tool in this task, so none of that happened. Use the tools now, or say plainly that you have not looked."

@@ -506,7 +506,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				text := "Your last reply was empty. Carry on with the task: use your tools if you still need to, then answer."
 				if emptyRetries == 2 {
 					// Qwen3 reads /no_think as "answer without the hidden reasoning this time"; other models ignore it
-					text = "Your last two replies were empty. Write your answer now, in plain words, from what your tools showed. /no_think"
+					text = "Your last two replies were empty. Call the tool you need next; if you cannot, say plainly what you could not do. Do not describe results you have not seen. /no_think"
 				}
 				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("empty_reply_%d", turn), Content: text})
 				r.emit(event{"type": "empty_reply_retry", "turn_index": turn})
@@ -524,7 +524,9 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 			if answer := strings.Join(r.segments, ""); !claimChecked && turn < maxTurns {
 				hist := sess.FileHistory[min(histStart, len(sess.FileHistory)):]
 				text := ""
-				if f := unbackedFileClaim(answer, hist); f != "" {
+				if claimsToolWork(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]) {
+					text = toolWorkText
+				} else if f := unbackedFileClaim(answer, hist); f != "" {
 					text = claimCheckText(f)
 				} else if f := unreportedChange(answer, hist); f != "" {
 					text = unreportedText(f)

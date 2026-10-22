@@ -66,3 +66,15 @@ func TestQuotesAreNotMispaired(t *testing.T) {
 		t.Fatal("the text between two quotes was taken for a quote")
 	}
 }
+
+func TestClaimsToolWork(t *testing.T) {
+	if !claimsToolWork("The reverse engineering tool analyzed demo.bin and found validate_input.", "p", nil) {
+		t.Fatal("made-up tool work must be caught")
+	}
+	if claimsToolWork("The reverse engineering tool analyzed demo.bin.", "p", []session.Message{{Role: "tool", Content: "x"}}) {
+		t.Fatal("real tool work must pass")
+	}
+	if claimsToolWork("Paris is the capital of France.", "p", nil) || claimsToolWork("I checked: memory is fine.", "What the computer reports right now (read-only, already looked up for you", nil) {
+		t.Fatal("ordinary answers must pass")
+	}
+}
