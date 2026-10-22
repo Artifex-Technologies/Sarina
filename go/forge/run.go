@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -18,12 +19,35 @@ type Runner interface {
 // Run sends the agent into a fresh Limbo guest of the given profile and returns what came back, labelled as untrusted evidence.
 // Nothing runs on the host. The number of runs an hour is limited.
 func (s *Store) Run(r Runner, name, profile string) (string, error) {
+	return s.RunWithInput(r, name, profile, "")
+}
+
+// MaxInput is the most text one agent can be handed (as input.txt in its folder): enough to pass one agent's output to the next.
+const MaxInput = 16 << 10
+
+// RunWithInput is Run with text handed to the agent as input.txt in its folder, so the output of one agent can be the input of the next.
+// Each agent still runs in its own fresh guest; nothing runs inside another agent's guest, so helpers never start helpers.
+func (s *Store) RunWithInput(r Runner, name, profile, input string) (string, error) {
 	m, files, err := s.Load(name)
 	if err != nil {
 		s.audit("run", name, "", "refused", err.Error())
 		return "", err
 	}
 	hash := hashOf(m, files)
+	if input != "" {
+		if len(input) > MaxInput || strings.ContainsRune(input, 0) {
+			s.audit("run", name, hash, "refused", "input too large or not text")
+			return "", fmt.Errorf("the input is larger than %d KiB or is not text", MaxInput>>10)
+		}
+		if _, clash := files["input.txt"]; clash {
+			return "", errors.New("the agent has its own input.txt; rename that file to pass it input")
+		}
+		withInput := map[string]string{"input.txt": input}
+		for k, v := range files {
+			withInput[k] = v
+		}
+		files = withInput
+	}
 	bundle, err := Bundle(files)
 	if err != nil {
 		s.audit("run", name, hash, "refused", err.Error())

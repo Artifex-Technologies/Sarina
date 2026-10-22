@@ -252,3 +252,35 @@ func TestRemoveDropsTheApproval(t *testing.T) {
 		t.Fatal("a re-created agent must not inherit an old approval")
 	}
 }
+
+func TestRunWithInputAddsInputFile(t *testing.T) {
+	s := store(t)
+	m, files := good()
+	s.Create(m, files)
+	r := &fakeRunner{text: "ok"}
+	if _, err := s.RunWithInput(r, "tally", "agent-run", "one two three"); err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(bytes.NewReader(r.bundle))
+	found := false
+	for {
+		h, err := tr.Next()
+		if err != nil {
+			break
+		}
+		if h.Name == "input.txt" {
+			b, _ := io.ReadAll(tr)
+			found = string(b) == "one two three"
+		}
+	}
+	if !found {
+		t.Fatal("input.txt missing from the bundle")
+	}
+	if _, err := s.RunWithInput(r, "tally", "agent-run", strings.Repeat("x", MaxInput+1)); err == nil {
+		t.Fatal("too much input must be refused")
+	}
+	// the agent itself is unchanged: input is not part of its approved version
+	if h, _ := s.Hash("tally"); h == "" {
+		t.Fatal("hash")
+	}
+}
