@@ -615,6 +615,7 @@ func TestGrep(t *testing.T) {
 func TestEditLoopGuard(t *testing.T) {
 	e := newEnv(t, writeAll())
 	e.put("f.txt", "start")
+	e.ok("read_file", map[string]any{"path": "f.txt"}) // writing over a file needs it read first
 	for i := 0; i < 5; i++ {
 		e.ok("write_file", map[string]any{"path": "f.txt", "content": strings.Repeat("v", i+1)})
 	}
@@ -739,4 +740,18 @@ func TestBinaryFilesAreNotRewritten(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "pic.png")); string(b) != string(png) {
 		t.Fatal("binary file changed")
 	}
+}
+
+func TestWriteNeedsTheFileReadFirst(t *testing.T) {
+	e := newEnv(t, writeAll())
+	e.put("todo.md", "- [ ] milk\n- [ ] call Dana\n")
+	e.fails("write_file", map[string]any{"path": "todo.md", "content": "- [ ] water the plants\n"}, "tool_execution_error")
+	if e.read("todo.md") != "- [ ] milk\n- [ ] call Dana\n" {
+		t.Fatal("unread content was replaced")
+	}
+	e.ok("read_file", map[string]any{"path": "todo.md"})
+	e.ok("write_file", map[string]any{"path": "todo.md", "content": "- [ ] milk\n- [ ] call Dana\n- [ ] water the plants\n"})
+	// keeping what was there is fine even unread
+	e.put("b.md", "keep\n")
+	e.ok("write_file", map[string]any{"path": "b.md", "content": "keep\nmore\n"})
 }

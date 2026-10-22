@@ -151,6 +151,7 @@ type fileState struct {
 	edits         map[string]int
 	summaryWrites int
 	authored      map[string]bool
+	read          map[string]bool // files read whole or in part in this context
 }
 
 func stateOf(tc *Context) *fileState {
@@ -162,7 +163,7 @@ func stateOf(tc *Context) *fileState {
 	if s, ok := tc.Runtimes[runtimeFileState].(*fileState); ok {
 		return s
 	}
-	s := &fileState{edits: map[string]int{}, authored: map[string]bool{}}
+	s := &fileState{edits: map[string]int{}, authored: map[string]bool{}, read: map[string]bool{}}
 	tc.Runtimes[runtimeFileState] = s
 	return s
 }

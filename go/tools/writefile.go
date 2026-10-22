@@ -25,6 +25,18 @@ func (s *fileState) isAuthored(path string) bool {
 	return s.authored[path]
 }
 
+func (s *fileState) markRead(path string) {
+	s.mu.Lock()
+	s.read[path] = true
+	s.mu.Unlock()
+}
+
+func (s *fileState) wasRead(path string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.read[path]
+}
+
 func (s *fileState) markAuthored(path string) {
 	s.mu.Lock()
 	s.authored[path] = true
@@ -124,6 +136,7 @@ func WriteFile() Tool {
 			if n, refused := st.attempt(path); refused {
 				return "", nil, editLoopError(given, n)
 			}
+			known := st.isAuthored(path) || st.wasRead(path)
 			st.markAuthored(path)
 
 			md := map[string]any{"action": "write_file", "path": relPath(tc.Root, path), "content_length": len([]rune(content))}
@@ -140,6 +153,10 @@ func WriteFile() Tool {
 				before = string(data)
 				if isBinary(data) {
 					return "", nil, fmt.Errorf("refused: %s is a binary file (an image, archive or program); writing text into it would break it. Leave it as it is and tell the user", given)
+				}
+				if strings.TrimSpace(before) != "" && !known && !strings.Contains(content, strings.TrimSpace(before)) {
+					// writing replaces the whole file: content she has not seen would be lost (she "added" an item to a list by writing only the item)
+					return "", nil, fmt.Errorf("refused: %s already has content you have not read in this task, and writing replaces all of it. Read it first, then write the whole new content; or change part of it with edit_file", given)
 				}
 				if strings.TrimSpace(before) != "" && strings.TrimSpace(content) == "" {
 					// a model that is told there is no delete tool sometimes "deletes" by writing nothing: refuse, so the file survives
