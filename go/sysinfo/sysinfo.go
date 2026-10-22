@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -119,6 +120,11 @@ func Report(ctx context.Context, topic string) (string, error) {
 	var b strings.Builder
 	// the time the report was made, so "today" and "recently" are judged against the dates in it, not guessed
 	fmt.Fprintf(&b, "Now: %s\n\n", time.Now().Format("Mon 2006-01-02 15:04"))
+	if strings.EqualFold(strings.TrimSpace(topic), "boot") {
+		if sum := bootSummary(ctx); sum != "" {
+			b.WriteString("## Summary\n" + sum + "\n\n")
+		}
+	}
 	for _, s := range steps {
 		fmt.Fprintf(&b, "## %s\n%s\n\n", s.title, run(ctx, s))
 	}
@@ -151,4 +157,48 @@ func Tools() []tools.Tool {
 			return text, map[string]any{"action": "system_status", "topic": topic}, nil
 		},
 	}}
+}
+
+var atRE = regexp.MustCompile(`^(\S+)\s+@([0-9.]+(?:min [0-9.]+)?m?s)`)
+
+// bootSummary says when the login screen appeared, when everything was started, and which of the slowest units are not in the login
+// screen's chain (they ran in the background and did not delay it): a model reads the top of a report and skims the rest.
+func bootSummary(ctx context.Context) string {
+	dm := run(ctx, step{argv: []string{"systemd-analyze", "critical-chain", "display-manager.service", "--no-pager"}})
+	all := run(ctx, step{argv: []string{"systemd-analyze", "critical-chain", "--no-pager"}})
+	first := func(chain string) (string, string) {
+		for _, l := range strings.Split(chain, "\n") {
+			if m := atRE.FindStringSubmatch(strings.TrimSpace(l)); m != nil {
+				return m[1], m[2]
+			}
+		}
+		return "", ""
+	}
+	dmUnit, dmAt := first(dm)
+	_, allAt := first(all)
+	if dmAt == "" && allAt == "" {
+		return ""
+	}
+	var parts []string
+	if dmAt != "" {
+		parts = append(parts, fmt.Sprintf("The login screen (%s) appeared %s after the start.", dmUnit, dmAt))
+	}
+	if allAt != "" {
+		parts = append(parts, fmt.Sprintf("Everything was started after %s.", allAt))
+	}
+	var background []string
+	for _, l := range strings.Split(run(ctx, step{argv: []string{"systemd-analyze", "blame", "--no-pager"}, lines: 6}), "\n") {
+		f := strings.Fields(l)
+		if len(f) < 2 {
+			continue
+		}
+		unit := f[len(f)-1]
+		if !strings.Contains(dm, unit) {
+			background = append(background, unit)
+		}
+	}
+	if len(background) > 0 {
+		parts = append(parts, "These slow units are not in the login screen's chain, so they did not delay it (they run in the background or later): "+strings.Join(background, ", ")+".")
+	}
+	return strings.Join(parts, " ")
 }
