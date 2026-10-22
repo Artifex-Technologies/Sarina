@@ -55,7 +55,8 @@ var Topics = map[string][]step{
 	},
 	"boot": {
 		{"Time to start", []string{"systemd-analyze", "--no-pager"}, 0},
-		{"What the start actually waited for (the critical chain; only these delay the desktop)", []string{"systemd-analyze", "critical-chain", "--no-pager"}, 16},
+		{"When the login screen appeared (what it waited for)", []string{"systemd-analyze", "critical-chain", "display-manager.service", "--no-pager"}, 12},
+		{"When everything was started (the graphical target; background services can make this later than the login screen)", []string{"systemd-analyze", "critical-chain", "--no-pager"}, 14},
 		{"Slowest units overall (includes background jobs that do not delay the start)", []string{"systemd-analyze", "blame", "--no-pager"}, 10},
 	},
 	"audio": {
