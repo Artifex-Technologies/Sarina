@@ -19,6 +19,7 @@ import (
 	_ "github.com/Artifex-Technologies/Sarina/go/reverse" // adds reverse_engineer (REA + Ghidra in a sandbox) when SARINA_REVERSE=on
 	_ "github.com/Artifex-Technologies/Sarina/go/service" // adds the service command
 	_ "github.com/Artifex-Technologies/Sarina/go/sysinfo" // adds system_status: how the computer is doing, read-only
+	_ "github.com/Artifex-Technologies/Sarina/go/route" // sarina route: what to look up before a spoken question (by meaning)
 	_ "github.com/Artifex-Technologies/Sarina/go/vault"   // adds the vault-* commands and, with SARINA_VAULT set, the vault tools
 )
 
