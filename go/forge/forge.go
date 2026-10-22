@@ -61,6 +61,8 @@ type Store struct {
 	Now      func() time.Time
 
 	mu sync.Mutex
+	// results of this process's runs, by agent version and input: the same run is not repeated within a task
+	done map[string]string
 }
 
 func (s *Store) now() time.Time {

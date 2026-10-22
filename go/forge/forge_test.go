@@ -3,6 +3,7 @@ package forge
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -215,7 +216,8 @@ func TestRunLimitPerHourHoldsAcrossProcesses(t *testing.T) {
 	s.Now = func() time.Time { return now }
 	r := &fakeRunner{text: "ok"}
 	for i := 0; i < MaxPerHour; i++ {
-		if _, err := s.Run(r, "tally", "agent-run"); err != nil {
+		// different inputs: the same run twice is answered from memory and does not count
+		if _, err := s.RunWithInput(r, "tally", "agent-run", fmt.Sprint("input ", i)); err != nil {
 			t.Fatalf("run %d: %v", i, err)
 		}
 	}
@@ -282,5 +284,21 @@ func TestRunWithInputAddsInputFile(t *testing.T) {
 	// the agent itself is unchanged: input is not part of its approved version
 	if h, _ := s.Hash("tally"); h == "" {
 		t.Fatal("hash")
+	}
+}
+
+func TestSameRunIsNotRepeated(t *testing.T) {
+	s := store(t)
+	m, files := good()
+	s.Create(m, files)
+	r := &fakeRunner{text: "ok"}
+	s.Run(r, "tally", "agent-run")
+	out, _ := s.Run(r, "tally", "agent-run")
+	if r.calls != 1 || !strings.Contains(out, "not run again") {
+		t.Fatalf("calls %d: %s", r.calls, out)
+	}
+	s.RunWithInput(r, "tally", "agent-run", "other input")
+	if r.calls != 2 {
+		t.Fatal("a different input is a different run")
 	}
 }
