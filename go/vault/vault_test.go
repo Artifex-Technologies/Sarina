@@ -316,3 +316,12 @@ func TestToolsThroughTheRegistryShapes(t *testing.T) {
 		t.Error("tools offered without a vault")
 	}
 }
+
+func TestRelinkPointsNearMissesAtExistingNotes(t *testing.T) {
+	v := tmpVault(t)
+	put(t, v, "Lessons/Verify after writing.md", "# Verify after writing\n\nRead it back.\n", 0)
+	out, changed := relink(v, "Check df first. [[Verify writes]] and [[Totally unrelated idea]] and [[Verify after writing]].")
+	if len(changed) != 1 || !strings.Contains(out, "[[Verify after writing]] and [[Totally unrelated idea]]") || strings.Contains(out, "[[Verify writes]]") {
+		t.Fatalf("%q %v", out, changed)
+	}
+}

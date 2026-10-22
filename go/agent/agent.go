@@ -449,7 +449,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 	}
 
 	maxTurns := rt.MaxTurns
-	histStart, claimChecked := len(sess.FileHistory), false
+	histStart, claimChecked, msgStart := len(sess.FileHistory), false, len(sess.Messages)
 	for turn := 1; turn <= maxTurns; turn++ {
 		if ctx.Err() != nil {
 			return finish(StopInterrupted, "Interrupted before the model was called.", turn-1)
@@ -525,7 +525,18 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					continue
 				}
 			}
-			return finish(t.FinishReason, strings.Join(r.segments, ""), turn)
+			answer := strings.Join(r.segments, "")
+			if clean, changed := hideSecretsRead(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); changed {
+				answer = clean
+				for i := len(sess.Messages) - 1; i >= 0; i-- {
+					if sess.Messages[i].Role == "assistant" {
+						sess.Messages[i].Content = hideAll(sess.Messages[i].Content, sess.Messages[min(msgStart, len(sess.Messages)):])
+						break
+					}
+				}
+				r.emit(event{"type": "secret_hidden", "turn_index": turn})
+			}
+			return finish(t.FinishReason, answer, turn)
 		}
 
 		r.segments = nil

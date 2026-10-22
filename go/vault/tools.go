@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/Artifex-Technologies/Sarina/go/guard"
@@ -158,7 +159,10 @@ func Tools() []tools.Tool {
 					return "", nil, err
 				}
 				mode := Mode(str(a, "mode"))
-				res, err := v.Write(gateFor(tc), str(a, "path"), str(a, "content"), mode)
+				// a link that misses an existing note only by wording is pointed at that note before saving (and said so), so the note and
+				// what she tells the user about it agree
+				content, relinked := relink(v, str(a, "content"))
+				res, err := v.Write(gateFor(tc), str(a, "path"), content, mode)
 				if err != nil {
 					return "", nil, err
 				}
@@ -166,6 +170,9 @@ func Tools() []tools.Tool {
 				msg := fmt.Sprintf("Saved %s.", res.Path)
 				if !res.Created {
 					msg = fmt.Sprintf("Updated %s.", res.Path)
+				}
+				if len(relinked) > 0 {
+					msg += " Linked " + strings.Join(relinked, ", ") + " (the notes that exist)."
 				}
 				if len(res.BrokenLinks) > 0 {
 					notes, _ := v.Notes()
@@ -183,4 +190,33 @@ func Tools() []tools.Tool {
 			},
 		},
 	}
+}
+
+var wikiLinkRE = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
+
+// relink points [[links]] that name no note, but closely match one, at that note. It returns the new content and what it changed.
+func relink(v *Vault, content string) (string, []string) {
+	notes, err := v.Notes()
+	if err != nil || len(notes) == 0 {
+		return content, nil
+	}
+	var changed []string
+	out := wikiLinkRE.ReplaceAllStringFunc(content, func(m string) string {
+		inner := m[2 : len(m)-2]
+		target, alias := inner, ""
+		if i := strings.IndexAny(inner, "|#"); i >= 0 {
+			target, alias = inner[:i], inner[i:]
+		}
+		if Resolve(notes, target) != "" {
+			return m
+		}
+		sug := Suggest(notes, target)
+		if sug == "" {
+			return m
+		}
+		name := sug[strings.LastIndex(sug, "/")+1:]
+		changed = append(changed, "[["+target+"]] as [["+name+"]]")
+		return "[[" + name + alias + "]]"
+	})
+	return out, changed
 }
