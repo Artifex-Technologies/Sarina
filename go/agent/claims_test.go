@@ -58,3 +58,11 @@ func TestUngroundedQuote(t *testing.T) {
 		t.Fatal("paths are not quotes from evidence")
 	}
 }
+
+func TestQuotesAreNotMispaired(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "if (s[0] == 'L' && s[5] == '7') return 1;"}}
+	ans := `It must start with "L" and end with "7" to pass.`
+	if q := ungroundedQuote(ans, "p", tool); q == " and end with " {
+		t.Fatal("the text between two quotes was taken for a quote")
+	}
+}

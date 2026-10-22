@@ -84,7 +84,7 @@ func unreportedText(file string) string {
 	return "Check before you finish: in this task you changed " + file + ", but your answer does not say so. Tell the user plainly what you changed in " + file + " and what it holds now."
 }
 
-var quotedRE = regexp.MustCompile("`([^`\\n]{4,60})`|\"([^\"\\n]{4,60})\"")
+var quotedRE = regexp.MustCompile("(?:^|[\\s(:,])(?:`([^`\\n]{4,60})`|\"([^\"\\n]{4,60})\")(?:$|[\\s).,:;!?])")
 
 // ungroundedQuote returns a literal the answer quotes (in backticks or double quotes) that appears in none of this task's tool output and not in
 // the prompt, when tools were used at all: quoting a string as if it came from the evidence, when it did not, is how a small model invents
