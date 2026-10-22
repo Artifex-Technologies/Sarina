@@ -129,6 +129,10 @@ func ReadFile() Tool {
 				if out == "" {
 					out = "(no lines in the requested range)"
 				}
+				// a partial read says how much is left: a small model reads a few chunks and concludes that what it has not reached is not there
+				if total := countLines(path); end < total {
+					out += fmt.Sprintf("\n[lines %d to %d of %d shown; %d more after these. grep_search finds a name in the whole file faster than reading on]", start, end, total, total-end)
+				}
 			}
 			if stateOf(tc).isAuthored(path) {
 				out = authoredBanner + out
@@ -229,4 +233,32 @@ func ListDir() Tool {
 			return TruncateOutput(strings.TrimRight(b.String(), "\n"), tc.MaxOutputChars), nil, nil
 		},
 	}
+}
+
+func countLines(path string) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	n, buf := 0, make([]byte, 64*1024)
+	last := byte('\n')
+	for {
+		k, err := f.Read(buf)
+		for _, c := range buf[:k] {
+			if c == '\n' {
+				n++
+			}
+		}
+		if k > 0 {
+			last = buf[k-1]
+		}
+		if err != nil {
+			break
+		}
+	}
+	if last != '\n' {
+		n++
+	}
+	return n
 }

@@ -468,7 +468,7 @@ func TestReadFileBehaviour(t *testing.T) {
 	if r := e.ok("read_file", map[string]any{"path": "f.txt", "start_line": 2}); r.Content != "2: b\n3: c" {
 		t.Fatalf("open-ended range: %q", r.Content)
 	}
-	if r := e.ok("read_file", map[string]any{"path": "f.txt", "end_line": 1}); r.Content != "1: a" {
+	if r := e.ok("read_file", map[string]any{"path": "f.txt", "end_line": 1}); !strings.HasPrefix(r.Content, "1: a\n[lines 1 to 1 of 3 shown; 2 more") {
 		t.Fatalf("end only: %q", r.Content)
 	}
 	if r := e.ok("read_file", map[string]any{"path": "f.txt", "start_line": 3, "end_line": 2}); !strings.Contains(r.Content, "no lines") {

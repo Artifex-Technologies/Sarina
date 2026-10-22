@@ -123,7 +123,7 @@ func TestReadFile(t *testing.T) {
 		t.Fatalf("full read: %+v", r)
 	}
 	r = run(map[string]any{"path": "f.txt", "start_line": 2, "end_line": 3})
-	if r.Content != "2: two\n3: three" {
+	if !strings.HasPrefix(r.Content, "2: two\n3: three\n[lines 2 to 3 of 4 shown; 1 more") {
 		t.Fatalf("slice: %q", r.Content)
 	}
 	r = run(map[string]any{"path": "f.txt", "start_line": "3"})
