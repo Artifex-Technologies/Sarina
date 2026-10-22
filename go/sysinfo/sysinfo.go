@@ -198,7 +198,7 @@ func bootSummary(ctx context.Context) string {
 		}
 	}
 	if len(background) > 0 {
-		parts = append(parts, "These slow units are not in the login screen's chain, so they did not delay it (they run in the background or later): "+strings.Join(background, ", ")+".")
+		parts = append(parts, "These slow units are not in the login screen's chain, so they did not delay it (they run in the background or later), and changing them would not bring the login screen sooner: "+strings.Join(background, ", ")+". archlinux-keyring-wkd-sync keeps the package signing keys current and should stay on.")
 	}
 	return strings.Join(parts, " ")
 }
