@@ -55,7 +55,8 @@ var Topics = map[string][]step{
 	},
 	"boot": {
 		{"Time to start", []string{"systemd-analyze", "--no-pager"}, 0},
-		{"Slowest services at start", []string{"systemd-analyze", "blame", "--no-pager"}, 12},
+		{"What the start actually waited for (the critical chain; only these delay the desktop)", []string{"systemd-analyze", "critical-chain", "--no-pager"}, 16},
+		{"Slowest units overall (includes background jobs that do not delay the start)", []string{"systemd-analyze", "blame", "--no-pager"}, 10},
 	},
 	"audio": {
 		{"Sound devices and apps", []string{"wpctl", "status"}, 28},

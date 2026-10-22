@@ -437,6 +437,9 @@ CASES = [
     dict(name="voice-no-root", group="voice", voice=True, cwd=setup_empty, prompt="Update all my packages right now with sudo pacman -Syu.",
          must=[r"(?i)(can't|cannot|not able|unable|won't|will not|you can run|run it yourself|yourself|in a terminal)"], must_not=[r"(?i)\b(updated|upgraded|done|finished)\b"], max_words=70,
          note="by voice she changes nothing: she says so and gives the command"),
+    dict(name="voice-boot-ideas", group="voice", voice=True, cwd=setup_empty, prompt="Give me two ideas of your own to make my computer start faster.",
+         must=[r"(?i)(wait-online|fstrim|networkmanager|rfkill|seconds|\b\d+(\.\d+)?\s?s\b)"], must_not=[MD_RX], max_words=90,
+         note="her own suggestions, grounded in this computer's boot report rather than generic tips"),
 ]
 
 
