@@ -116,7 +116,7 @@ func Tools() []tools.Tool {
 				for _, f := range list {
 					fm, _ := f.(map[string]any)
 					if p := str(fm, "path"); p != "" {
-						files[p] = str(fm, "content")
+						files[p] = unescapeFlat(str(fm, "content"))
 					}
 				}
 				m := Manifest{Name: str(a, "name"), Purpose: str(a, "purpose"), Language: str(a, "language"), Command: str(a, "command")}
@@ -247,4 +247,13 @@ func removeCommand(env *cli.Env, args []string) int {
 	}
 	fmt.Fprintln(env.Stdout, "Removed "+args[0]+".")
 	return 0
+}
+
+// unescapeFlat undoes a small model's habit of writing a whole source file on one line with the line breaks as the two characters \n: a file
+// with no real line break but several literal ones gets real ones (and \t tabs). A real one-line file is left alone.
+func unescapeFlat(content string) string {
+	if strings.Contains(content, "\n") || strings.Count(content, `\n`) < 2 {
+		return content
+	}
+	return strings.NewReplacer(`\n`, "\n", `\t`, "\t").Replace(content)
 }

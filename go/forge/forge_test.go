@@ -318,3 +318,18 @@ func TestCommandMustStartAProgram(t *testing.T) {
 		}
 	}
 }
+
+func TestUnescapeFlat(t *testing.T) {
+	flat := `with open('input.txt') as f:\n    words = f.read().split()\n    print(len(words))`
+	if got := unescapeFlat(flat); got != "with open('input.txt') as f:\n    words = f.read().split()\n    print(len(words))" {
+		t.Fatalf("%q", got)
+	}
+	keep := "print('a\\nb')\nprint(1)\n"
+	if unescapeFlat(keep) != keep {
+		t.Fatal("a file with real line breaks must stay as it is")
+	}
+	one := `print('a\nb')`
+	if unescapeFlat(one) != one {
+		t.Fatal("a one-line file with one escape must stay as it is")
+	}
+}
