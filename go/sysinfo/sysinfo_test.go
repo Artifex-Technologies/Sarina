@@ -47,7 +47,7 @@ func TestCrashDetailRefusesOddNames(t *testing.T) {
 
 func TestCrashDetailRuns(t *testing.T) {
 	out, err := CrashDetail(context.Background(), "python3")
-	if err != nil || !strings.Contains(out, "Latest crash") || strings.Contains(out, `\n`) {
+	if err != nil || !strings.Contains(out, "## Summary") || strings.Contains(out, `\n`) {
 		t.Fatalf("%v %q", err, out)
 	}
 }

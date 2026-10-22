@@ -24,9 +24,12 @@ func CrashDetail(ctx context.Context, exe string) (string, error) {
 	}
 	var b strings.Builder
 	b.WriteString("## Latest crash\n")
-	info := run(ctx, step{argv: []string{"coredumpctl", "info", "--no-pager", "-1", exe}, lines: 60})
-	b.WriteString(info)
-	if where := resolveFrames(ctx, info); where != "" {
+	info := run(ctx, step{argv: []string{"coredumpctl", "info", "--no-pager", "-1", exe}, lines: 80})
+	where := resolveFrames(ctx, info)
+	// the summary comes first: a small model reads the top of a long report and skims the rest
+	b.Reset()
+	b.WriteString("## Summary\n" + crashSummary(exe, info, where) + "\n\n## The crash record (selected lines)\n" + recordLines(info))
+	if where != "" {
 		b.WriteString("\n\n## Where it crashed (frames named from the program file; it was not run)\n")
 		b.WriteString(where)
 	}
@@ -95,4 +98,80 @@ func resolveFrames(ctx context.Context, info string) string {
 		out = append(out, fmt.Sprintf("#%s %s in %s%s", num, fn, filepath.Base(path), loc))
 	}
 	return strings.Join(out, "\n")
+}
+
+func field(info, name string) string {
+	for _, l := range strings.Split(info, "\n") {
+		t := strings.TrimSpace(l)
+		if strings.HasPrefix(t, name+":") {
+			return strings.TrimSpace(strings.TrimPrefix(t, name+":"))
+		}
+	}
+	return ""
+}
+
+func recordLines(info string) string {
+	var out []string
+	for _, k := range []string{"Timestamp", "Signal", "Command Line", "Executable", "Package", "Storage"} {
+		if v := field(info, k); v != "" {
+			out = append(out, k+": "+v)
+		}
+	}
+	if len(out) == 0 {
+		return info
+	}
+	return strings.Join(out, "\n")
+}
+
+// crashSummary says in one or two sentences what crashed, how, when and where (when the frames could be named).
+func crashSummary(exe, info, where string) string {
+	sig, when := field(info, "Signal"), field(info, "Timestamp")
+	if sig == "" {
+		return "No crash of " + filepath.Base(exe) + " is recorded."
+	}
+	s := fmt.Sprintf("%s crashed with signal %s", filepath.Base(exe), sig)
+	if when != "" {
+		s += " at " + when
+	}
+	s += "."
+	if where != "" {
+		lines := strings.Split(where, "\n")
+		first := strings.TrimPrefix(lines[0], "#0 ")
+		s += " It crashed in " + first
+		if len(lines) > 1 {
+			s += ", called from " + strings.SplitN(lines[1], " ", 2)[1]
+		}
+		s += "."
+	} else if named := namedFrames(info, 6); len(named) > 0 {
+		s += " Its stack, innermost first: " + strings.Join(named, " < ") + "."
+	} else {
+		s += " The program has no symbols, so where in it the crash happened cannot be named."
+	}
+	if cmd := field(info, "Command Line"); len(strings.Fields(cmd)) > 1 {
+		s += " It was running: " + cmd + "."
+	}
+	return s
+}
+
+var anyFrameRE = regexp.MustCompile(`#\d+\s+0x[0-9a-f]+\s+(\S+)\s+\(`)
+
+// namedFrames lists the function names the record has (the libraries' exported ones), from the first stack, skipping the unnamed ones.
+func namedFrames(info string, n int) []string {
+	first := info
+	if i := strings.Index(info, "Stack trace of thread"); i >= 0 {
+		first = info[i:]
+		if j := strings.Index(first[1:], "Stack trace of thread"); j >= 0 {
+			first = first[:j+1]
+		}
+	}
+	var out []string
+	for _, m := range anyFrameRE.FindAllStringSubmatch(first, -1) {
+		if m[1] != "n/a" {
+			out = append(out, m[1])
+		}
+		if len(out) == n {
+			break
+		}
+	}
+	return out
 }
