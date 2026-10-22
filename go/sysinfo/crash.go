@@ -93,6 +93,13 @@ func resolveFrames(ctx context.Context, info string) string {
 		if fi, err := os.Stat(path); err != nil || !fi.Mode().IsRegular() {
 			continue
 		}
+		// frames above the first hold return addresses, one past the call: look up the call itself
+		if num != "0" {
+			var v uint64
+			if _, err := fmt.Sscanf(off, "0x%x", &v); err == nil && v > 0 {
+				off = fmt.Sprintf("0x%x", v-1)
+			}
+		}
 		res := run(ctx, step{argv: []string{"addr2line", "-f", "-C", "-e", path, off}, lines: 2})
 		lines := strings.Split(strings.TrimSpace(res), "\n")
 		fn, loc := name, ""
@@ -101,6 +108,9 @@ func resolveFrames(ctx context.Context, info string) string {
 		}
 		if len(lines) >= 2 && !strings.HasPrefix(lines[1], "??") {
 			loc = " at " + lines[1]
+			if src := sourceLine(lines[1]); src != "" {
+				loc += `: "` + src + `"`
+			}
 		}
 		if fn == "n/a" {
 			continue
@@ -184,4 +194,37 @@ func namedFrames(info string, n int) []string {
 		}
 	}
 	return out
+}
+
+// sourceLine is the text of FILE:LINE when the program's source is on this computer (read, never run; at most 1 MB files).
+func sourceLine(fileLine string) string {
+	i := strings.LastIndex(fileLine, ":")
+	if i < 0 {
+		return ""
+	}
+	file, num := fileLine[:i], strings.Fields(fileLine[i+1:])
+	if len(num) == 0 {
+		return ""
+	}
+	var n int
+	if _, err := fmt.Sscan(num[0], &n); err != nil || n < 1 {
+		return ""
+	}
+	fi, err := os.Stat(file)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > 1<<20 {
+		return ""
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return ""
+	}
+	ls := strings.Split(string(data), "\n")
+	if n > len(ls) {
+		return ""
+	}
+	t := strings.TrimSpace(ls[n-1])
+	if r := []rune(t); len(r) > 120 {
+		t = string(r[:120]) + "…"
+	}
+	return t
 }
