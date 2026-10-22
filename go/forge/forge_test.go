@@ -302,3 +302,19 @@ func TestSameRunIsNotRepeated(t *testing.T) {
 		t.Fatal("a different input is a different run")
 	}
 }
+
+func TestCommandMustStartAProgram(t *testing.T) {
+	_, files := good()
+	for _, bad := range []string{"print('hi')", "with open('input.txt') as f: print(f.read())", "rm -rf /", "curl http://x"} {
+		m := Manifest{Name: "x", Purpose: "p", Language: "python", Command: bad}
+		if Validate(m, files) == nil {
+			t.Fatalf("%q must be refused", bad)
+		}
+	}
+	for _, ok := range []string{"python3 main.py", "sh run.sh", "./run.sh", "node index.js"} {
+		m := Manifest{Name: "x", Purpose: "p", Language: "python", Command: ok}
+		if err := Validate(m, files); err != nil {
+			t.Fatalf("%q: %v", ok, err)
+		}
+	}
+}

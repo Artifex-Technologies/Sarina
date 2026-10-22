@@ -41,6 +41,8 @@ var (
 	nameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 	fileRE = regexp.MustCompile(`^[A-Za-z0-9._][A-Za-z0-9._/-]{0,119}$`)
 	langRE = regexp.MustCompile(`^[a-z0-9+#.-]{1,20}$`)
+	// what the agent-run image has (see Limbo's examples/agent-profile.json and the image build)
+	runnerRE = regexp.MustCompile(`^(python3?|node|go|bash|sh|gcc|cc|make|jq|\./[A-Za-z0-9._-]+)$`)
 )
 
 // Manifest says what an agent is for and how to start it inside the guest.
@@ -101,6 +103,10 @@ func Validate(m Manifest, files map[string]string) error {
 	}
 	if c := m.Command; strings.TrimSpace(c) == "" || len(c) > MaxCommand || strings.ContainsAny(c, "\x00\n\r") {
 		return errors.New("the command must be one line that starts the agent from its folder")
+	}
+	// the command starts a program with one of the agent's files (python3 main.py), it is not the program itself
+	if first := strings.Fields(m.Command)[0]; !runnerRE.MatchString(first) {
+		return fmt.Errorf("the command must start with an interpreter the guest has (python3, node, go, bash, sh, gcc, make, jq) or ./a-file-of-the-agent, then the file: for example \"python3 main.py\" (got %q)", first)
 	}
 	if m.TimeoutSeconds < 0 || m.TimeoutSeconds > 900 {
 		return errors.New("the timeout must be between 0 and 900 seconds")
