@@ -24,7 +24,12 @@ func CrashDetail(ctx context.Context, exe string) (string, error) {
 	}
 	var b strings.Builder
 	b.WriteString("## Latest crash\n")
-	b.WriteString(run(ctx, step{argv: []string{"coredumpctl", "info", "--no-pager", "-1", exe}, lines: 60}))
+	info := run(ctx, step{argv: []string{"coredumpctl", "info", "--no-pager", "-1", exe}, lines: 60})
+	b.WriteString(info)
+	if where := resolveFrames(ctx, info); where != "" {
+		b.WriteString("\n\n## Where it crashed (frames named from the program file; it was not run)\n")
+		b.WriteString(where)
+	}
 	if filepath.IsAbs(exe) {
 		if _, err := os.Stat(exe); err == nil {
 			b.WriteString("\n\n## Package that owns it\n")
@@ -59,4 +64,35 @@ func crashTool() tools.Tool {
 			return text, map[string]any{"action": "crash_detail", "program": p}, nil
 		},
 	}
+}
+
+var frameRE = regexp.MustCompile(`#(\d+)\s+0x[0-9a-f]+\s+(\S+)\s+\((/[^ )]+) \+ (0x[0-9a-f]+)\)`)
+
+// resolveFrames names the stack frames the crash record left as "n/a", reading the program file with addr2line (function, and source file and
+// line when the program has debug information). Only frames in files that exist are looked up, at most six.
+func resolveFrames(ctx context.Context, info string) string {
+	var out []string
+	for _, m := range frameRE.FindAllStringSubmatch(info, -1) {
+		if len(out) == 6 {
+			break
+		}
+		num, name, path, off := m[1], m[2], m[3], m[4]
+		if fi, err := os.Stat(path); err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		res := run(ctx, step{argv: []string{"addr2line", "-f", "-C", "-e", path, off}, lines: 2})
+		lines := strings.Split(strings.TrimSpace(res), "\n")
+		fn, loc := name, ""
+		if len(lines) >= 1 && lines[0] != "??" && !strings.HasPrefix(lines[0], "(") {
+			fn = lines[0]
+		}
+		if len(lines) >= 2 && !strings.HasPrefix(lines[1], "??") {
+			loc = " at " + lines[1]
+		}
+		if fn == "n/a" {
+			continue
+		}
+		out = append(out, fmt.Sprintf("#%s %s in %s%s", num, fn, filepath.Base(path), loc))
+	}
+	return strings.Join(out, "\n")
 }
