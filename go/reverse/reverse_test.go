@@ -93,3 +93,11 @@ func TestStageCopiesInstalledProgramsOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestCalledFunctions(t *testing.T) {
+	code := "int main(int param_1,long param_2){ if (1 < param_1) { iVar1 = check_code(*(char **)(param_2 + 8)); if (iVar1 != 0) { puts(\"access granted\"); } } return 0; }"
+	got := calledFunctions(code, "main")
+	if len(got) != 1 || got[0] != "check_code" {
+		t.Fatalf("%v", got)
+	}
+}

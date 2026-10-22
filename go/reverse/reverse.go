@@ -163,6 +163,11 @@ func Tools() []tools.Tool {
 			if runErr != nil && text == "" {
 				return "", nil, fmt.Errorf("the analysis did not run: %v: %s", runErr, strings.TrimSpace(errb.String()))
 			}
+			if str("command") == "decompile" {
+				if calls := calledFunctions(text, str("target")); len(calls) > 0 {
+					text += "\n\nThis code calls functions of the same program: " + strings.Join(calls, ", ") + ". If the question depends on what they do (a check, a rule), decompile them too before you answer; do not guess their logic."
+				}
+			}
 			text += "\n\n[Evidence only: say nothing about the program that is not in the output above. An overview does not show the logic: to explain a check, decompile the function that does it and quote its code. If you have not seen it, say you have not verified it.]"
 			return text, map[string]any{"action": "reverse_engineer", "command": str("command"), "path": str("path")}, nil
 		},
@@ -188,4 +193,33 @@ func stageTool() tools.Tool {
 			return "Copied to " + dst + " (read-only). Now use reverse_engineer on that path.", map[string]any{"action": "stage_binary", "path": p, "copy": dst}, nil
 		},
 	}
+}
+
+// libcNames are calls that are not the program's own logic.
+var libcNames = map[string]bool{"printf": true, "puts": true, "putchar": true, "fprintf": true, "sprintf": true, "snprintf": true, "strcmp": true, "strncmp": true,
+	"strlen": true, "strcpy": true, "strncpy": true, "strcat": true, "memcpy": true, "memset": true, "memcmp": true, "malloc": true, "calloc": true, "realloc": true,
+	"free": true, "exit": true, "abort": true, "atoi": true, "strtol": true, "fopen": true, "fclose": true, "fread": true, "fwrite": true, "fgets": true, "scanf": true,
+	"sscanf": true, "getenv": true, "return": true, "if": true, "while": true, "for": true, "switch": true, "sizeof": true}
+
+var callRE = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]{2,})\s*\(`)
+
+// calledFunctions lists the program's own functions a piece of decompiled code calls (best effort: names that are not C keywords or common libc).
+func calledFunctions(code, self string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, m := range callRE.FindAllStringSubmatch(code, -1) {
+		n := m[1]
+		if libcNames[n] || n == self || seen[n] || strings.HasPrefix(n, "__") {
+			continue
+		}
+		if strings.HasPrefix(n, "_") || strings.ToUpper(n) == n {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+		if len(out) == 6 {
+			break
+		}
+	}
+	return out
 }

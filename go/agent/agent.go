@@ -449,6 +449,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 	}
 
 	maxTurns := rt.MaxTurns
+	histStart, claimChecked := len(sess.FileHistory), false
 	for turn := 1; turn <= maxTurns; turn++ {
 		if ctx.Err() != nil {
 			return finish(StopInterrupted, "Interrupted before the model was called.", turn-1)
@@ -507,6 +508,15 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				r.emit(event{"type": "continuation_request", "turn_index": turn, "reason": t.FinishReason,
 					"continuation_index": len(r.segments)})
 				continue
+			}
+			if answer := strings.Join(r.segments, ""); !claimChecked && turn < maxTurns {
+				if f := unbackedFileClaim(answer, sess.FileHistory[min(histStart, len(sess.FileHistory)):]); f != "" {
+					claimChecked = true
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("claim_check_%d", turn), Content: claimCheckText(f)})
+					r.emit(event{"type": "claim_check", "turn_index": turn, "file": f})
+					r.segments = nil
+					continue
+				}
 			}
 			return finish(t.FinishReason, strings.Join(r.segments, ""), turn)
 		}
