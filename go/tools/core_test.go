@@ -724,3 +724,19 @@ func TestWritesNeverEraseAFile(t *testing.T) {
 		t.Fatalf("an empty new file must be allowed: %v", err)
 	}
 }
+
+func TestBinaryFilesAreNotRewritten(t *testing.T) {
+	dir := t.TempDir()
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	os.WriteFile(filepath.Join(dir, "pic.png"), png, 0o644)
+	tc := &Context{Root: dir}
+	if _, _, err := WriteFile().Handler(context.Background(), map[string]any{"path": "pic.png", "content": string(png) + "hello\n"}, tc); err == nil {
+		t.Fatal("writing text into a binary file must be refused")
+	}
+	if _, _, err := EditFile().Handler(context.Background(), map[string]any{"path": "pic.png", "old_text": "IHDR", "new_text": "IHDRhello"}, tc); err == nil {
+		t.Fatal("editing a binary file must be refused")
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "pic.png")); string(b) != string(png) {
+		t.Fatal("binary file changed")
+	}
+}

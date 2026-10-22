@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Artifex-Technologies/Sarina/go/llm"
 )
@@ -133,6 +135,9 @@ func WriteFile() Tool {
 					return "", nil, fmt.Errorf("cannot read the existing %s: %v", given, err)
 				}
 				before = string(data)
+				if isBinary(data) {
+					return "", nil, fmt.Errorf("refused: %s is a binary file (an image, archive or program); writing text into it would break it. Leave it as it is and tell the user", given)
+				}
 				if strings.TrimSpace(before) != "" && strings.TrimSpace(content) == "" {
 					// a model that is told there is no delete tool sometimes "deletes" by writing nothing: refuse, so the file survives
 					return "", nil, fmt.Errorf("refused: writing nothing over %s would erase what is in it. There is no tool here to delete or empty files: leave it as it is and tell the user so", given)
@@ -198,6 +203,9 @@ func EditFile() Tool {
 			if err != nil {
 				return "", nil, fmt.Errorf("cannot read %s: %v", given, err)
 			}
+			if isBinary(data) {
+				return "", nil, fmt.Errorf("refused: %s is a binary file (an image, archive or program); editing it as text would break it. Leave it as it is and tell the user", given)
+			}
 			before := string(data)
 			count := strings.Count(before, oldT)
 			replaceAll := argBool(args, "replace_all", false)
@@ -256,4 +264,16 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+// isBinary: a NUL byte in the first 8 KiB, or text that is not valid UTF-8, means the file is not text and must not be rewritten as text.
+func isBinary(data []byte) bool {
+	head := data
+	if len(head) > 8192 {
+		head = head[:8192]
+	}
+	if bytes.IndexByte(head, 0) >= 0 {
+		return true
+	}
+	return !utf8.Valid(head) && !utf8.Valid(data)
 }
