@@ -25,6 +25,10 @@ type Features struct {
 	Rate       float64 `json:"rate"`        // syllable-like beats per second of speech
 	PauseRatio float64 `json:"pause_ratio"` // time in pauses (250 ms or more) over speaking time
 	VoicedSec  float64 `json:"voiced_sec"`
+	// Bright is how bright the voice sounds: zero crossings per second over the speaking frames (median). A pressed, tense or excited
+	// voice carries more high frequencies and crosses zero more often; a tired one less. (Spectral features like this are what speech
+	// emotion recognisers use, cf. x4nth055/emotion-recognition-using-speech; here it is only compared with the same voice's usual.)
+	Bright float64 `json:"bright"`
 }
 
 // ReadWAV reads 16-bit PCM (mono, or stereo mixed down) and returns samples in -1..1 and the sample rate.
@@ -110,6 +114,25 @@ func Analyze(x []float64, rate int) (f Features, ok bool) {
 		return f, false
 	}
 	f.LoudDB = sumDB / float64(nv)
+
+	var zc []float64
+	for i, v := range voiced {
+		if !v || i*hop+frame > len(x) {
+			continue
+		}
+		seg := x[i*hop : i*hop+frame]
+		n := 0
+		for k := 1; k < len(seg); k++ {
+			if (seg[k-1] < 0) != (seg[k] < 0) {
+				n++
+			}
+		}
+		zc = append(zc, float64(n)*float64(rate)/float64(frame))
+	}
+	if len(zc) > 0 {
+		sort.Float64s(zc)
+		f.Bright = zc[len(zc)/2]
+	}
 
 	// pauses: gaps of 250 ms or more between speaking frames, inside the speech (not the quiet before and after)
 	first, last := -1, -1
@@ -214,13 +237,15 @@ type Baseline struct {
 	N    int                `json:"n"`
 	Mean map[string]float64 `json:"mean"`
 	Var  map[string]float64 `json:"var"`
+	// Count is how many recordings each measure has seen (a measure added later starts from zero while the others go on).
+	Count map[string]int `json:"count,omitempty"`
 }
 
 // MinSamples is how many recordings must have been heard before any hint is given.
 const MinSamples = 12
 
 func (f Features) vec() map[string]float64 {
-	return map[string]float64{"loud": f.LoudDB, "f0": f.F0Median, "range": f.F0RangeSt, "rate": f.Rate, "pause": f.PauseRatio}
+	return map[string]float64{"loud": f.LoudDB, "f0": f.F0Median, "range": f.F0RangeSt, "rate": f.Rate, "pause": f.PauseRatio, "bright": f.Bright}
 }
 
 // Update folds one recording into the baseline.
@@ -228,26 +253,45 @@ func (b *Baseline) Update(f Features) {
 	if b.Mean == nil {
 		b.Mean, b.Var = map[string]float64{}, map[string]float64{}
 	}
+	b.fillCount()
 	b.N++
-	alpha := math.Max(1/float64(b.N), 0.03)
 	for k, v := range f.vec() {
-		if b.N == 1 {
+		n := b.Count[k] + 1
+		b.Count[k] = n
+		if n == 1 {
 			b.Mean[k], b.Var[k] = v, 0
 			continue
 		}
+		alpha := math.Max(1/float64(n), 0.03)
 		d := v - b.Mean[k]
 		b.Mean[k] += alpha * d
 		b.Var[k] = (1 - alpha) * (b.Var[k] + alpha*d*d)
 	}
 }
 
+// fillCount gives a baseline saved before Count existed its counts: every measure it has a mean for has seen all N recordings.
+func (b *Baseline) fillCount() {
+	if b.Count == nil {
+		b.Count = map[string]int{}
+		for k := range b.Mean {
+			b.Count[k] = b.N
+		}
+	}
+}
+
 // minSD keeps a very steady voice from turning small differences into big z-scores.
-var minSD = map[string]float64{"loud": 2.0, "f0": 12.0, "range": 1.5, "rate": 0.6, "pause": 0.08}
+var minSD = map[string]float64{"loud": 2.0, "f0": 12.0, "range": 1.5, "rate": 0.6, "pause": 0.08, "bright": 250}
 
 // Z says how far each feature is from this person's usual, in their own standard deviations.
+// A measure with too little history of its own counts as usual (0).
 func (b *Baseline) Z(f Features) map[string]float64 {
+	b.fillCount()
 	z := map[string]float64{}
 	for k, v := range f.vec() {
+		if b.Count[k] < MinSamples {
+			z[k] = 0
+			continue
+		}
 		sd := math.Max(math.Sqrt(b.Var[k]), minSD[k])
 		z[k] = (v - b.Mean[k]) / sd
 	}
@@ -268,7 +312,15 @@ func (b *Baseline) Mood(f Features) string {
 		return ""
 	}
 	z := b.Z(f)
-	arousal := (z["loud"] + z["rate"] + z["range"] + z["f0"]) / 4
+	keys := []string{"loud", "rate", "range", "f0"}
+	if b.Count["bright"] >= MinSamples {
+		keys = append(keys, "bright")
+	}
+	var arousal float64
+	for _, k := range keys {
+		arousal += z[k]
+	}
+	arousal /= float64(len(keys))
 	switch {
 	case z["rate"] >= 1.0 && z["pause"] <= -0.3 && z["range"] < 0.6:
 		return Tense

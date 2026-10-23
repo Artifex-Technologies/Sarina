@@ -238,3 +238,22 @@ func TestMoodHistoryNoticesAPatternOverDays(t *testing.T) {
 		t.Errorf("the history file is %o", st.Mode().Perm())
 	}
 }
+
+func TestBrightnessIsMeasuredAndJoinsAnOldBaselineGently(t *testing.T) {
+	low, _ := Analyze(speech(310, 6, 110, 1.0, 4.5, 0.25, 6, 0.2), sr)
+	high, _ := Analyze(speech(311, 6, 220, 1.0, 4.5, 0.25, 6, 0.2), sr)
+	if low.Bright <= 0 || high.Bright <= low.Bright {
+		t.Errorf("brightness: low voice %.0f, high voice %.0f", low.Bright, high.Bright)
+	}
+	// a baseline saved before brightness existed: 30 recordings, no counts
+	old := Baseline{N: 30, Mean: map[string]float64{"loud": -30, "f0": 130, "range": 5, "rate": 4.5, "pause": 0.2},
+		Var: map[string]float64{"loud": 4, "f0": 100, "range": 2, "rate": 0.3, "pause": 0.01}}
+	f := Features{LoudDB: -30, F0Median: 130, F0RangeSt: 5, Rate: 4.5, PauseRatio: 0.2, Bright: 9000}
+	if z := old.Z(f); z["bright"] != 0 || old.Mood(f) != Usual {
+		t.Errorf("brightness without its own history moved the mood: %v %s", z, old.Mood(f))
+	}
+	old.Update(f)
+	if old.Count["loud"] != 31 || old.Count["bright"] != 1 || old.Mean["bright"] != 9000 {
+		t.Errorf("counts after one update: %v mean %v", old.Count, old.Mean["bright"])
+	}
+}
