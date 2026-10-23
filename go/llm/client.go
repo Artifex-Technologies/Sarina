@@ -88,17 +88,43 @@ func (c *Client) BuildBody(req Request) ([]byte, error) {
 // receives each stream event as it arrives. Cancellation of ctx is returned as
 // ctx.Err(); every other failure is a *BackendError. One retry is made for
 // connection failures, 429 and 5xx before any response data was consumed.
+// When the model still fails that way, or the server does not have it (404),
+// the same request goes to each of Config.Fallbacks in turn (an idea from
+// litellm's fallbacks); Turn.Model then names the model that answered.
 func (c *Client) Complete(ctx context.Context, req Request, on func(StreamEvent)) (*Turn, error) {
-	body, err := c.BuildBody(req)
+	turn, fallback, err := c.completeWith(ctx, c.Config.Model, req, on)
+	if err == nil || !fallback {
+		return turn, err
+	}
+	for _, m := range c.Config.Fallbacks {
+		t, fb, ferr := c.completeWith(ctx, m, req, on)
+		if ferr == nil {
+			t.Model = m
+			return t, nil
+		}
+		if !fb {
+			return nil, ferr
+		}
+	}
+	return nil, err
+}
+
+// completeWith calls one model; fallback says whether another model might succeed where this one failed.
+func (c *Client) completeWith(ctx context.Context, model string, req Request, on func(StreamEvent)) (*Turn, bool, error) {
+	cc := *c
+	cc.Config.Model = model
+	body, err := cc.BuildBody(req)
 	if err != nil {
-		return nil, &BackendError{Message: "cannot encode request: " + err.Error()}
+		return nil, false, &BackendError{Message: "cannot encode request: " + err.Error()}
 	}
 	var lastErr error
+	retryable := false
 	for attempt := 0; attempt < 2; attempt++ {
-		turn, retryable, err := c.once(ctx, body, req, on)
+		var turn *Turn
+		turn, retryable, err = cc.once(ctx, body, req, on)
 		if err == nil {
 			Normalize(turn, toolNames(req.Tools))
-			return turn, nil
+			return turn, false, nil
 		}
 		lastErr = err
 		if !retryable || ctx.Err() != nil {
@@ -111,10 +137,16 @@ func (c *Client) Complete(ctx context.Context, req Request, on func(StreamEvent)
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, false, ctx.Err()
 		}
 	}
-	return nil, lastErr
+	if ctx.Err() != nil {
+		return nil, false, lastErr
+	}
+	var be *BackendError
+	missing := errors.As(lastErr, &be) && be.Status == http.StatusNotFound
+	timedOut := errors.As(lastErr, &be) && strings.Contains(be.Message, "timed out")
+	return nil, retryable || missing || timedOut, lastErr
 }
 
 func toolNames(specs []ToolSpec) []string {

@@ -35,6 +35,9 @@ type ModelConfig struct {
 	Temperature    float64 `json:"temperature"`
 	TimeoutSeconds float64 `json:"timeout_seconds"`
 	Pricing        Pricing `json:"pricing"`
+	// Fallbacks are models tried in order, on the same server, when Model is missing or keeps failing (SARINA_FALLBACK_MODELS,
+	// comma-separated). Never for a request the server refused as wrong: that would fail on every model.
+	Fallbacks []string `json:"fallbacks,omitempty"`
 }
 
 // Permissions gate the side-effecting tools.
@@ -126,6 +129,11 @@ func ModelFromEnv(getenv func(string) string) ModelConfig {
 	}
 	if v := getenv("OPENAI_API_KEY"); v != "" {
 		m.APIKey = v
+	}
+	for _, f := range strings.Split(getenv("SARINA_FALLBACK_MODELS"), ",") {
+		if f = strings.TrimSpace(f); f != "" && f != m.Model && len(m.Fallbacks) < 4 {
+			m.Fallbacks = append(m.Fallbacks, f)
+		}
 	}
 	// thinking models (Qwen3 and the like) loop at temperature 0: the same thought over and over until the request times out, and the same
 	// answer to different questions. Their makers recommend about 0.6.

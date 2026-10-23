@@ -493,3 +493,48 @@ func TestToolCallArgumentsJSONIsASCII(t *testing.T) {
 	}
 	_ = fmt.Sprint
 }
+
+func TestFallbackModels(t *testing.T) {
+	var models []string
+	s := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		models = append(models, body.Model)
+		switch body.Model {
+		case "voice:8b":
+			w.WriteHeader(404)
+			io.WriteString(w, `{"error":"model \"voice:8b\" not found, try pulling it first"}`)
+		case "broken:1b":
+			w.WriteHeader(500)
+		default:
+			io.WriteString(w, `{"choices":[{"message":{"content":"from `+body.Model+`"},"finish_reason":"stop"}]}`)
+		}
+	})
+	c := newTestClient(s.URL)
+	c.Config.Model, c.Config.Fallbacks = "voice:8b", []string{"broken:1b", "main:8b"}
+	turn, err := c.Complete(context.Background(), Request{}, nil)
+	if err != nil || turn.Content != "from main:8b" || turn.Model != "main:8b" {
+		t.Fatalf("fallback: %v %v", turn, err)
+	}
+	if strings.Join(models, ",") != "voice:8b,broken:1b,broken:1b,main:8b" {
+		t.Errorf("tried: %v", models)
+	}
+	if c.Config.Model != "voice:8b" {
+		t.Error("the client's own model was changed")
+	}
+
+	// a request the server refuses as wrong is not sent to other models
+	models = nil
+	bad := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		models = append(models, "x")
+		w.WriteHeader(400)
+		io.WriteString(w, `{"error":"prompt is too long"}`)
+	})
+	c2 := newTestClient(bad.URL)
+	c2.Config.Fallbacks = []string{"other"}
+	if _, err := c2.Complete(context.Background(), Request{}, nil); err == nil || len(models) != 1 {
+		t.Fatalf("400 went on to a fallback: %v %d", err, len(models))
+	}
+}

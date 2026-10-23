@@ -216,6 +216,8 @@ type Request struct {
 
 // Turn is the model's reply after normalisation.
 type Turn struct {
+	// Model is set when a fallback model answered (empty: the configured one did).
+	Model           string
 	Content         string
 	Reasoning       string
 	ToolCalls       []ToolCall
