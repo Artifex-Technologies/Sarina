@@ -17,6 +17,7 @@ import (
 	_ "github.com/Artifex-Technologies/Sarina/go/helpers" // adds memory-search and voice-chat (Python helper)
 	_ "github.com/Artifex-Technologies/Sarina/go/insight" // sarina reflect: what she has learned about the owner from their talks
 	_ "github.com/Artifex-Technologies/Sarina/go/limbo"   // adds limbo_* tools and limbo-* commands
+	_ "github.com/Artifex-Technologies/Sarina/go/quantum" // quantum_sim (SARINA_QUANTUM=on) and sarina quantum: exact circuits for teaching
 	_ "github.com/Artifex-Technologies/Sarina/go/reverse" // adds reverse_engineer (REA + Ghidra in a sandbox) when SARINA_REVERSE=on
 	_ "github.com/Artifex-Technologies/Sarina/go/route"   // sarina route: what to look up before a spoken question (by meaning)
 	_ "github.com/Artifex-Technologies/Sarina/go/service" // adds the service command
