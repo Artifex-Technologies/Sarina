@@ -18,6 +18,85 @@ import (
 
 func init() {
 	cli.Register("reflect", "learn from the talk log what she knows about the owner (Entities/About Zlothra.md): reflect [--path VAULT] [--dry-run]", reflectCommand)
+	cli.Register("vault-ingest", "turn new files in the vault's Inbox/ into linked notes under Sources/ (originals untouched): vault-ingest [--path VAULT] [--dry-run]", ingestCommand)
+}
+
+func ingestCommand(env *cli.Env, args []string) int {
+	fs := flag.NewFlagSet("vault-ingest", flag.ContinueOnError)
+	fs.SetOutput(env.Stderr)
+	path := fs.String("path", env.Getenv(vault.EnvVar), "the vault folder (default $"+vault.EnvVar+")")
+	dry := fs.Bool("dry-run", false, "show the notes; write nothing")
+	home := env.Home
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	statePath := fs.String("state", filepath.Join(home, ".local", "state", "sarina", "ingest.json"), "which inbox files were read, by content")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *path == "" {
+		fmt.Fprintln(env.Stderr, "sarina vault-ingest: no vault: give --path or set "+vault.EnvVar)
+		return 2
+	}
+	v, err := vault.Open(*path)
+	if err != nil {
+		fmt.Fprintln(env.Stderr, "sarina vault-ingest:", err)
+		return 1
+	}
+	done := map[string]string{}
+	if b, err := os.ReadFile(*statePath); err == nil {
+		_ = json.Unmarshal(b, &done)
+	}
+	files, skipped := NewInboxFiles(v.Root, done)
+	for _, s := range skipped {
+		fmt.Fprintln(env.Stdout, "skipped", s)
+	}
+	if len(files) == 0 {
+		fmt.Fprintln(env.Stdout, "nothing new in the inbox")
+		return 0
+	}
+	model := config.ModelFromEnv(env.Getenv)
+	var c Completer
+	if env.NewClient != nil {
+		c = env.NewClient(model)
+	} else {
+		c = llm.NewClient(model)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	notes, _ := v.Notes()
+	wrote := 0
+	for _, f := range files {
+		sum, err := Summarize(ctx, c, filepath.Base(f.Rel), f.Text)
+		if err != nil {
+			fmt.Fprintf(env.Stdout, "%s: %v (tried again next time)\n", f.Rel, err)
+			continue
+		}
+		name := FreeName(v.Root, sum.Title)
+		body := sum.Render(f.Rel, f.Cut, Related(notes, sum, name))
+		if *dry {
+			fmt.Fprintf(env.Stdout, "--- %s\n%s\n", name, body)
+			continue
+		}
+		if _, err := v.Write(guard.Memory(), name, body, vault.Create); err != nil {
+			fmt.Fprintf(env.Stdout, "%s: %v\n", f.Rel, err)
+		} else {
+			fmt.Fprintf(env.Stdout, "%s -> %s\n", f.Rel, name)
+			wrote++
+		}
+		done[f.Rel] = f.Hash // also when the gate refused it: the same file is not tried every day; a changed one is
+	}
+	if *dry {
+		return 0
+	}
+	if wrote > 0 {
+		v.Commit(fmt.Sprintf("notes from %d inbox file(s)", wrote))
+	}
+	if err := os.MkdirAll(filepath.Dir(*statePath), 0o700); err == nil {
+		b, _ := json.Marshal(done)
+		_ = os.WriteFile(*statePath, b, 0o600)
+	}
+	return 0
 }
 
 type gateAdapter struct{ g guard.Gate }

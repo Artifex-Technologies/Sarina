@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/llm"
+	"github.com/Artifex-Technologies/Sarina/go/vault"
 )
 
 func talks(t *testing.T) string {
@@ -93,4 +94,46 @@ func TestShortOrMissingQuotesAreNotEvidence(t *testing.T) {
 	if got := ParseProposals("no json here"); len(got) != 0 {
 		t.Error(got)
 	}
+}
+
+func TestInboxFilesBecomeLinkedSourceNotes(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "Inbox"), 0o755)
+	os.MkdirAll(filepath.Join(root, "Entities"), 0o755)
+	os.WriteFile(filepath.Join(root, "Entities", "Gardening.md"), []byte("# Gardening\n\nTomatoes and basil, watered on Sundays.\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "Inbox", "tomatoes.md"), []byte("---\ntags: x\n---\nHow to grow tomatoes on a balcony: sun, water, basil nearby.\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "Inbox", "photo.png"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(root, "Inbox", ".hidden.md"), []byte("x"), 0o644)
+	files, skipped := NewInboxFiles(root, map[string]string{})
+	if len(files) != 1 || files[0].Rel != "Inbox/tomatoes.md" || strings.Contains(files[0].Text, "tags:") || len(skipped) != 1 {
+		t.Fatalf("files %+v skipped %v", files, skipped)
+	}
+	if again, _ := NewInboxFiles(root, map[string]string{"Inbox/tomatoes.md": files[0].Hash}); len(again) != 0 {
+		t.Error("read again although unchanged")
+	}
+	reply := `<think>x</think>{"title": "Growing tomatoes on a [[balcony]]/../x", "points": ["Tomatoes need sun.", "Basil grows well next to them."], "matters": "They garden on Sundays."}`
+	s, err := Summarize(context.Background(), fakeModel{reply}, "tomatoes.md", files[0].Text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := vaultNotes(root)
+	name := FreeName(root, s.Title)
+	if name != "Sources/Growing tomatoes on a balcony x.md" {
+		t.Errorf("name: %q", name)
+	}
+	body := s.Render(files[0].Rel, false, Related(v, s, name))
+	if !strings.Contains(body, "From [[Inbox/tomatoes]]") || !strings.Contains(body, "- [[Entities/Gardening]]") || strings.Contains(body, "[[balcony]]") {
+		t.Errorf("note:\n%s", body)
+	}
+	if _, err := Summarize(context.Background(), fakeModel{"I cannot do that."}, "x", "y"); err == nil {
+		t.Error("no JSON accepted as a summary")
+	}
+}
+
+func vaultNotes(root string) ([]vault.Note, error) {
+	v, err := vault.Open(root)
+	if err != nil {
+		return nil, err
+	}
+	return v.Notes()
 }
