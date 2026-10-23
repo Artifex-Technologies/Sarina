@@ -36,6 +36,7 @@ var Commands = map[string]string{
 	"inspect-rust-binary":      "Rust crates and metadata",
 	"inspect-pe-resources":     "Windows resources (manifest, version, icons)",
 	"inspect-firmware-regions": "regions of a firmware image",
+	"network-map":              "web addresses, host names and IP addresses inside the program, with where each IP belongs (offline)",
 }
 
 // SamplesDir is where files to analyse are put (the sandbox sees it as /samples).
@@ -87,6 +88,9 @@ func Args(command, path, target string, maxTokens int) ([]string, error) {
 	}
 	if command == "functions" {
 		return []string{"--exec", "nm", "-C", "--defined-only", "-n", inside}, nil // not a REA command: the symbol table, read inside the sandbox
+	}
+	if command == "network-map" { // not a REA command: the program's strings (8-bit and UTF-16), read inside the sandbox
+		return []string{"--exec", "sh", "-c", `strings -a -n 6 "$1"; strings -a -n 6 -e l "$1"`, "strings", inside}, nil
 	}
 	args := []string{command, inside}
 	if target != "" {
@@ -157,6 +161,9 @@ func Tools() []tools.Tool {
 			cmd.Stdout, cmd.Stderr = &out, &errb
 			runErr := cmd.Run()
 			text := strings.TrimSpace(out.String())
+			if str("command") == "network-map" && (runErr == nil || text != "") {
+				text = FindAddresses(text).Report(ctx, filepath.Base(str("path")))
+			}
 			if r := []rune(text); len(r) > 14000 {
 				text = string(r[:14000]) + "\n[cut]"
 			}

@@ -1,6 +1,7 @@
 package reverse
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,5 +100,42 @@ func TestCalledFunctions(t *testing.T) {
 	got := calledFunctions(code, "main")
 	if len(got) != 1 || got[0] != "check_code" {
 		t.Fatalf("%v", got)
+	}
+}
+
+func TestNetworkMapFindsAddressesNotFileNames(t *testing.T) {
+	text := strings.Join([]string{
+		"connecting to https://update.example-c2.ru/gate.php?id=1",
+		"fallback 203.0.113.50:8443 and 2001:db8::7",
+		"libc.so.6", "main.go", "setup.py", "version 1.2.3", "GCC: (GNU) 14.2.1",
+		"http://www.w3.org/2000/svg", "beacon.badhost.top", "abcdefghijklmnop.onion",
+		"0.0.0.0", "127.0.0.1",
+	}, "\n")
+	nm := FindAddresses(text)
+	if len(nm.URLs) != 2 || nm.URLs[0] != "http://www.w3.org/2000/svg" || !strings.HasPrefix(nm.URLs[1], "https://update.example-c2.ru/gate.php") {
+		t.Errorf("urls: %v", nm.URLs)
+	}
+	if strings.Join(nm.IPs, ",") != "2001:db8::7,203.0.113.50:8443" {
+		t.Errorf("ips: %v", nm.IPs)
+	}
+	for _, h := range nm.Hosts {
+		if strings.Contains(h, "libc") || strings.Contains(h, "main.go") || strings.Contains(h, "setup.py") || strings.Contains(h, "w3.org") {
+			t.Errorf("a file name or standard taken for a host: %v", nm.Hosts)
+		}
+	}
+	if strings.Join(nm.Hosts, ",") != "beacon.badhost.top,update.example-c2.ru" || len(nm.Onions) != 1 {
+		t.Errorf("hosts %v onions %v", nm.Hosts, nm.Onions)
+	}
+	r := nm.Report(context.Background(), "x.bin")
+	if !strings.Contains(r, "nothing was run and no name was looked up") || !strings.Contains(r, "hidden service") {
+		t.Errorf("report: %s", r)
+	}
+	if r := (NetMap{}).Report(context.Background(), "y"); !strings.Contains(r, "No web addresses") {
+		t.Errorf("empty: %s", r)
+	}
+	d := t.TempDir()
+	t.Setenv("LABYRINTH_REA_SAMPLES", d)
+	if a, err := Args("network-map", filepath.Join(d, "x.bin"), "", 0); err != nil || a[0] != "--exec" || a[len(a)-1] != "/samples/x.bin" {
+		t.Errorf("args: %v %v", a, err)
 	}
 }
