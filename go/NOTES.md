@@ -504,3 +504,24 @@ had CRLF working-tree endings, converted back to LF so the diff is the two added
 Not done: the doctor cannot see ACLs on Windows (permission-bit check only) and skips Limbo mode checks there; it does not check
 `allow_data` semantics, the service/GUI token state, or whether Sentry's `/v1/review` actually accepts a request (that would need a
 review call, which could be audited as real traffic). Skill text is untested against a real small model.
+
+## Gaming and the first repair tool (status, 2026-10-23)
+
+Labyrinth OS is a gaming machine first, so `go/sysinfo/gaming.go` adds a `gaming` topic to `system_status` (the read-only `labyrinth-gaming
+check`, the card's use and memory, which programs hold graphics memory, game mode, Steam/Proton/Wine processes, Proton versions in the system
+and user `compatibilitytools.d`, the installed games) with a summary first: whether a game runs and how much of the card Ollama holds, since
+Sarina's model and the games compete for the same 11 GB. `GameRunning` (game mode active, Steam's reaper with `SteamLaunch AppId=`, gamescope)
+keeps `reflect` and `vault-ingest` off the card while a game runs (exit 75, which their timers retry on; `--force` overrides). `route` has a
+`gaming` topic, and the desktop's `labyrinth-ask-sarina` puts her gaming guide notes in front of a gaming question.
+
+`system_fix` is the first tool that changes the real system: a table of named repairs (`restart_audio`, `restart_bluetooth`), each fixed
+commands at user level with a check afterwards whose output is the evidence; `restart_bluetooth` runs only when Bluetooth is already on.
+`Requires: PermShell`, `ClassMutating`, offered only with `SARINA_SYSTEM=on`, so a spoken question (read-only tools) never has it; the model
+chooses a name from the enum and nothing else. `sarina system-fix --list|ACTION` runs the same table. Tests swap the runner so no test
+restarts the developer's audio; the eval `sys-fix-audio` does the real restart once and checks the unit's activation time changed.
+
+**Two guards added the same day from the full eval run.** `tools.Context.Step` counts the model's tool-call batches (the agent raises it in
+`runToolCalls`); `write_file` refuses a write of a file that was read in the same step, because that content was composed before the read result
+existed (she wrote `<read_file_output>` and the new item over a to-do list), and refuses content that holds a tool-output marker. Both say to
+read first and write in the next step, or use `edit_file`. The `audio` report ends with a note that the sound system runs as the user and is
+restarted with `systemctl --user`, never sudo (she had told the owner `sudo systemctl restart pipewire`).

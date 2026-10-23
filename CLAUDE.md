@@ -217,6 +217,36 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-10-23 — Training round: gaming (Labyrinth's main goal) and the first repair tool
+- **Owner's direction:** Labyrinth OS is privacy-oriented but its main goal is the most capable gaming
+  experience on Linux; Sarina helps with stability and mods, talks naturally, and gets a little more
+  access to the system each training round. Nothing in her knew about games before this round.
+- **New `system_status gaming`** (`go/sysinfo/gaming.go`): the read-only `labyrinth-gaming check`, the
+  card's use and memory, which programs hold graphics memory (her own model included), game mode, Steam/
+  Proton/Wine processes, Proton versions (system and user `compatibilitytools.d`), installed games; a
+  summary first says whether a game runs and how much Ollama holds, and that part of the card's use is
+  her own model answering. `GameRunning` keeps `reflect` and `vault-ingest` off the card while a game
+  runs (exit 75, retried by their timers; `--force` overrides). `route` has a `gaming` topic.
+- **New `system_fix` tool and `sarina system-fix`**: the first tool that changes the real system, as a
+  table of named repairs at user level (`restart_audio`, `restart_bluetooth`, the latter only when
+  Bluetooth is already on), fixed commands with a check afterwards as evidence. `PermShell`,
+  `ClassMutating`, only with `SARINA_SYSTEM=on`; a spoken question never has it. Tests swap the runner so
+  no test restarts the developer's audio; the eval does it once for real and checks the unit's
+  activation time changed.
+- **Labyrinth side** (their repo, `profile/airootfs`): `labyrinth-ask-sarina` puts the gaming guides in
+  front of a gaming question and labels a prefetched crash record that may not be the program meant;
+  the voice rules name the gaming topic and the shared graphics card; `labyrinth-gaming check` no longer
+  hides a system-wide Proton-CachyOS (one `ls` over two folders failed as a whole). Four gaming guide
+  notes and one lesson in her vault; three lessons in `SARINA_LESSONS.md`. Plan, observations and a
+  what-next list with reasons: `Labyrinth_OS/docs/SARINA_GAMING.md`.
+- **Evals:** 11 new cases (group `gaming`, 74 in all); first run 11/11, but reading the answers found
+  three faults the keywords missed (sudo for a user service, "game mode inactive" called a fault, a test
+  program's crash explained as the game's), now fixed and the checks tightened. Full run (`docs/sarina-evals/2026-10-23-full.md`): 63 of 70 graded cases passed (the 4 Limbo cases need the sudo password and were skipped); after the fixes the retry passed the append, sudo, false-memory, thread and game-crash cases. Still failing: the two Heimdall alert checks (its session scan raised no `injection-phrase` for the "SYSTEM NOTICE TO THE ASSISTANT" text although its `/v1/review` denies it: for Heimdall's board) and `voice-install-help` by five words over the cap with the content now right (Agora first).
+- **Not done / for the owner:** the root-owned installed copies (`/usr/bin/sarina`, the two scripts, the
+  rules file) still need `sudo install` from the repos (the evals ran the staged build in `~/.local/bin`);
+  no Steam-launch hook frees the graphics card yet; no tiers are configured on this machine.
+— Signed: Sarina / Claude Mythos 5.1
+
 ### 2026-10-10 (3) — Draft Limbo decompile profile and static-analysis skill
 - **New `packaging/limbo/decompile/`** (owner rule: all decompiling happens in Limbo):
   `decompile.profile.json` (network none, no sudo, `exchange_dir` sample share; checked

@@ -25,6 +25,10 @@ type Context struct {
 	// Runtimes lets other packages attach runtime handles (memory, limbo, ...)
 	// that their own tools look up by name.
 	Runtimes map[string]any
+	// Step counts the model's tool-call batches (the agent raises it before each
+	// one). A file read and written in the same step was written before its
+	// content was seen, which write_file refuses.
+	Step int
 
 	// Environ returns the parent environment ("KEY=value" entries) that child
 	// processes start from; nil means os.Environ. Secret-looking names are

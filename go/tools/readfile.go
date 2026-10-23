@@ -107,7 +107,7 @@ func ReadFile() Tool {
 			if !st.Mode().IsRegular() {
 				return "", nil, fmt.Errorf("%s is not a regular file", given)
 			}
-			stateOf(tc).markRead(path)
+			stateOf(tc).markRead(path, tc.Step)
 			_, hasStart := args["start_line"]
 			_, hasEnd := args["end_line"]
 			var out string

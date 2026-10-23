@@ -25,17 +25,29 @@ func (s *fileState) isAuthored(path string) bool {
 	return s.authored[path]
 }
 
-func (s *fileState) markRead(path string) {
+func (s *fileState) markRead(path string, step int) {
 	s.mu.Lock()
-	s.read[path] = true
+	s.read[path] = step
 	s.mu.Unlock()
 }
 
 func (s *fileState) wasRead(path string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.read[path]
+	_, ok := s.read[path]
+	return ok
 }
+
+// readInStep says whether the last read of path happened in this very step (so its result was not yet in the model's hands).
+func (s *fileState) readInStep(path string, step int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	at, ok := s.read[path]
+	return ok && step > 0 && at == step
+}
+
+// toolOutputMarker is text a model writes when it imagines a tool's result in place of the real content.
+var toolOutputMarker = regexp.MustCompile(`(?i)<(read_file_output|tool_output|tool_result|function_results?)\b|"tool":\s*"read_file"`)
 
 func (s *fileState) markAuthored(path string) {
 	s.mu.Lock()
@@ -137,6 +149,14 @@ func WriteFile() Tool {
 				return "", nil, editLoopError(given, n)
 			}
 			known := st.isAuthored(path) || st.wasRead(path)
+			if st.readInStep(path, tc.Step) && !st.isAuthored(path) {
+				// she asked to read the file and to write it in one step, so the write was composed before the content was in her hands
+				// (she wrote "<read_file_output>" and the new item, and the list was gone)
+				return "", nil, fmt.Errorf("refused: you asked to read %s and to write it in the same step, so this content was written before you saw the file. Read the result first, then write the whole new content in your next step, or add to it with edit_file", given)
+			}
+			if toolOutputMarker.MatchString(content) {
+				return "", nil, fmt.Errorf("refused: the content for %s holds a tool-output marker (such as <read_file_output>) instead of the file's text. Write the real text of the whole file, or add to it with edit_file", given)
+			}
 			st.markAuthored(path)
 
 			md := map[string]any{"action": "write_file", "path": relPath(tc.Root, path), "content_length": len([]rune(content))}

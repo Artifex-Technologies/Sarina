@@ -830,6 +830,7 @@ func (r *run) answerPending(calls []llm.ToolCall, reason string) {
 // runToolCalls executes a turn's calls in order. A non-empty stop means the run
 // must end with that stop reason; every call has been answered either way.
 func (a *Agent) runToolCalls(ctx context.Context, r *run, calls []llm.ToolCall, turn int) (stop, out string) {
+	a.toolCtx.Step++ // the file tools tell a read from a write made in the same batch apart by this
 	for i, call := range calls {
 		if ctx.Err() != nil {
 			r.answerPending(calls[i:], "not run: the session was interrupted")

@@ -21,55 +21,56 @@ type step struct {
 	title string
 	argv  []string
 	lines int // keep this many lines (0: all)
+	cols  int // cut each line at this many characters (0: whole lines)
 }
 
 // Topics are what she may ask about: each one a few fixed commands.
 var Topics = map[string][]step{
 	"performance": {
-		{"Uptime and load", []string{"uptime"}, 0},
-		{"Memory", []string{"free", "-h"}, 0},
-		{"Busiest programs by processor", []string{"ps", "-eo", "pid,comm,pcpu,pmem", "--sort=-pcpu"}, 9},
-		{"Biggest programs by memory", []string{"ps", "-eo", "pid,comm,pcpu,pmem", "--sort=-pmem"}, 9},
-		{"Pressure (share of time programs waited)", []string{"cat", "/proc/pressure/cpu", "/proc/pressure/memory", "/proc/pressure/io"}, 0},
+		{"Uptime and load", []string{"uptime"}, 0, 0},
+		{"Memory", []string{"free", "-h"}, 0, 0},
+		{"Busiest programs by processor", []string{"ps", "-eo", "pid,comm,pcpu,pmem", "--sort=-pcpu"}, 9, 0},
+		{"Biggest programs by memory", []string{"ps", "-eo", "pid,comm,pcpu,pmem", "--sort=-pmem"}, 9, 0},
+		{"Pressure (share of time programs waited)", []string{"cat", "/proc/pressure/cpu", "/proc/pressure/memory", "/proc/pressure/io"}, 0, 0},
 	},
 	"network": {
-		{"Connection state", []string{"nmcli", "-t", "-f", "STATE,CONNECTIVITY", "general", "status"}, 0},
-		{"Devices", []string{"nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"}, 0},
-		{"Addresses", []string{"ip", "-brief", "address"}, 0},
-		{"Routes", []string{"ip", "route"}, 6},
-		{"Name server answers", []string{"getent", "hosts", "archlinux.org"}, 2},
+		{"Connection state", []string{"nmcli", "-t", "-f", "STATE,CONNECTIVITY", "general", "status"}, 0, 0},
+		{"Devices", []string{"nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"}, 0, 0},
+		{"Addresses", []string{"ip", "-brief", "address"}, 0, 0},
+		{"Routes", []string{"ip", "route"}, 6, 0},
+		{"Name server answers", []string{"getent", "hosts", "archlinux.org"}, 2, 0},
 	},
 	"disk": {
-		{"Space", []string{"df", "-h", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs"}, 0},
-		{"Drives", []string{"lsblk", "-o", "NAME,SIZE,TYPE,MOUNTPOINTS"}, 0},
+		{"Space", []string{"df", "-h", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs"}, 0, 0},
+		{"Drives", []string{"lsblk", "-o", "NAME,SIZE,TYPE,MOUNTPOINTS"}, 0, 0},
 	},
 	"logs": {
-		{"Warnings and errors since boot (newest last)", []string{"journalctl", "-b", "-p", "warning", "-n", "40", "--no-pager", "-o", "short"}, 0},
+		{"Warnings and errors since boot (newest last)", []string{"journalctl", "-b", "-p", "warning", "-n", "40", "--no-pager", "-o", "short"}, 0, 0},
 	},
 	"services": {
-		{"Services that failed", []string{"systemctl", "--failed", "--no-pager", "--plain"}, 0},
-		{"User services that failed", []string{"systemctl", "--user", "--failed", "--no-pager", "--plain"}, 0},
+		{"Services that failed", []string{"systemctl", "--failed", "--no-pager", "--plain"}, 0, 0},
+		{"User services that failed", []string{"systemctl", "--user", "--failed", "--no-pager", "--plain"}, 0, 0},
 	},
 	"crashes": {
-		{"Crashes in the last 7 days, newest first (core dumps)", []string{"coredumpctl", "list", "--no-pager", "--reverse", "--since=-7d", "-n", "12"}, 0},
-		{"Crash and out-of-memory lines this boot", []string{"journalctl", "-b", "--no-pager", "-n", "25", "-g", "segfault|core dumped|dumped core|out of memory|oom-kill|Killed process|general protection", "-o", "short"}, 0},
+		{"Crashes in the last 7 days, newest first (core dumps)", []string{"coredumpctl", "list", "--no-pager", "--reverse", "--since=-7d", "-n", "12"}, 0, 0},
+		{"Crash and out-of-memory lines this boot", []string{"journalctl", "-b", "--no-pager", "-n", "25", "-g", "segfault|core dumped|dumped core|out of memory|oom-kill|Killed process|general protection", "-o", "short"}, 0, 0},
 	},
 	"boot": {
-		{"Time to start", []string{"systemd-analyze", "--no-pager"}, 0},
-		{"When the login screen appeared (what it waited for)", []string{"systemd-analyze", "critical-chain", "display-manager.service", "--no-pager"}, 12},
-		{"When everything was started (the graphical target; background services can make this later than the login screen)", []string{"systemd-analyze", "critical-chain", "--no-pager"}, 14},
-		{"Slowest units overall (includes background jobs that do not delay the start)", []string{"systemd-analyze", "blame", "--no-pager"}, 10},
+		{"Time to start", []string{"systemd-analyze", "--no-pager"}, 0, 0},
+		{"When the login screen appeared (what it waited for)", []string{"systemd-analyze", "critical-chain", "display-manager.service", "--no-pager"}, 12, 0},
+		{"When everything was started (the graphical target; background services can make this later than the login screen)", []string{"systemd-analyze", "critical-chain", "--no-pager"}, 14, 0},
+		{"Slowest units overall (includes background jobs that do not delay the start)", []string{"systemd-analyze", "blame", "--no-pager"}, 10, 0},
 	},
 	"audio": {
-		{"Sound devices and apps", []string{"wpctl", "status"}, 28},
+		{"Sound devices and apps", []string{"wpctl", "status"}, 28, 0},
 	},
 	"kernel": {
-		{"Kernel warnings and errors this boot", []string{"journalctl", "-k", "-b", "-p", "warning", "-n", "30", "--no-pager", "-o", "short"}, 0},
+		{"Kernel warnings and errors this boot", []string{"journalctl", "-k", "-b", "-p", "warning", "-n", "30", "--no-pager", "-o", "short"}, 0, 0},
 	},
 	"hardware": {
-		{"Temperatures and fans", []string{"sensors"}, 30},
-		{"Graphics card", []string{"nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader"}, 0},
-		{"Battery and power", []string{"cat", "/sys/class/power_supply/BAT0/capacity"}, 0},
+		{"Temperatures and fans", []string{"sensors"}, 30, 0},
+		{"Graphics card", []string{"nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader"}, 0, 0},
+		{"Battery and power", []string{"cat", "/sys/class/power_supply/BAT0/capacity"}, 0, 0},
 	},
 }
 
@@ -104,6 +105,13 @@ func run(ctx context.Context, s step) string {
 	if s.lines > 0 && len(lines) > s.lines {
 		lines = lines[:s.lines]
 	}
+	if s.cols > 0 {
+		for i, l := range lines {
+			if r := []rune(l); len(r) > s.cols {
+				lines[i] = string(r[:s.cols]) + "..."
+			}
+		}
+	}
 	text = strings.Join(lines, "\n")
 	if r := []rune(text); len(r) > 3500 {
 		text = string(r[:3500]) + "\n[cut]"
@@ -120,10 +128,16 @@ func Report(ctx context.Context, topic string) (string, error) {
 	var b strings.Builder
 	// the time the report was made, so "today" and "recently" are judged against the dates in it, not guessed
 	fmt.Fprintf(&b, "Now: %s\n\n", time.Now().Format("Mon 2006-01-02 15:04"))
-	if strings.EqualFold(strings.TrimSpace(topic), "boot") {
+	switch strings.ToLower(strings.TrimSpace(topic)) {
+	case "boot":
 		if sum := bootSummary(ctx); sum != "" {
 			b.WriteString("## Summary\n" + sum + "\n\n")
 		}
+	case "gaming":
+		b.WriteString("## Summary\n" + gamingSummary(ctx) + "\n\n")
+	case "audio":
+		// she once told the owner to restart PipeWire with sudo: the sound system runs as the user
+		b.WriteString("## Note\nThe sound system (PipeWire, WirePlumber) runs as the user: it is restarted with `systemctl --user restart pipewire pipewire-pulse wireplumber`, never with sudo; with shell, system_fix restart_audio does the same.\n\n")
 	}
 	for _, s := range steps {
 		fmt.Fprintf(&b, "## %s\n%s\n\n", s.title, run(ctx, s))
@@ -134,16 +148,17 @@ func Report(ctx context.Context, topic string) (string, error) {
 
 func init() { tools.RegisterProvider(Tools) }
 
-// Tools returns system_status (read-only) when SARINA_SYSTEM=on (off by default: the tool's description costs every request some of the model's context).
+// Tools returns crash_detail and system_status (read-only) and system_fix (shell-gated) when SARINA_SYSTEM=on (off by default: the tools'
+// descriptions cost every request some of the model's context).
 func Tools() []tools.Tool {
 	if os.Getenv("SARINA_SYSTEM") != "on" {
 		return nil
 	}
-	return []tools.Tool{crashTool(), {
+	return []tools.Tool{crashTool(), fixTool(), {
 		Class: tools.ClassReadOnly,
 		Spec: llm.ToolSpec{
 			Name:        "system_status",
-			Description: "How the computer is doing now (read-only): performance, network, disk, logs, services, hardware, crashes, boot, audio, kernel. Call it before answering about slowness, internet, errors, crashes or health.",
+			Description: "How the computer is doing now (read-only): performance, network, disk, logs, services, hardware, crashes, boot, audio, kernel, gaming (Steam, Proton, the graphics card and who holds its memory). Call it before answering about slowness, internet, errors, crashes, games or health.",
 			Parameters: map[string]any{"type": "object", "required": []string{"topic"}, "properties": map[string]any{
 				"topic": map[string]any{"type": "string", "enum": names()},
 			}},

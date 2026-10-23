@@ -10,7 +10,7 @@ import (
 
 func init() {
 	cli.Register("crash-detail", "the latest crash of one program (read-only): crash-detail PROGRAM", crashCommand)
-	cli.Register("system-status", "print what the computer reports about one topic (read-only): system-status performance|network|disk|logs|services|hardware|crashes|boot|audio|kernel", statusCommand)
+	cli.Register("system-status", "print what the computer reports about one topic (read-only): system-status performance|network|disk|logs|services|hardware|crashes|boot|audio|kernel|gaming", statusCommand)
 }
 
 func statusCommand(env *cli.Env, args []string) int {

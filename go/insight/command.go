@@ -13,6 +13,7 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/config"
 	"github.com/Artifex-Technologies/Sarina/go/guard"
 	"github.com/Artifex-Technologies/Sarina/go/llm"
+	"github.com/Artifex-Technologies/Sarina/go/sysinfo"
 	"github.com/Artifex-Technologies/Sarina/go/vault"
 )
 
@@ -31,8 +32,12 @@ func ingestCommand(env *cli.Env, args []string) int {
 		home, _ = os.UserHomeDir()
 	}
 	statePath := fs.String("state", filepath.Join(home, ".local", "state", "sarina", "ingest.json"), "which inbox files were read, by content")
+	force := fs.Bool("force", false, "run even while a game is running")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if rc := notWhileGaming(env, "vault-ingest", *force); rc != 0 {
+		return rc
 	}
 	if *path == "" {
 		fmt.Fprintln(env.Stderr, "sarina vault-ingest: no vault: give --path or set "+vault.EnvVar)
@@ -118,8 +123,12 @@ func reflectCommand(env *cli.Env, args []string) int {
 	}
 	statePath := fs.String("state", filepath.Join(home, ".local", "state", "sarina", "reflect.json"), "where the last reflected talk line is remembered")
 	batch := fs.Int("batch", 60, "talk lines per model call")
+	force := fs.Bool("force", false, "run even while a game is running")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if rc := notWhileGaming(env, "reflect", *force); rc != 0 {
+		return rc
 	}
 	if *path == "" {
 		fmt.Fprintln(env.Stderr, "sarina reflect: no vault: give --path or set "+vault.EnvVar)
@@ -186,6 +195,19 @@ func reflectCommand(env *cli.Env, args []string) int {
 	if err := os.MkdirAll(filepath.Dir(*statePath), 0o700); err == nil {
 		b, _ := json.Marshal(st)
 		_ = os.WriteFile(*statePath, b, 0o600)
+	}
+	return 0
+}
+
+// notWhileGaming keeps a background job off the graphics card while a game runs: the model would take several gigabytes of the card's
+// memory from the game. Exit 75 (EX_TEMPFAIL) is what the timers' units retry on later.
+func notWhileGaming(env *cli.Env, job string, force bool) int {
+	if force {
+		return 0
+	}
+	if why, yes := sysinfo.GameRunning(context.Background()); yes {
+		fmt.Fprintf(env.Stdout, "sarina %s: a game is running (%s); not now, so the game keeps the graphics card (--force overrides)\n", job, why)
+		return 75
 	}
 	return 0
 }

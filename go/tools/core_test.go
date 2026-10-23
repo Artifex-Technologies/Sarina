@@ -755,3 +755,22 @@ func TestWriteNeedsTheFileReadFirst(t *testing.T) {
 	e.put("b.md", "keep\n")
 	e.ok("write_file", map[string]any{"path": "b.md", "content": "keep\nmore\n"})
 }
+
+func TestWriteInTheSameStepAsTheReadIsRefused(t *testing.T) {
+	// the model asked for the read and the write in one batch: the write was composed before the content was in its hands
+	e := newEnv(t, writeAll())
+	e.put("todo.md", "- [ ] milk\n- [ ] call Dana\n")
+	e.tc.Step = 1
+	e.ok("read_file", map[string]any{"path": "todo.md"})
+	e.fails("write_file", map[string]any{"path": "todo.md", "content": "- [ ] water the plants\n"}, "tool_execution_error")
+	if e.read("todo.md") != "- [ ] milk\n- [ ] call Dana\n" {
+		t.Fatal("the list was replaced by a write made in the same step as the read")
+	}
+	e.tc.Step = 2 // the next model turn: the content has been seen
+	e.ok("write_file", map[string]any{"path": "todo.md", "content": "- [ ] milk\n- [ ] call Dana\n- [ ] water the plants\n"})
+	// a tool-output marker written as content is never the file's text
+	e.fails("write_file", map[string]any{"path": "todo.md", "content": "<read_file_output>\n- [ ] water the plants\n"}, "tool_execution_error")
+	if !strings.Contains(e.read("todo.md"), "call Dana") {
+		t.Fatal("placeholder content replaced the file")
+	}
+}

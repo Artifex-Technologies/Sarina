@@ -29,6 +29,7 @@ var Topics = map[string][]string{
 	"boot":        {"why does it take so long to start", "booting is slow", "what slows down startup"},
 	"audio":       {"there is no sound", "my microphone doesn't work", "the speakers are silent", "audio crackles"},
 	"services":    {"are there any errors on my system", "something is broken since the update", "is everything working properly", "any problems I should know about"},
+	"gaming":      {"my game keeps stuttering", "steam won't start my game", "which proton version should I use", "is this computer ready for gaming", "how do I show my frame rate in a game", "where do I put mods for a steam game", "does your model slow down my games", "my controller is not working in the game", "the game crashes on launch with proton"},
 	"guides":      {"how do I change the default app for pdf files", "where is the setting for the wallpaper", "how do I sign in to proton drive", "what is the shortcut to talk to you", "how do I lock the screen", "where do I change the power mode", "how do I install an app"},
 	"chat":        {"tell me a joke", "how are you today", "what is the capital of france", "thank you", "good morning", "write me a short poem"},
 }

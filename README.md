@@ -18,6 +18,13 @@ What she does today:
 - **Troubleshoots the computer.** She reads how it is doing (performance, network, disks, logs, failed
   services, boot, sound, kernel, temperatures) and explains it; her spoken answers come with that report
   already looked up.
+- **Looks after the gaming side.** Labyrinth is a gaming machine first: she reads the gaming setup check,
+  Proton versions, the installed games, and who holds the graphics card's memory (her own model included),
+  and answers from guide notes about Proton, launch options, mods, controllers and anti-cheat. Her
+  background jobs stay off the card while a game runs.
+- **Does a few repairs when allowed a shell.** `system_fix` restarts the audio or Bluetooth for the user:
+  named, fixed commands from a table, reversible, each reported with its check; nothing else can be run
+  through it, and a spoken question never has it.
 - **Helps with crashes as they happen.** For a program that crashed she names the function, the source
   file and line and quotes it when the source is on the computer; Labyrinth's crash helper offers to ask her.
 - **Studies programs without running them.** Static analysis with REA and Ghidra in a sandbox (no network,
@@ -83,7 +90,7 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
 | `SARINA_REQUEST_MAX_TOKENS` | the most one reply may produce, so a runaway reply ends instead of timing out (6000) |
 | `SARINA_VAULT` | her notes folder |
 | `SARINA_SEMANTIC=on` | find notes by meaning as well as by words (needs `nomic-embed-text`) |
-| `SARINA_SYSTEM=on` | the `system_status` and `crash_detail` tools |
+| `SARINA_SYSTEM=on` | the `system_status` and `crash_detail` tools (read-only), and `system_fix` (named, reversible user-level repairs; needs `--allow-shell`) |
 | `SARINA_REVERSE=on` | the sandboxed `reverse_engineer` and `stage_binary` tools (needs `labyrinth-rea`) |
 | `SARINA_FORGE=on` | the agent forge tools (needs Limbo and its `agent-run` profile) |
 | `SARINA_LIMBO_SOCKET` | Limbo's agent socket (`/run/limbo/agent.sock`) |
@@ -106,7 +113,8 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
 | `memory-status`, `memory-show`, `memory-review*` | curated memory and its review queue |
 | `session-search`, `memory-search` | lexical and semantic search over saved sessions |
 | `limbo-profiles`, `limbo-validate` | run commands in a disposable Limbo guest |
-| `system-status TOPIC`, `crash-detail PROGRAM` | how the computer is doing, and the latest crash of one program (read-only) |
+| `system-status TOPIC`, `crash-detail PROGRAM` | how the computer is doing (performance, network, disk, logs, services, hardware, crashes, boot, audio, kernel, gaming), and the latest crash of one program (read-only) |
+| `system-fix --list`, `system-fix ACTION` | the named repairs the `system_fix` tool can do (restart the audio, restart Bluetooth): fixed commands at user level, each with a check afterwards |
 | `route QUESTION` | what to look up before answering a spoken question, decided by meaning |
 | `vault-init`, `vault-search`, `vault-lint` | her notes: starting folders, search (words and meaning), broken links |
 | `forge-list`, `forge-approve NAME`, `forge-remove NAME` | the agents she wrote; approving needs you at a terminal |
@@ -142,7 +150,8 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
 - **File tools protect your files.** A file is never replaced unread, never erased or emptied, a binary
   file is never written as text, and private folders (`SARINA_PRIVATE_DIRS`) stay closed, also to searches.
 - **Spoken questions change nothing.** By voice she has read-only tools and her vault only; she gives you
-  the command instead of running it.
+  the command instead of running it. The one tool that changes the real system, `system_fix`, is a table of
+  named user-level repairs behind `--allow-shell`.
 - **Her agents run only in Limbo.** No network, none of your files, no sudo; output is capped and labelled
   as untrusted evidence; you approve exact versions; there is no tool that approves anything.
 - **Tool-less sessions.** `tool_allowlist: []` on the service creates a session
@@ -150,9 +159,10 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
 
 ## Evals
 
-`python3 evals/run_evals.py` runs about fifty checks against the real agent: understanding, honesty,
+`python3 evals/run_evals.py` runs about seventy checks against the real agent: understanding, honesty,
 safety (injections, secrets, private folders), writing files, her vault, reverse engineering, Limbo,
-troubleshooting and crash help, and spoken answers. It writes a Markdown report and a JSON file; the
+troubleshooting and crash help, gaming (the setup check, Proton, mods, graphics memory, the repair tool),
+spoken answers and companion talk. It writes a Markdown report and a JSON file; the
 reports of past runs are in Labyrinth_OS `docs/sarina-evals/`. `tools/training/` turns her real answers into
 a review sheet you tick, and exports the ticked ones for fine-tuning (nothing is trained by itself).
 
