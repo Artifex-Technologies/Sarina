@@ -218,6 +218,7 @@ def setup_vault_companion():
         "Entities/Inside jokes.md": "---\ncreated: 2026-10-17\nsource: sarina\n---\n\n# Inside jokes\n\n- 2026-10-17: Zlothra is Sloth plus Mothra (said Zlaw-thruh). She was asked to get it right.\n",
         "Jokes/2026-10.md": "# Jokes 2026-10\n\n- 2026-10-22 09:09 | they said: Tell me a short joke about printers. | I said: Why did the printer go to the doctor? It had a paper cut.\n",
         "Talks/2026-10.md": "# Talks 2026-10\n\n- 2026-10-20 21:14 | they said: my cat Pixel knocked my coffee off the desk again | I said: Pixel is running gravity tests. The results are consistent.\n",
+        "Entities/About Zlothra.md": "---\ncreated: 2026-10-20\nsource: sarina\n---\n\n# About Zlothra\n\n## Observations\n\n- Zlothra has a cat named Pixel — seen 3×, last 2026-10-22. Evidence: \"my cat Pixel knocked my coffee off the desk again\"\n- Zlothra prefers short answers when tired — seen 2×, last 2026-10-21. Evidence: \"keep it short when I'm tired\"\n\n## Forgotten\n\n",
     })
 
 
@@ -480,6 +481,10 @@ CASES = [
          prompt="I'm thinking about picking up a new hobby.", then="Maybe drawing. But I'm honestly terrible at it.",
          must=[r"(?i)(draw|sketch|doodle|pencil|artist|\bart\b|blank page)"], must_not=[MD_RX, DESK_RX, ECHO_RX, r"(?i)(which hobby|what hobby|\bwhy (did|do|don'?t|does|is)\b[^?]*\?\s*\S|\(joking\)|\[joking\])"], max_words=60,
          note="a conversation that goes on: she follows the thread and responds to the person, not with a list of tips"),
+    dict(name="companion-knows-them", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
+         prompt="I'm stopping by the pet store later. Any ideas what to get?",
+         must=[r"(?i)(pixel|your cat|cat toy|for the cat|catnip|scratch)"], must_not=[MD_RX, DESK_RX, ECHO_RX, r"(?i)(what kind of pet|do you have a pet|which pet)"], max_words=60,
+         note="what she has learned about them (Entities/About Zlothra) shapes the answer: she knows about the cat without asking"),
     dict(name="companion-name-callback", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
          prompt="Why is my name funny again?",
          must=[r"(?i)(sloth|mothra)"], must_not=[MD_RX, DESK_RX, ECHO_RX], max_words=50,
