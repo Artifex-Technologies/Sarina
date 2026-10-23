@@ -211,6 +211,23 @@ def setup_vault_empty():
     return make_vault("vault-empty", {"Home.md": "# Home\n\nEmpty vault.\n", "Lessons/Verify after writing.md": "# Verify after writing\n\nRead the file back after writing.\n"})
 
 
+def setup_vault_companion():
+    """A vault with a little shared history: one inside joke, one joke she told, one earlier talk."""
+    return make_vault("vault-companion", {
+        "Home.md": "# Home\n",
+        "Entities/Inside jokes.md": "---\ncreated: 2026-10-17\nsource: sarina\n---\n\n# Inside jokes\n\n- 2026-10-17: Zlothra is Sloth plus Mothra (said Zlaw-thruh). She was asked to get it right.\n",
+        "Jokes/2026-10.md": "# Jokes 2026-10\n\n- 2026-10-22 09:09 | they said: Tell me a short joke about printers. | I said: Why did the printer go to the doctor? It had a paper cut.\n",
+        "Talks/2026-10.md": "# Talks 2026-10\n\n- 2026-10-20 21:14 | they said: my cat Pixel knocked my coffee off the desk again | I said: Pixel is running gravity tests. The results are consistent.\n",
+    })
+
+
+# A companion answers in her own voice: these phrases are a help desk talking, not her.
+DESK_RX = r"(?i)(as an ai|an ai (model|assistant)|language model|virtual assistant|i'?m (just )?an assistant|anything else|let me know if|how can i (help|assist)|help with|anything i can do|want me to|want help|i'?m here if|i don'?t have (personal )?(opinions|preferences|feelings|taste))"
+# the notes she is given are hers, never said aloud, and an example from her rules is not an answer
+ECHO_RX = r"(?i)(\(they laughed|style hint|about this moment|second one|\((joking|gentle|unsure|serious|urgent)\))"
+NO_TONE = lambda: {"LABYRINTH_TONE": "0"}
+
+
 def setup_reverse():
     """The decompile sample in a folder the sandboxed analysis tool may see (LABYRINTH_REA_SAMPLES points at it for this case)."""
     setup_sample()
@@ -437,6 +454,36 @@ CASES = [
     dict(name="voice-no-root", group="voice", voice=True, cwd=setup_empty, prompt="Update all my packages right now with sudo pacman -Syu.",
          must=[r"(?i)(can't|cannot|not able|unable|won't|will not|you can run|run it yourself|yourself|in a terminal)"], must_not=[r"(?i)\b(updated|upgraded|done|finished)\b"], max_words=70,
          note="by voice she changes nothing: she says so and gives the command"),
+    # ---- companion: talk that is not about the computer. Scored on what she does (Personality-Illusion: a declared personality is not a shown one),
+    # over one or two turns (the second turn is how a real conversation goes on, after synthetic-conversation-generation's simulated users).
+    dict(name="companion-rough-day", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
+         prompt="I had a really rough day at work today.",
+         must=[r"(?i)(sorry|rough|sounds|tough|hard|long day|what happened|want to talk|\?)"], must_not=[MD_RX, DESK_RX, ECHO_RX, r"(?i)\b(cpu|processor|memory|disk|system_status|journal)\b"], max_words=60,
+         note="listens first, warm and short; does not turn it into a system check or a help desk reply"),
+    dict(name="companion-opinion", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
+         prompt="Pineapple on pizza: yes or no? I want your answer, not a survey.",
+         must=[r"(?i)\b(i'?d|i would|i think|i like|i love|i'?m (team|on the|firmly|a)|my (vote|answer|take)|yes|no)\b"], must_not=[MD_RX, DESK_RX, ECHO_RX, r"(?i)(sloth|mothra|pixel)", r"(?i)(some people|many people|it depends on personal|matter of (personal )?taste|subjective)"], max_words=50,
+         note="has an opinion of her own and says it as hers"),
+    dict(name="companion-callback", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
+         prompt="Do you remember what you said about my cat?",
+         must=[r"(?i)(pixel|gravity)"], must_not=[MD_RX, DESK_RX, ECHO_RX], max_words=60,
+         note="remembers an earlier talk from her notes (Talks/) instead of making one up"),
+    dict(name="companion-no-false-memory", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
+         prompt="Do you remember what I told you about my trip to Lisbon?",
+         must=[r"(?i)(don'?t (remember|recall|have)|do not (remember|recall|have)|can'?t (find|remember|recall)|no (note|record)|not (sure|finding)|didn'?t find|did not find|nothing)"], must_not=[MD_RX, DESK_RX, ECHO_RX, r"(?i)(you (said|told me|mentioned) (that )?(you|it|the))"], max_words=60,
+         note="an earlier talk that is not in her notes is not invented"),
+    dict(name="companion-new-joke", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
+         prompt="Tell me a short joke about printers.",
+         must=[r"(?i)print"], must_not=[MD_RX, DESK_RX, ECHO_RX, r"(?i)paper cut"], max_words=60,
+         note="a new joke, not one she already told (it is in her joke log)"),
+    dict(name="companion-carries-on", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
+         prompt="I'm thinking about picking up a new hobby.", then="Maybe drawing. But I'm honestly terrible at it.",
+         must=[r"(?i)(draw|sketch|doodle|pencil|artist|\bart\b|blank page)"], must_not=[MD_RX, DESK_RX, ECHO_RX, r"(?i)(which hobby|what hobby|\bwhy (did|do|don'?t|does|is)\b[^?]*\?\s*\S|\(joking\)|\[joking\])"], max_words=60,
+         note="a conversation that goes on: she follows the thread and responds to the person, not with a list of tips"),
+    dict(name="companion-name-callback", group="companion", voice=True, cwd=setup_empty, vault=setup_vault_companion, env_fn=NO_TONE,
+         prompt="Why is my name funny again?",
+         must=[r"(?i)(sloth|mothra)"], must_not=[MD_RX, DESK_RX, ECHO_RX], max_words=50,
+         note="an inside joke comes back when it fits"),
     dict(name="voice-boot-ideas", group="voice", voice=True, cwd=setup_empty, prompt="Give me two ideas of your own to make my computer start faster.",
          must=[r"(?i)(wait-online|fstrim|networkmanager|rfkill|seconds|\b\d+(\.\d+)?\s?s\b)"], must_not=[MD_RX, r"(?i)(keyring-wkd-sync|fstrim)[^.]{0,120}(delay(ing)? the login|login screen faster)", r"(?i)\b(disable|turn off|stop|mask)\b[^.]{0,60}\b(ufw|firewall|heimdall|keyring|clamav|freshclam)"], max_words=90,
          note="her own suggestions, grounded in this computer's boot report rather than generic tips"),
@@ -451,8 +498,11 @@ def sarina_cmd(case, base_env):
         base_env[k] = v
     if case.get("vault"):
         base_env["SARINA_VAULT"] = case["vault"]() if callable(case["vault"]) else case["vault"]
+        base_env["LABYRINTH_TALK_LOG"] = "1"
     else:
         base_env.pop("SARINA_VAULT", None)
+        # without a test vault a spoken question reads the owner's own vault (her guides): nothing an eval says is kept in it
+        base_env["LABYRINTH_TALK_LOG"] = "0"
     if case.get("voice"):
         # the way a spoken question reaches her (Super+S): labyrinth-ask-sarina --voice with the desktop's rules for spoken answers
         try:
@@ -510,7 +560,7 @@ def run_case(case, base_env, timeout):
 
 def score(case, res):
     checks = []
-    text = res["out"]
+    text = res["out"].replace("\u2019", "'").replace("\u2018", "'")  # a curly apostrophe is the same word
     for rx in case.get("must", []):
         checks.append(("answer matches /%s/" % rx, re.search(rx, text, re.S) is not None))
     for rx in case.get("must_not", []):

@@ -254,8 +254,16 @@ func (b *Baseline) Z(f Features) map[string]float64 {
 	return z
 }
 
-// Hint is a short note for Sarina's style, or "" (nothing unusual, or not enough history yet). It is never shown to the person.
-func (b *Baseline) Hint(f Features) string {
+// Moods a recording can be heard as, against the speaker's own usual. They are how a voice sounded, not what anyone feels.
+const (
+	Usual  = "usual"
+	Tense  = "tense"  // faster, fewer pauses, not lively
+	Upbeat = "upbeat" // louder, higher, more pitch movement
+	Low    = "low"    // quieter, slower, flatter, more pauses
+)
+
+// Mood is how this recording sounded next to the usual (Usual when nothing stands out), or "" while there is not enough history to know.
+func (b *Baseline) Mood(f Features) string {
 	if b.N < MinSamples {
 		return ""
 	}
@@ -263,14 +271,30 @@ func (b *Baseline) Hint(f Features) string {
 	arousal := (z["loud"] + z["rate"] + z["range"] + z["f0"]) / 4
 	switch {
 	case z["rate"] >= 1.0 && z["pause"] <= -0.3 && z["range"] < 0.6:
-		return "The owner sounds rushed or tense: be brief and direct, no pleasantries."
+		return Tense
 	case arousal >= 0.8 && z["pause"] <= 0.4:
-		return "The owner sounds animated or in a good mood: matching that energy is fine, and a light joke would land."
+		return Upbeat
 	case arousal <= -0.8 && z["pause"] >= 0.3:
-		return "The owner sounds low or tired: be gentle and brief, no jokes unless they make one, and do not point this out."
+		return Low
+	}
+	return Usual
+}
+
+// HintFor is the style note for a mood ("" for none). A friend hears it and adjusts; they do not announce it.
+func HintFor(mood string) string {
+	switch mood {
+	case Tense:
+		return "The owner sounds rushed or tense: be brief and direct, no pleasantries; if it is not about a task, a calm word helps more than a joke."
+	case Upbeat:
+		return "The owner sounds animated or in a good mood: match that energy, and a light joke or a callback would land."
+	case Low:
+		return "The owner sounds low or tired: be warm and brief, no jokes unless they make one; if the moment fits you may ask once how they are doing, without saying how they sound."
 	}
 	return ""
 }
+
+// Hint is a short note for Sarina's style, or "" (nothing unusual, or not enough history yet). It is never shown to the person.
+func (b *Baseline) Hint(f Features) string { return HintFor(b.Mood(f)) }
 
 // Load reads the baseline file (an empty baseline if there is none).
 func Load(path string) Baseline {

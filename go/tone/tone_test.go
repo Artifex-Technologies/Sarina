@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const sr = 16000
@@ -193,5 +194,47 @@ func TestReadWAV(t *testing.T) {
 	}
 	if _, _, err := ReadWAV(filepath.Join(t.TempDir(), "none.wav")); err == nil {
 		t.Error("a missing file was read")
+	}
+}
+
+func TestMoodHistoryNoticesAPatternOverDays(t *testing.T) {
+	now := time.Date(2026, 10, 22, 21, 0, 0, 0, time.Local)
+	at := func(daysAgo, hour int) int64 {
+		return time.Date(2026, 10, 22-daysAgo, hour, 0, 0, 0, time.Local).Unix()
+	}
+	var h []Entry
+	for d := 7; d < 14; d++ { // the week before: usual
+		h = append(h, Entry{at(d, 15), Usual}, Entry{at(d, 21), Usual})
+	}
+	if p := Pattern(h, now); p != "" {
+		t.Errorf("nothing unusual, yet: %q", p)
+	}
+	for d := 1; d < 7; d++ { // this week: low in the evenings
+		h = append(h, Entry{at(d, 14), Usual}, Entry{at(d, 22), Low})
+	}
+	p := Pattern(h, now)
+	if !strings.Contains(p, "low or tired in 6 of 12") || !strings.Contains(p, "more than the week before") || !strings.Contains(p, "late in the day") {
+		t.Errorf("an evening pattern this week: %q", p)
+	}
+	h = append(h, Entry{at(0, 9), Tense}, Entry{at(0, 12), Tense}, Entry{at(0, 18), Usual})
+	if p := Pattern(h, now); !strings.HasPrefix(p, "Today they have sounded rushed or tense in 2 of 3") {
+		t.Errorf("today first: %q", p)
+	}
+	if p := Pattern(h[:5], now); p != "" {
+		t.Errorf("too little to go on: %q", p)
+	}
+
+	path := filepath.Join(t.TempDir(), "s", "mood.jsonl")
+	for i := 0; i < keepEntries+5; i++ {
+		if err := AppendHistory(path, Entry{int64(1000 + i), Usual}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := ReadHistory(path)
+	if len(got) != keepEntries || got[0].T != 1005 {
+		t.Errorf("kept %d, oldest %d", len(got), got[0].T)
+	}
+	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
+		t.Errorf("the history file is %o", st.Mode().Perm())
 	}
 }
