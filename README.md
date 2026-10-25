@@ -34,6 +34,18 @@ What she does today:
 - **Writes her own small programs ("agents")** and runs them only inside Limbo's disposable virtual
   machines; you approve an agent at a terminal, and any change voids the approval (see
   [docs/AGENT_FORGE.md](docs/AGENT_FORGE.md)).
+- **Follows skills, long ones too.** A skill is a Markdown file of instructions. One up to 4 MiB is split into
+  sections of at most 12 KiB, and she reads only the part she needs (`skill_section`, or `skill_search` by
+  meaning or words). A skill can have its evidence looked up before she starts (`prefetch: [status]`,
+  `prefetch: [security]`). Packaged skills: `desktop-fix` (find and fix what is broken on the desktop),
+  `security-advisor`, `security-audit` (your own code), `static-analysis`, `ecosystem-troubleshoot`,
+  `labyrinth-engineer`, `quantum-tutor`, `ios-app-builder`.
+- **Reviews security with Heimdall.** `system_status security` reads what Heimdall finds open (its local
+  API: packages and kernels with known holes, settings that could be safer, and files it holds in
+  quarantine with the report it made by reading them). The `security-advisor` skill judges each finding
+  and proposes what to do, in order, with the exact commands; you run them. On Labyrinth the daily check-up
+  (`labyrinth-sarina-checkup`, in the Labyrinth_OS repo) runs it when Heimdall reports something new and
+  saves her proposal in the vault (`Security/DATE.md`). She never releases a held file herself.
 - **Works with the Argus App and firmware** (Flipper Zero tooling) through read-only advisory commands.
 
 ## Status and licensing
@@ -108,12 +120,12 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
 | `doctor [--json]` | read-only checkup of the whole setup (model backend, sessions, tiers, config files, Limbo, Heimdall); exit 1 on any FAIL; the model can call it as the `sarina_doctor` tool |
 | `council QUESTION`, `council status [--probe]` | ask several models the same question and compare the answers; local members answer directly, online ones (Claude, Gemini, ChatGPT, ...) only after you confirm the exact text; also the `council_ask` tool when a council is configured; see `docs/ECOSYSTEM.md` section 9 |
 | `tiers status` | show compute tiers and whether each is reachable |
-| `skill list`, `skill run` | named reusable prompts |
+| `skill list`, `skill run NAME [ARGS]` | skills: list them (with their source and whether the model may start them), or run one |
 | `mcp list`, `agents list` | show configured MCP servers and subagent profiles |
 | `memory-status`, `memory-show`, `memory-review*` | curated memory and its review queue |
 | `session-search`, `memory-search` | lexical and semantic search over saved sessions |
 | `limbo-profiles`, `limbo-validate` | run commands in a disposable Limbo guest |
-| `system-status TOPIC`, `crash-detail PROGRAM` | how the computer is doing (performance, network, disk, logs, services, hardware, crashes, boot, audio, kernel, gaming), and the latest crash of one program (read-only) |
+| `system-status TOPIC`, `crash-detail PROGRAM` | how the computer is doing (performance, network, disk, logs, services, hardware, crashes, boot, audio, kernel, gaming, security), and the latest crash of one program (read-only) |
 | `system-fix --list`, `system-fix ACTION` | the named repairs the `system_fix` tool can do (restart the audio, restart Bluetooth): fixed commands at user level, each with a check afterwards |
 | `route QUESTION` | what to look up before answering a spoken question, decided by meaning |
 | `vault-init`, `vault-search`, `vault-lint` | her notes: starting folders, search (words and meaning), broken links |
@@ -139,6 +151,16 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
   tiers load only from your own files (`~/.sarina/...`). A workspace can add
   skills or MCP servers only with an explicit `--trust-workspace-*` flag, and a
   workspace policy file can only tighten.
+- **Her behaviour files can require the owner's signature.** Heimdall keeps a signed list of the files that
+  decide how she behaves (rules, tool connections, skills, agents). In `enforce` mode she checks each one
+  before using it: an unapproved skill, section, agent or tool connection is not used, and an unapproved
+  `policy.json` stops her. Files under `/usr` belong to packages and are not checked. The mode is off by
+  default (`go/trust`; Heimdall's docs/TRUST.md).
+- **Heimdall can contain her.** While Heimdall's lock `/etc/heimdall/contained` exists she does not start
+  (only `version` and `help` answer) and says how the owner releases her (Settings > Security, or
+  `sudo heimdalld contain release`). The lock survives a restart (Heimdall's docs/CONTAIN.md).
+- **Skills she may read.** The section tools only open skills the model may start, or one the operator
+  started; an operator-only skill stays closed to her.
 - **Troubleshooting is read-only first.** `sarina doctor` changes nothing and never prints keys or
   tokens. The packaged `ecosystem-troubleshoot` skill (installed in `/usr/share/sarina/skills`, a
   root-owned directory a workspace cannot shadow) walks the agent from a doctor finding to a plan the
@@ -210,14 +232,14 @@ token. `sarina gui` is loopback-only with Host/Origin checks and a per-launch
 token, streams events, supports cancel, and asks for approval before write or
 shell tools.
 
-## Ecosystem
+## Artifex Ecosystem
 
 | Repository | What it is | Sarina's part |
 | --- | --- | --- |
 | `Labyrinth_OS` | the gaming-focused OS (CachyOS base) | packages her (optional), voice, crash helper, daily check-up |
 | `Yggdrasil` | the desktop (panel, Fylgja, Settings, Agora, Minos, compositor) | Super+S, Settings > Sarina's agents |
 | `Chymaera_OS` | the security edition, to be renamed Niflheim OS | hosts her for security work |
-| `Heimdall` | the security watcher | watches her sessions and reviews what she keeps |
+| `Heimdall` | the security watcher | watches her sessions, reviews what she keeps, signs her behaviour files, can contain her; she reads its findings |
 | `Limbo` | disposable virtual machines | where her validation runs and agents execute |
 | `Argus_App`, `Argus_Firmware` | Flipper Zero desktop console and firmware (formerly Chymaera Zero) | read-only advisories, local control API |
 

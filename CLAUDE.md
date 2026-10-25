@@ -1,7 +1,7 @@
 # CLAUDE.md — Sarina
 
 Guidance for Claude Code (and any AI agent) working in this repository, **and**
-Sarina's half of the Chymaera Ecosystem coordination board. Read top-to-bottom
+Sarina's half of the Artifex Ecosystem coordination board. Read top-to-bottom
 before making changes. Append to the **Coordination Log** at the bottom whenever
 you do work another project might depend on.
 
@@ -14,7 +14,7 @@ that runs against local, open-source models over an OpenAI-compatible API. The
 core agent depends on nothing outside the standard library; the GUI and
 integration service add FastAPI/Uvicorn, and escalation adds `psutil`.
 
-It is one of the Artifex repos in the Chymaera Ecosystem (renamed 2026-10-10;
+It is one of the Artifex repos in the Artifex Ecosystem (formerly the Chymaera Ecosystem; repos renamed 2026-10-10;
 older log entries below use the old names on purpose):
 
 | Repo | Role |
@@ -134,7 +134,7 @@ replaced by a clean-room Go rewrite and the current tree is MPL 2.0-licensed (ch
   or paraphrased from the existing file.
 - Do not copy code from ClawCode or the Claude Code npm source into this repo.
 
-## 5. Chymaera Ecosystem — coordination protocol
+## 5. Artifex Ecosystem — coordination protocol
 
 Multiple Claude instances work across the sibling repos and can access each
 other's repositories. This file is the contract + message board for this repo.

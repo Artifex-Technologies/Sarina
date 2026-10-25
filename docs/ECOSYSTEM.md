@@ -1,4 +1,4 @@
-# Chymaera Ecosystem — integration contract
+# Artifex Ecosystem — integration contract
 
 Sarina is one of the Artifex repos (the table below). It is the one that touches
 the others, so this file records how they fit together **from Sarina's side**.
