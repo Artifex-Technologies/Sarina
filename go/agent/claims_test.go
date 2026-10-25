@@ -110,3 +110,23 @@ func TestSuggestsSecurityOff(t *testing.T) {
 		}
 	}
 }
+
+func TestCommandsMustComeFromTheReportWhenItSaysSo(t *testing.T) {
+	fix := `printf 'KERNEL=="kvm"\n' | sudo tee /etc/udev/rules.d/65-kvm.rules && sudo usermod -aG kvm $USER && sudo udevadm control --reload`
+	prompt := "### Summary\n- Package lua51: severity LOW\n- HELD /x: confirm it (sudo heimdalld immunity confirm 5f5f5f5f5f5f)\n\nCommands to copy exactly, whole:\n- kvm-world-writable:\n  " + fix
+	for answer, want := range map[string]string{
+		"Run `" + fix + "`.": "",
+		"Run `sudo heimdalld immunity confirm 5f5f5f5f5f5f`":           "",
+		"Then `sudo pacman -Syu` and `pacman -Qi lua51`.":              "",
+		"Update it: `sudo pacman -Syu lua51`":                          "sudo pacman -Syu lua51",
+		"`sudo udevadm trigger --everything`":                          "sudo udevadm trigger --everything",
+		"Release it with `sudo heimdalld immunity release deadbeef00`": "sudo heimdalld immunity release deadbeef00",
+	} {
+		if got := unsourcedCommand(answer, prompt, nil); got != want {
+			t.Errorf("%q: got %q, want %q", answer, got, want)
+		}
+	}
+	if unsourcedCommand("`sudo pacman -Syu lua51`", "a chat without a report", nil) != "" {
+		t.Error("other tasks are not checked")
+	}
+}

@@ -538,6 +538,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = unreportedText(f)
 				} else if q := ungroundedQuote(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); q != "" {
 					text = ungroundedText(q)
+				} else if c := unsourcedCommand(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); c != "" {
+					text = unsourcedText(c)
 				}
 				if text != "" {
 					claimChecked = true

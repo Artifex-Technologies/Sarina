@@ -194,3 +194,51 @@ func suggestsSecurityOff(answer string) string {
 func securityOffText(what string) string {
 	return "Check before you finish: your answer suggests turning off " + what + ", a security piece. Never advise that for speed or convenience. Write your whole answer again without that suggestion; if nothing else would help, say so."
 }
+
+// commandsMarker is in a report whose commands must be copied, not written by the model (the security report, sysinfo's
+// computedSummary). Only there are the answer's commands checked: in other tasks she may suggest commands of her own.
+const commandsMarker = "Commands to copy exactly"
+
+var (
+	backtickRE = regexp.MustCompile("`([^`\n]{3,400})`")
+	cmdStartRE = regexp.MustCompile(`^(sudo |pacman |heimdalld |systemctl |printf |echo )`)
+	// standard steps the security skill names itself, with a name or id that must come from the report
+	stdCmdRE = regexp.MustCompile(`^(sudo pacman -Syu|pacman -Qi [\w.+-]+|sudo pacman -Rs [\w.+-]+|sudo heimdalld immunity (confirm|release) ([0-9a-f]{8,64}))$`)
+)
+
+func squash(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// unsourcedCommand reports a command in the answer that the report and the tools never gave, when the task's report says its
+// commands must be copied (the 8B model shortened Heimdall's fixes and made up "sudo pacman -Syu lua51" for a package with no fix).
+func unsourcedCommand(answer, prompt string, msgs []session.Message) string {
+	if !strings.Contains(prompt, commandsMarker) {
+		return ""
+	}
+	var mat strings.Builder
+	mat.WriteString(prompt)
+	for _, m := range msgs {
+		if m.Role == "tool" {
+			mat.WriteString("\n" + m.Content)
+		}
+	}
+	material := squash(mat.String())
+	for _, m := range backtickRE.FindAllStringSubmatch(answer, -1) {
+		c := squash(m[1])
+		if !cmdStartRE.MatchString(c) || strings.Contains(material, c) {
+			continue
+		}
+		if sm := stdCmdRE.FindStringSubmatch(c); sm != nil {
+			// a name or id in it must be one the report gave
+			parts := strings.Fields(c)
+			if last := parts[len(parts)-1]; c == "sudo pacman -Syu" || strings.Contains(material, last) {
+				continue
+			}
+		}
+		return c
+	}
+	return ""
+}
+
+func unsourcedText(c string) string {
+	return "Check before you finish: your answer gives the command `" + c + "`, but the report does not. Use only the commands the report gives, copied whole and unchanged (the block \"" + commandsMarker + "\"), or the standard steps the instructions name; if no command is given for a finding, say so plainly. Write your whole answer again, complete. Do not talk about this check."
+}
