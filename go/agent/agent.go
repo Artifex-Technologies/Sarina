@@ -542,6 +542,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = unsourcedText(c)
 				} else if h := inventedHistory(answer, sess.Messages, msgStart); h != "" {
 					text = inventedHistoryText(h)
+				} else if defaultOutputForOneApp(answer, prompt) {
+					text = oneAppSilentText
 				}
 				if text != "" {
 					claimChecked = true

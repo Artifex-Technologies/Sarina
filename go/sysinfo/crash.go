@@ -228,3 +228,25 @@ func sourceLine(fileLine string) string {
 	}
 	return t
 }
+
+// gameRE: a program that is a game, or runs one (Steam's library, Proton, Wine, a Windows .exe, the common game launchers).
+var gameRE = regexp.MustCompile(`(?i)(steamapps/common/|/proton|/wine|\.exe$|wine64|wineserver|gamescope|lutris|heroic|retroarch|/games/)`)
+
+// newestCrash reads `coredumpctl list` (newest first) and says which program crashed last, when, and whether it is a game, so a
+// question like "my game just crashed" is answered from the record, not assumed.
+func newestCrash(list string) string {
+	for _, l := range strings.Split(list, "\n") {
+		f := strings.Fields(l)
+		// TIME (weekday date time zone) PID UID GID SIG COREFILE EXE [SIZE]
+		if len(f) < 10 || !strings.HasPrefix(f[7], "SIG") {
+			continue
+		}
+		exe := f[9]
+		kind := "it is not a game (not from Steam, Proton or Wine)"
+		if gameRE.MatchString(exe) {
+			kind = "it is a game or runs one (Steam, Proton or Wine)"
+		}
+		return fmt.Sprintf("The newest crash is %s (%s) at %s %s %s; %s.", filepath.Base(exe), exe, f[1], f[2], f[3], kind)
+	}
+	return "No crash is recorded in the last 7 days."
+}

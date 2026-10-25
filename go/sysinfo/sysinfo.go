@@ -136,6 +136,10 @@ func Report(ctx context.Context, topic string) (string, error) {
 		}
 	case "gaming":
 		b.WriteString("## Summary\n" + gamingSummary(ctx) + "\n\n")
+	case "crashes":
+		// the newest crash named first, and whether it is a game: a model told "my game crashed" otherwise calls any crash the game
+		list := run(ctx, Topics["crashes"][0])
+		b.WriteString("## Summary\n" + newestCrash(list) + " A game started through Steam with Proton also writes its own log (PROTON_LOG=1 in the game's launch options gives ~/steam-<id>.log).\n\n")
 	case "security":
 		b.WriteString("## What Heimdall finds open\n" + securitySummary(ctx) + "\n\n")
 	case "audio":

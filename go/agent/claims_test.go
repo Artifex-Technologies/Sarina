@@ -164,3 +164,12 @@ func TestInventedHistoryIsCaught(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestTheDefaultOutputIsLeftAloneWhenAnotherAppPlays(t *testing.T) {
+	if !defaultOutputForOneApp("3. If using the wrong sink: `wpctl set-default 52`", "Firefox plays no sound but Spotify does") {
+		t.Fatal("caught")
+	}
+	if defaultOutputForOneApp("Run `wpctl set-default 52` to use the headphones.", "Nothing plays any sound since I plugged in headphones") {
+		t.Fatal("no other program plays: set-default may be right")
+	}
+}

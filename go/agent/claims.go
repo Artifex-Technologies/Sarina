@@ -307,3 +307,17 @@ func inventedHistory(answer string, all []session.Message, msgStart int) string 
 func inventedHistoryText(s string) string {
 	return "Check before you finish: your answer says \"" + s + "\" as if it came from an earlier conversation or something the user told you, but nothing you were given shows it (not this conversation, your memory or your tools). Do not invent what was said or done before. If you do not know or do not remember, say so plainly. Write your whole answer again, complete. Do not talk about this check."
 }
+
+var (
+	setDefaultRE = regexp.MustCompile(`(?i)\b(wpctl|pactl) set-default(-sink)?\b`)
+	// "Firefox plays no sound but Spotify does": another program plays, so the default output works
+	oneAppSilentRE = regexp.MustCompile(`(?i)\b(but|while|though|yet)\b[^.?!]{0,60}\b(does|works|plays|is fine|has sound|is working)\b`)
+)
+
+// defaultOutputForOneApp reports advice to change the default audio output when the question says another program plays sound:
+// the output works, and changing it moves every program (seen repeatedly with the desktop-fix skill, even when told not to).
+func defaultOutputForOneApp(answer, prompt string) bool {
+	return setDefaultRE.MatchString(answer) && oneAppSilentRE.MatchString(prompt)
+}
+
+const oneAppSilentText = "Check before you finish: another program plays sound, so the default output works; `wpctl set-default` would move every program and fix nothing. Leave the default as it is. The fix is the silent program's own stream: find it under Streams in `wpctl status` (unmute it, raise its volume, or move only that stream), or the program's own sound setting. Write your whole answer again, complete, without set-default. Do not talk about this check."
