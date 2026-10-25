@@ -540,6 +540,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = ungroundedText(q)
 				} else if c := unsourcedCommand(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); c != "" {
 					text = unsourcedText(c)
+				} else if h := inventedHistory(answer, sess.Messages, msgStart); h != "" {
+					text = inventedHistoryText(h)
 				}
 				if text != "" {
 					claimChecked = true

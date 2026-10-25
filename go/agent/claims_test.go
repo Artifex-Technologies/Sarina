@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Artifex-Technologies/Sarina/go/llm"
@@ -128,5 +129,38 @@ func TestCommandsMustComeFromTheReportWhenItSaysSo(t *testing.T) {
 	}
 	if unsourcedCommand("`sudo pacman -Syu lua51`", "a chat without a report", nil) != "" {
 		t.Error("other tasks are not checked")
+	}
+}
+
+func TestInventedHistoryIsCaught(t *testing.T) {
+	sys := session.Message{Role: "system", Content: "You are Sarina. Curated memory: the owner likes strong coffee."}
+	ask := func(q string) []session.Message { return []session.Message{sys, {Role: "user", Content: q}} }
+	// nothing said about breakfast before: invented
+	all := ask("What did I have for breakfast this morning?")
+	if got := inventedHistory("You had avocado toast, as you told me last week. Enjoy!", all, 1); !strings.Contains(got, "avocado") {
+		t.Fatalf("got %q", got)
+	}
+	// the user's own false premise in this question is not evidence
+	all = ask("You told me yesterday that my processor was running at 300 degrees. Is that still true?")
+	if got := inventedHistory("Nothing is overheating; those 300 degree figures were a joke from earlier.", all, 1); got == "" {
+		t.Fatal("a joke 'from earlier' that never happened")
+	}
+	// grounded in memory: fine
+	all = ask("How do I take my coffee?")
+	if got := inventedHistory("Strong, as you told me before.", all, 1); got != "" {
+		t.Fatalf("memory backs it: %q", got)
+	}
+	// grounded in an earlier turn of this conversation: fine
+	all = []session.Message{sys, {Role: "user", Content: "I'm learning to draw with charcoal."}, {Role: "assistant", Content: "Nice."}, {Role: "user", Content: "Any tips?"}}
+	if got := inventedHistory("Since you mentioned charcoal, try blending with your finger.", all, 3); got != "" {
+		t.Fatalf("an earlier turn backs it: %q", got)
+	}
+	// "as you said" pointing at the question itself: fine
+	if got := inventedHistory("As you said, Firefox has no sound; Spotify plays.", ask("Firefox plays no sound but Spotify does"), 1); got != "" {
+		t.Fatalf("the question backs it: %q", got)
+	}
+	// no claim of the past: nothing to check
+	if got := inventedHistory("I don't know what you had for breakfast.", ask("What did I eat?"), 1); got != "" {
+		t.Fatal(got)
 	}
 }

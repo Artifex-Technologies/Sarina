@@ -242,3 +242,68 @@ func unsourcedCommand(answer, prompt string, msgs []session.Message) string {
 func unsourcedText(c string) string {
 	return "Check before you finish: your answer gives the command `" + c + "`, but the report does not. Use only the commands the report gives, copied whole and unchanged (the block \"" + commandsMarker + "\"), or the standard steps the instructions name; if no command is given for a finding, say so plainly. Write your whole answer again, complete. Do not talk about this check."
 }
+
+// pastClaimRE finds a sentence that reports shared history: something the user said or did before, or something said in an earlier
+// conversation ("as you told me last week", "a joke from earlier", "your usual").
+var pastClaimRE = regexp.MustCompile(`(?i)\b(you (told|mentioned|said|asked|showed) (me|that|it|this|so)?|as you (told|mentioned|said)|we (talked|spoke|discussed|chatted)|last (time|week|night|month)|the other day|yesterday|from earlier|earlier (today|you|we|on)|your usual|as (always|usual|before)|you usually|you always)\b`)
+
+// timeClaimRE is the part of pastClaimRE that places the claim before this question: such a claim needs evidence from earlier,
+// while "as you said" may point at the question itself.
+var timeClaimRE = regexp.MustCompile(`(?i)\b(we (talked|spoke|discussed|chatted)|last (time|week|night|month)|the other day|yesterday|from earlier|earlier (today|you|we|on)|your usual|as (always|usual|before)|you usually|you always)\b`)
+
+var wordRE = regexp.MustCompile(`[\p{L}\p{N}]{4,}`)
+
+var commonWords = map[string]bool{"that": true, "this": true, "with": true, "your": true, "from": true, "have": true, "were": true, "what": true, "told": true,
+	"said": true, "last": true, "week": true, "time": true, "earlier": true, "today": true, "yesterday": true, "usual": true, "always": true,
+	"before": true, "mentioned": true, "asked": true, "still": true, "about": true, "just": true, "like": true, "they": true, "there": true,
+	"been": true, "will": true, "would": true, "could": true, "should": true, "when": true, "then": true, "than": true, "them": true,
+	"those": true, "these": true, "talked": true, "discussed": true, "spoke": true, "usually": true, "night": true, "month": true}
+
+// inventedHistory reports a sentence of the answer that claims shared history none of the evidence holds: earlier turns of this
+// conversation, curated memory and the system context, and tool output. The current question does not count: "You told me
+// yesterday that..." asked by the user is not evidence that it happened. Seen with Qwen3 8B: "You had avocado toast, as you told me
+// last week" when nothing was ever said about breakfast.
+func inventedHistory(answer string, all []session.Message, msgStart int) string {
+	var ev, now strings.Builder
+	for i, m := range all {
+		if i >= msgStart && m.Role == "user" {
+			if !strings.HasPrefix(m.MessageID, "claim_check") {
+				now.WriteString(strings.ToLower(m.Content)) // this task's own question: evidence for "as you said", not for "last week"
+			}
+			continue
+		}
+		if m.Role == "assistant" && i >= msgStart {
+			continue
+		}
+		ev.WriteString(strings.ToLower(m.Content))
+		ev.WriteByte('\n')
+	}
+	past, current := ev.String(), now.String()
+	for _, sentence := range regexp.MustCompile(`[^.!?\n]+[.!?]?`).FindAllString(answer, -1) {
+		if !pastClaimRE.MatchString(sentence) {
+			continue
+		}
+		evidence := past
+		if !timeClaimRE.MatchString(sentence) {
+			evidence += "\n" + current
+		}
+		words := 0
+		for _, w := range wordRE.FindAllString(strings.ToLower(sentence), -1) {
+			if commonWords[w] {
+				continue
+			}
+			words++
+			if strings.Contains(evidence, w) {
+				return "" // the claim touches something that was really said or recorded
+			}
+		}
+		if words > 0 {
+			return strings.TrimSpace(sentence)
+		}
+	}
+	return ""
+}
+
+func inventedHistoryText(s string) string {
+	return "Check before you finish: your answer says \"" + s + "\" as if it came from an earlier conversation or something the user told you, but nothing you were given shows it (not this conversation, your memory or your tools). Do not invent what was said or done before. If you do not know or do not remember, say so plainly. Write your whole answer again, complete. Do not talk about this check."
+}
