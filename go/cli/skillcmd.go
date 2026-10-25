@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Artifex-Technologies/Sarina/go/embed"
 	"github.com/Artifex-Technologies/Sarina/go/skills"
 )
 
@@ -43,6 +44,14 @@ func (o *opts) catalog(env *Env) *skills.Catalog {
 		fmt.Fprintf(env.Stderr, "[skills] %d skill file(s) were not loaded; 'sarina skill list' shows why\n", n)
 	}
 	return o.cat
+}
+
+// library searches the long skills (skill_search, and the passages added when one runs with a task), with the local embedding model.
+func (o *opts) library(env *Env) *skills.Library {
+	if o.lib == nil {
+		o.lib = skills.NewLibrary(o.catalog(env), embed.Default(), skills.DefaultIndexDir(env.Getenv, env.homeDir()))
+	}
+	return o.lib
 }
 
 func skillCommand(env *Env, args []string) int {
@@ -132,7 +141,7 @@ func skillRun(env *Env, args []string) int {
 		a.NarrowTools(append([]string{}, s.AllowedTools...))
 	}
 	o.noSlash = true // the expanded skill text is a prompt, never a slash command
-	return conversation(env, a, o, nil, s.Expand(strings.Join(rest[1:], " ")))
+	return conversation(env, a, o, nil, s.ExpandWith(strings.Join(rest[1:], " "), o.library(env)))
 }
 
 func findUserSkill(cat *skills.Catalog, name string) (*skills.Skill, string) {
@@ -165,7 +174,7 @@ func skillSlash(sc *SlashContext, args string) SlashResult {
 	if errText != "" {
 		return SlashResult{Text: strings.ToUpper(errText[:1]) + errText[1:]}
 	}
-	r := SlashResult{Prompt: s.Expand(strings.TrimSpace(rest))}
+	r := SlashResult{Prompt: s.ExpandWith(strings.TrimSpace(rest), sc.opts.library(sc.Env))}
 	if s.HasAllowed {
 		r.Narrow = append([]string{}, s.AllowedTools...)
 	}

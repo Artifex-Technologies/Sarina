@@ -17,7 +17,7 @@ const ToolName = "skill"
 // model_invocable skills are listed or runnable. A skill with allowed_tools
 // reports them in the result metadata (skill_allowed_tools); the agent narrows
 // its registry with them, which can only remove tools.
-func Tool(c *Catalog) (tools.Tool, bool) {
+func Tool(c *Catalog, lib *Library) (tools.Tool, bool) {
 	list := c.ModelInvocable()
 	if len(list) == 0 {
 		return tools.Tool{}, false
@@ -60,7 +60,99 @@ func Tool(c *Catalog) (tools.Tool, bool) {
 			if s.HasAllowed {
 				md["skill_allowed_tools"] = append([]string{}, s.AllowedTools...)
 			}
-			return s.Expand(arguments), md, nil
+			return s.ExpandWith(arguments, lib), md, nil
 		},
 	}, true
+}
+
+// Section and search tool names.
+const (
+	SectionToolName = "skill_section"
+	SearchToolName  = "skill_search"
+)
+
+// LibraryTools are skill_section and skill_search, for reading long skills a part at a time. None when no skill is long.
+func LibraryTools(c *Catalog, lib *Library) []tools.Tool {
+	var long []string
+	if c != nil {
+		for _, s := range c.Skills {
+			if s.IsLibrary() {
+				long = append(long, s.Name)
+			}
+		}
+	}
+	if len(long) == 0 {
+		return nil
+	}
+	names := strings.Join(long, ", ")
+	section := tools.Tool{
+		Class: tools.ClassReadOnly,
+		Spec: llm.ToolSpec{
+			Name:        SectionToolName,
+			Description: "Read one section of a long skill (its table of contents is in the skill's text). Long skills: " + names,
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"skill":   map[string]any{"type": "string", "description": "The skill's name.", "minLength": 1},
+					"section": map[string]any{"type": "string", "description": "The section's number from the table of contents, or (part of) its title.", "minLength": 1},
+				},
+				"required": []any{"skill", "section"},
+			},
+		},
+		Handler: func(ctx context.Context, args map[string]any, tc *tools.Context) (string, map[string]any, error) {
+			name, _ := args["skill"].(string)
+			which := fmt.Sprint(args["section"])
+			s, ok := c.Get(name)
+			if !ok || !s.IsLibrary() {
+				return "", nil, fmt.Errorf("no long skill named %q; long skills: %s", name, names)
+			}
+			n, sec, ok := s.Section(which)
+			if !ok {
+				return "", nil, fmt.Errorf("skill %s has no section %q (it has %d; use a number from its table of contents, or skill_search)", s.Name, which, len(s.Sections))
+			}
+			next := ""
+			if n < len(s.Sections) {
+				next = fmt.Sprintf("\n\n(next: section %d, %s)", n+1, s.Sections[n].Title)
+			}
+			return fmt.Sprintf("%s, section %d of %d: %s\n\n%s%s", s.Name, n, len(s.Sections), sec.Title, sec.Text, next), map[string]any{"skill": s.Name, "section": n}, nil
+		},
+	}
+	search := tools.Tool{
+		Class: tools.ClassReadOnly,
+		Spec: llm.ToolSpec{
+			Name:        SearchToolName,
+			Description: "Find the passages of long skills that are about something (by meaning when the embedding model is there, else by words). Long skills: " + names,
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"query": map[string]any{"type": "string", "description": "What to find, in words.", "minLength": 1},
+					"skill": map[string]any{"type": "string", "description": "Only this skill (optional; all long skills without it)."},
+					"limit": map[string]any{"type": "integer", "description": "How many passages (default 5, at most 10)."},
+				},
+				"required": []any{"query"},
+			},
+		},
+		Handler: func(ctx context.Context, args map[string]any, tc *tools.Context) (string, map[string]any, error) {
+			query, _ := args["query"].(string)
+			skill, _ := args["skill"].(string)
+			limit := 5
+			if f, ok := args["limit"].(float64); ok && f >= 1 {
+				limit = min(int(f), 10)
+			}
+			found, how, err := lib.Search(skill, query, limit)
+			if err != nil {
+				return "", nil, err
+			}
+			if len(found) == 0 {
+				return "Nothing in the long skills matches that (" + how + "). Try other words, or open a section from a table of contents.", nil, nil
+			}
+			var b strings.Builder
+			fmt.Fprintf(&b, "%d passage(s), found %s:\n", len(found), how)
+			for _, p := range found {
+				fmt.Fprintf(&b, "\n--- %s, section %d: %s ---\n%s\n", p.Skill, p.Section, p.Title, p.Text)
+			}
+			return b.String(), map[string]any{"found": len(found)}, nil
+		},
+	}
+	return []tools.Tool{section, search}
 }

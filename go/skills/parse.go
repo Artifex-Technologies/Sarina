@@ -21,6 +21,8 @@ type Skill struct {
 	Body           string
 	Path           string
 	Source         string // "operator" or "workspace"
+	// Sections of a long skill, read on demand (see library.go); empty for an ordinary one.
+	Sections []Section
 }
 
 // Expand returns the prompt: the body with every $ARGUMENTS replaced, by plain

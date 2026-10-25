@@ -73,6 +73,7 @@ type opts struct {
 	autoReview                            bool            // review memory when an interactive conversation ends; OFF unless a command turns it on
 	client                                agent.Completer // the model transport the agent uses (also used for the exit-time memory review)
 	cat                                   *skills.Catalog
+	lib                                   *skills.Library
 	router                                *tiers.Router
 	esc                                   runkit.EscalationFlags // --escalate-to-claude-code and friends
 }
@@ -319,9 +320,10 @@ func (o *opts) agent(env *Env, stored *session.Session) (*agent.Agent, error) {
 		}
 	}
 	builder := tools.Builder{Allowlist: allow, Deny: pol.Denied}
-	if st, ok := skills.Tool(o.catalog(env)); ok {
+	if st, ok := skills.Tool(o.catalog(env), o.library(env)); ok {
 		builder.Extra = append(builder.Extra, st)
 	}
+	builder.Extra = append(builder.Extra, skills.LibraryTools(o.catalog(env), o.library(env))...)
 	if mgr := o.startMCP(env, pol, rt, sessionEnv); mgr != nil {
 		builder.Extra = append(builder.Extra, mgr.Tools()...)
 	}

@@ -141,7 +141,7 @@ func TestWorkspaceSkillIgnoredWithoutTheFlag(t *testing.T) {
 	if len(c.Skills) != 0 || len(c.Notices) != 0 {
 		t.Fatalf("a workspace skill was loaded without the opt-in: %v", names(c))
 	}
-	if tool, ok := Tool(c); ok {
+	if tool, ok := Tool(c, nil); ok {
 		t.Fatalf("tool offered: %v", tool.Spec.Name)
 	}
 	// Also not reachable by pointing the workspace at HOME-less discovery.
@@ -236,10 +236,10 @@ func TestCustomScannerIsUsed(t *testing.T) {
 	}
 }
 
-func TestOversizedAndSymlinkedSkillsAreRefused(t *testing.T) {
+func TestSymlinkedAndHugeSkillsAreRefused(t *testing.T) {
 	e := newEnv(t)
 	dir := filepath.Join(e.home, ".sarina", "skills")
-	write(t, filepath.Join(dir, "big.md"), "---\ndescription: d\n---\n"+strings.Repeat("a", maxSkillBytes))
+	write(t, filepath.Join(dir, "huge.md"), "---\ndescription: d\n---\n"+strings.Repeat("a", maxFileBytes))
 	outside := filepath.Join(t.TempDir(), "outside.md")
 	write(t, outside, good)
 	if err := os.Symlink(outside, filepath.Join(dir, "link.md")); err != nil {
@@ -260,7 +260,7 @@ func TestToolOffersOnlyModelInvocableSkills(t *testing.T) {
 	write(t, filepath.Join(dir, "open.md"), "---\ndescription: open one\nmodel_invocable: true\nallowed_tools: [read_file]\n---\nRun $ARGUMENTS")
 	write(t, filepath.Join(dir, "private.md"), "---\ndescription: operator only secret procedure\n---\nsecret steps")
 	c := Discover(e.opts(false))
-	tool, ok := Tool(c)
+	tool, ok := Tool(c, nil)
 	if !ok {
 		t.Fatal("tool not built")
 	}
@@ -288,7 +288,7 @@ func TestToolOffersOnlyModelInvocableSkills(t *testing.T) {
 	}
 	// A skill without allowed_tools reports no narrowing at all.
 	write(t, filepath.Join(dir, "free.md"), "---\ndescription: f\nmodel_invocable: true\n---\nx")
-	tool, _ = Tool(Discover(e.opts(false)))
+	tool, _ = Tool(Discover(e.opts(false)), nil)
 	res = tools.NewRegistry(tool).Execute(context.Background(), "skill", map[string]any{"name": "free"}, nil)
 	if _, has := res.Metadata["skill_allowed_tools"]; has {
 		t.Fatalf("no allowed_tools means no narrowing: %v", res.Metadata)
@@ -298,10 +298,10 @@ func TestToolOffersOnlyModelInvocableSkills(t *testing.T) {
 func TestNoToolWhenNothingIsModelInvocable(t *testing.T) {
 	e := newEnv(t)
 	write(t, filepath.Join(e.home, ".sarina", "skills", "triage.md"), good)
-	if _, ok := Tool(Discover(e.opts(false))); ok {
+	if _, ok := Tool(Discover(e.opts(false)), nil); ok {
 		t.Fatal("skill tool must not be offered without a model_invocable skill")
 	}
-	if _, ok := Tool(nil); ok {
+	if _, ok := Tool(nil, nil); ok {
 		t.Fatal("nil catalog")
 	}
 }

@@ -217,6 +217,20 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-10-25 — Long skills: sections on demand and search by meaning
+- **The 64 KiB limit is now on the prompt, not the file.** A skill over it (up to 4 MiB) is split at its
+  `##` headings (long sections into parts of at most 12 KiB); the prompt gets its introduction and a table
+  of contents. A skill folder may also keep sections as files: `<skill>/sections/*.md`
+  (`go/skills/library.go`).
+- **New read-only tools `skill_section` and `skill_search`** (offered only when a long skill exists).
+  `skill_search` embeds passages with the local `nomic-embed-text` (index kept in
+  `$XDG_STATE_HOME/sarina/skill-index`, made on first search) and falls back to words without the model.
+  Running a long skill with a task adds the best passages (at most 6 KiB) to the prompt (`ExpandWith`).
+- **New package `go/embed`** (the Ollama embedder, moved out of `vault`; `vault.DefaultEmbedder` still
+  works), so `cli` and `skills` can embed without importing `vault` (which imports `cli`).
+- A skill folder's `SKILL.md` without front matter now loads (name from the folder, description from its
+  first heading); a loose `.md` still needs the header. The security scan is unchanged.
+
 ### 2026-10-23 — Training round: gaming (Labyrinth's main goal) and the first repair tool
 - **Owner's direction:** Labyrinth OS is privacy-oriented but its main goal is the most capable gaming
   experience on Linux; Sarina helps with stability and mods, talks naturally, and gets a little more

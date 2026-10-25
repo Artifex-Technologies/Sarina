@@ -3,7 +3,6 @@ package skills
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,6 +22,7 @@ const (
 	// it) and is searched on Linux only.
 	DefaultSystemDir = "/usr/share/sarina/skills"
 
+	// maxSkillBytes is the most of a skill that goes into the prompt; a longer skill is split into sections (library.go).
 	maxSkillBytes = 64 << 10
 )
 
@@ -123,7 +123,8 @@ func Discover(o Options) *Catalog {
 			c.Notices = append(c.Notices, "workspace skills are enabled (--trust-workspace-skills): loading skills from "+root.Dir)
 		}
 		for _, cand := range candidates(root.Dir, c) {
-			s, err := load(cand.path, cand.fallback, sc)
+			s, probs, err := load(cand.path, cand.fallback, sc)
+			c.Problems = append(c.Problems, probs...)
 			if err != nil {
 				c.Problems = append(c.Problems, Problem{cand.path, err.Error()})
 				continue
@@ -175,28 +176,67 @@ func candidates(dir string, c *Catalog) []candidate {
 	return out
 }
 
-func load(path, fallback string, sc Scanner) (*Skill, error) {
-	f, err := os.Open(path)
+func load(path, fallback string, sc Scanner) (*Skill, []Problem, error) {
+	data, err := readCapped(path)
 	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, maxSkillBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > maxSkillBytes {
-		return nil, fmt.Errorf("file is larger than %d bytes", maxSkillBytes)
+		return nil, nil, err
 	}
 	if v := sc.Scan(string(data)); v.Blocked {
-		return nil, fmt.Errorf("blocked by the security scan: %s", v.Reason)
+		return nil, nil, fmt.Errorf("blocked by the security scan: %s", v.Reason)
 	}
 	s, err := Parse(data, fallback)
+	if err != nil && strings.EqualFold(filepath.Base(path), "SKILL.md") && strings.HasPrefix(err.Error(), "no front matter") {
+		// a skill folder's SKILL.md written without the header: the folder names it, its first heading describes it
+		s, err = Parse([]byte("---\ndescription: "+headerless(string(data))+"\n---\n"+string(data)), fallback)
+	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	s.Path = path
-	return s, nil
+	var probs []Problem
+	// a skill folder's own sections (<skill>/sections/*.md), after what SKILL.md says
+	if strings.EqualFold(filepath.Base(path), "SKILL.md") {
+		var secs []Section
+		secs, probs = sectionFiles(filepath.Dir(path), sc)
+		if len(secs) > 0 {
+			if len(s.Body) > maxSkillBytes {
+				intro, more := splitSections(s.Body)
+				s.makeLibrary(intro, append(more, secs...), false)
+			} else {
+				s.makeLibrary(s.Body, secs, true)
+			}
+			return s, probs, nil
+		}
+	}
+	// too long for the prompt: split at its headings
+	if len(s.Body) > maxSkillBytes {
+		intro, secs := splitSections(s.Body)
+		s.makeLibrary(intro, secs, false)
+	}
+	return s, probs, nil
+}
+
+// headerless describes a skill written without front matter: its first heading, else its first line (short, quote-free, one line).
+func headerless(text string) string {
+	desc := ""
+	if m := headingRE.FindStringSubmatch(text); m != nil {
+		desc = m[2]
+	} else {
+		for _, l := range strings.Split(text, "\n") {
+			if t := strings.TrimSpace(l); t != "" {
+				desc = t
+				break
+			}
+		}
+	}
+	desc = strings.NewReplacer("\"", "", "'", "", "#", "", ":", " -").Replace(strings.TrimSpace(desc))
+	if r := []rune(desc); len(r) > 120 {
+		desc = string(r[:120])
+	}
+	if desc == "" {
+		desc = "(no description)"
+	}
+	return desc
 }
 
 // Get finds a skill by name, ignoring case.
