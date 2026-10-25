@@ -96,7 +96,7 @@ func securitySummary(ctx context.Context) string {
 		if p.Fixed != "" {
 			fix = "fixed in " + p.Fixed
 		}
-		fmt.Fprintf(&b, "- %s %s: %s %s (%s, %s); %s\n", p.Package, p.Installed, p.Severity, p.Type, p.Advisory, strings.Join(p.CVEs, " "), fix)
+		fmt.Fprintf(&b, "- %s %s: severity %s (Arch's rating), kind: %s (%s, %s); %s\n", p.Package, p.Installed, strings.ToUpper(p.Severity), p.Type, p.Advisory, strings.Join(p.CVEs, " "), fix)
 	}
 	b.WriteString("\n### Kernels\n")
 	for _, k := range r.Kernels {
