@@ -67,6 +67,7 @@ var Topics = map[string][]step{
 	"kernel": {
 		{"Kernel warnings and errors this boot", []string{"journalctl", "-k", "-b", "-p", "warning", "-n", "30", "--no-pager", "-o", "short"}, 0, 0},
 	},
+	"security": {}, // Heimdall's audit, below
 	"hardware": {
 		{"Temperatures and fans", []string{"sensors"}, 30, 0},
 		{"Graphics card", []string{"nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader"}, 0, 0},
@@ -135,6 +136,8 @@ func Report(ctx context.Context, topic string) (string, error) {
 		}
 	case "gaming":
 		b.WriteString("## Summary\n" + gamingSummary(ctx) + "\n\n")
+	case "security":
+		b.WriteString("## What Heimdall finds open\n" + securitySummary(ctx) + "\n\n")
 	case "audio":
 		// she once told the owner to restart PipeWire with sudo: the sound system runs as the user
 		b.WriteString("## Note\nThe sound system (PipeWire, WirePlumber) runs as the user: it is restarted with `systemctl --user restart pipewire pipewire-pulse wireplumber`, never with sudo; with shell, system_fix restart_audio does the same.\n\n")
@@ -158,7 +161,7 @@ func Tools() []tools.Tool {
 		Class: tools.ClassReadOnly,
 		Spec: llm.ToolSpec{
 			Name:        "system_status",
-			Description: "How the computer is doing now (read-only): performance, network, disk, logs, services, hardware, crashes, boot, audio, kernel, gaming (Steam, Proton, the graphics card and who holds its memory). Call it before answering about slowness, internet, errors, crashes, games or health.",
+			Description: "How the computer is doing now (read-only): performance, network, disk, logs, services, hardware, crashes, boot, audio, kernel, gaming (Steam, Proton, the graphics card and who holds its memory), security (Heimdall's findings: packages and kernels with known holes, settings that could be safer). Call it before answering about slowness, internet, errors, crashes, games or health.",
 			Parameters: map[string]any{"type": "object", "required": []string{"topic"}, "properties": map[string]any{
 				"topic": map[string]any{"type": "string", "enum": names()},
 			}},
