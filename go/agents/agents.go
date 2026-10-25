@@ -128,7 +128,13 @@ type Options struct {
 	// Trusted false skips every operator file and leaves only the built-ins
 	// (the policy's trust switch).
 	Trusted bool
+	// Trust (optional) checks each profile against the owner's signed list; an unapproved one is skipped.
+	Trust Trust
 }
+
+// Trust refuses behaviour files the owner did not approve (Heimdall's signed list, package trust); "" means the file may be used.
+type Trust interface{ Refuse(path string) string }
+
 
 // Load returns the built-in profiles plus the operator's. An operator profile
 // with a built-in's name replaces it (the operator wrote it); between operator
@@ -170,6 +176,12 @@ func Load(o Options) *Catalog {
 			path := filepath.Join(d, name)
 			if strings.HasPrefix(name, ".") || !strings.EqualFold(filepath.Ext(name), ".md") || strings.EqualFold(name, "README.md") {
 				continue
+			}
+			if o.Trust != nil && e.Type().IsRegular() {
+				if why := o.Trust.Refuse(path); why != "" {
+					c.Problems = append(c.Problems, fmt.Sprintf("%s: %s; skipped", path, why))
+					continue
+				}
 			}
 			if !e.Type().IsRegular() { // symbolic links and directories are not followed
 				c.Problems = append(c.Problems, fmt.Sprintf("%s: not a regular file; skipped", path))

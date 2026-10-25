@@ -39,7 +39,14 @@ type Options struct {
 	Home      string              // for ~/.sarina/policy.json; empty = none
 	Getenv    func(string) string // default os.Getenv
 	Workspace string              // the workspace directory; "" = no workspace file
+	// Trust (optional) checks the operator files against the owner's signed list; an unapproved one stops Sarina, since ignoring
+	// it could drop the owner's own restrictions.
+	Trust Trust
 }
+
+// Trust refuses behaviour files the owner did not approve (Heimdall's signed list, package trust); "" means the file may be used.
+type Trust interface{ Refuse(path string) string }
+
 
 type prefixRule struct{ prefix, source string }
 
@@ -92,6 +99,14 @@ func Load(o Options) *Policy {
 			continue
 		}
 		seen[abs] = true
+		if o.Trust != nil {
+			if _, err := os.Stat(abs); err == nil {
+				if why := o.Trust.Refuse(abs); why != "" {
+					p.Fatal = append(p.Fatal, fmt.Sprintf("policy file %s is %s", abs, why))
+					continue
+				}
+			}
+		}
 		p.loadFile(abs, true)
 	}
 	if o.Workspace != "" {

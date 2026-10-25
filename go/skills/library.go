@@ -116,7 +116,7 @@ func cutParts(text string, max int) []string {
 }
 
 // sectionFiles reads <dir>/sections/*.md, sorted by name; the first heading of each is its title (else the file name).
-func sectionFiles(dir string, sc Scanner) ([]Section, []Problem) {
+func sectionFiles(dir string, sc Scanner, tr Trust) ([]Section, []Problem) {
 	entries, err := os.ReadDir(filepath.Join(dir, "sections"))
 	if err != nil {
 		return nil, nil
@@ -128,6 +128,12 @@ func sectionFiles(dir string, sc Scanner) ([]Section, []Problem) {
 		p := filepath.Join(dir, "sections", e.Name())
 		if !e.Type().IsRegular() || !strings.EqualFold(filepath.Ext(e.Name()), ".md") {
 			continue
+		}
+		if tr != nil {
+			if why := tr.Refuse(p); why != "" {
+				probs = append(probs, Problem{p, why})
+				continue
+			}
 		}
 		data, err := readCapped(p)
 		if err != nil {

@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/Artifex-Technologies/Sarina/go/flagx"
+	"github.com/Artifex-Technologies/Sarina/go/trust"
 	"io"
 	"os"
 	"strings"
@@ -302,7 +303,7 @@ func (o *opts) agent(env *Env, stored *session.Session) (*agent.Agent, error) {
 		client, tracker = o.router, o.router
 	}
 	o.client = client
-	pol := policy.Load(policy.Options{Home: env.homeDir(), Getenv: env.Getenv, Workspace: rt.CWD})
+	pol := policy.Load(policy.Options{Home: env.homeDir(), Getenv: env.Getenv, Workspace: rt.CWD, Trust: trust.Default()})
 	if len(pol.Fatal) > 0 {
 		return nil, errors.New(strings.Join(pol.Fatal, "; "))
 	}
@@ -327,7 +328,7 @@ func (o *opts) agent(env *Env, stored *session.Session) (*agent.Agent, error) {
 	if mgr := o.startMCP(env, pol, rt, sessionEnv); mgr != nil {
 		builder.Extra = append(builder.Extra, mgr.Tools()...)
 	}
-	profiles := agents.Load(agents.Options{Home: env.homeDir(), Getenv: env.Getenv, Trusted: pol.Trusted})
+	profiles := agents.Load(agents.Options{Home: env.homeDir(), Getenv: env.Getenv, Trusted: pol.Trusted, Trust: trust.Default()})
 	for _, p := range profiles.Problems {
 		fmt.Fprintf(env.Stderr, "[agents] %s\n", p)
 	}
@@ -357,7 +358,7 @@ func (o *opts) startMCP(env *Env, pol *policy.Policy, rt config.RuntimeConfig, s
 		fmt.Fprintln(env.Stderr, "[notice] MCP servers are disabled: the operator policy sets trusted=false")
 		return nil
 	}
-	cfg := mcp.Load(mcp.LoadOptions{Home: env.homeDir(), Getenv: env.Getenv, Workspace: rt.CWD, TrustWorkspace: o.trustWorkspaceMCP})
+	cfg := mcp.Load(mcp.LoadOptions{Home: env.homeDir(), Getenv: env.Getenv, Workspace: rt.CWD, TrustWorkspace: o.trustWorkspaceMCP, Trust: trust.Default()})
 	for _, n := range cfg.Notices {
 		fmt.Fprintf(env.Stderr, "[notice] %s\n", n)
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/trust"
 	"regexp"
 	"strings"
 
@@ -94,7 +95,7 @@ func Build(s Spec) (*Built, error) {
 			}
 		}
 	}
-	pol := policy.Load(policy.Options{Home: s.Home, Getenv: getenv, Workspace: rt.CWD})
+	pol := policy.Load(policy.Options{Home: s.Home, Getenv: getenv, Workspace: rt.CWD, Trust: trust.Default()})
 	if len(pol.Fatal) > 0 {
 		return nil, errors.New(strings.Join(pol.Fatal, "; "))
 	}
@@ -115,7 +116,7 @@ func Build(s Spec) (*Built, error) {
 	}
 	var profiles *agents.Catalog
 	if s.Subagents {
-		profiles = agents.Load(agents.Options{Home: s.Home, Getenv: getenv, Trusted: pol.Trusted})
+		profiles = agents.Load(agents.Options{Home: s.Home, Getenv: getenv, Trusted: pol.Trusted, Trust: trust.Default()})
 	}
 	a, err := agent.New(agent.Options{
 		Model: m, Runtime: rt, Client: client, Discoverer: discoverer,

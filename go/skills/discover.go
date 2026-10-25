@@ -37,7 +37,13 @@ type Options struct {
 	// SystemDir overrides the system skills directory (tests). Empty means
 	// DefaultSystemDir on Linux and none elsewhere.
 	SystemDir string
+	// Trust (optional) checks skill files (and ~/.sarina/skills.json) against the owner's signed list; unapproved ones are not used.
+	Trust Trust
 }
+
+// Trust refuses behaviour files the owner did not approve (Heimdall's signed list, package trust); "" means the file may be used.
+type Trust interface{ Refuse(path string) string }
+
 
 // Root is one directory searched for skills.
 type Root struct{ Dir, Source string }
@@ -88,7 +94,8 @@ func Roots(o Options) []Root {
 		add(d, SourceOperator)
 	}
 	if o.Home != "" {
-		if raw, err := os.ReadFile(filepath.Join(o.Home, ".sarina", "skills.json")); err == nil {
+		sj := filepath.Join(o.Home, ".sarina", "skills.json")
+		if raw, err := os.ReadFile(sj); err == nil && (o.Trust == nil || o.Trust.Refuse(sj) == "") {
 			var cfg struct {
 				Paths []string `json:"paths"`
 			}
@@ -123,7 +130,13 @@ func Discover(o Options) *Catalog {
 			c.Notices = append(c.Notices, "workspace skills are enabled (--trust-workspace-skills): loading skills from "+root.Dir)
 		}
 		for _, cand := range candidates(root.Dir, c) {
-			s, probs, err := load(cand.path, cand.fallback, sc)
+			if o.Trust != nil {
+				if why := o.Trust.Refuse(cand.path); why != "" {
+					c.Problems = append(c.Problems, Problem{cand.path, why})
+					continue
+				}
+			}
+			s, probs, err := load(cand.path, cand.fallback, sc, o.Trust)
 			c.Problems = append(c.Problems, probs...)
 			if err != nil {
 				c.Problems = append(c.Problems, Problem{cand.path, err.Error()})
@@ -176,7 +189,7 @@ func candidates(dir string, c *Catalog) []candidate {
 	return out
 }
 
-func load(path, fallback string, sc Scanner) (*Skill, []Problem, error) {
+func load(path, fallback string, sc Scanner, tr Trust) (*Skill, []Problem, error) {
 	data, err := readCapped(path)
 	if err != nil {
 		return nil, nil, err
@@ -197,7 +210,7 @@ func load(path, fallback string, sc Scanner) (*Skill, []Problem, error) {
 	// a skill folder's own sections (<skill>/sections/*.md), after what SKILL.md says
 	if strings.EqualFold(filepath.Base(path), "SKILL.md") {
 		var secs []Section
-		secs, probs = sectionFiles(filepath.Dir(path), sc)
+		secs, probs = sectionFiles(filepath.Dir(path), sc, tr)
 		if len(secs) > 0 {
 			if len(s.Body) > maxSkillBytes {
 				intro, more := splitSections(s.Body)

@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	strust "github.com/Artifex-Technologies/Sarina/go/trust"
 	"path/filepath"
 	"strings"
 
@@ -32,12 +33,12 @@ func mcpCommand(env *Env, args []string) int {
 		return exitUsage
 	}
 	ws, _ := filepath.Abs(*cwd)
-	pol := policy.Load(policy.Options{Home: env.homeDir(), Getenv: env.Getenv, Workspace: ws})
+	pol := policy.Load(policy.Options{Home: env.homeDir(), Getenv: env.Getenv, Workspace: ws, Trust: strust.Default()})
 	if !pol.Trusted {
 		fmt.Fprintln(env.Stdout, "MCP servers are disabled: the operator policy sets trusted=false")
 		return exitOK
 	}
-	cfg := mcp.Load(mcp.LoadOptions{Home: env.homeDir(), Getenv: env.Getenv, Workspace: ws, TrustWorkspace: *trust})
+	cfg := mcp.Load(mcp.LoadOptions{Home: env.homeDir(), Getenv: env.Getenv, Workspace: ws, TrustWorkspace: *trust, Trust: strust.Default()})
 	for _, n := range cfg.Notices {
 		fmt.Fprintf(env.Stdout, "NOTICE: %s\n", n)
 	}
@@ -72,8 +73,8 @@ func agentsCommand(env *Env, args []string) int {
 		return exitUsage
 	}
 	ws, _ := filepath.Abs(*cwd)
-	pol := policy.Load(policy.Options{Home: env.homeDir(), Getenv: env.Getenv, Workspace: ws})
-	cat := agents.Load(agents.Options{Home: env.homeDir(), Getenv: env.Getenv, Trusted: pol.Trusted})
+	pol := policy.Load(policy.Options{Home: env.homeDir(), Getenv: env.Getenv, Workspace: ws, Trust: strust.Default()})
+	cat := agents.Load(agents.Options{Home: env.homeDir(), Getenv: env.Getenv, Trusted: pol.Trusted, Trust: strust.Default()})
 	for _, p := range cat.Profiles {
 		tl := "everything a read-only helper may use"
 		if p.Tools != nil {

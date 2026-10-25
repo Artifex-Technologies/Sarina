@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/trust"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +21,7 @@ func presence(path string) string {
 
 func (r *runner) extensions() {
 	// skills
-	opt := skills.Options{Home: r.home, Getenv: r.env, Workspace: r.o.Cwd, SystemDir: r.o.SystemSkillsDir}
+	opt := skills.Options{Home: r.home, Getenv: r.env, Workspace: r.o.Cwd, SystemDir: r.o.SystemSkillsDir, Trust: trust.Default()}
 	cat := skills.Discover(opt)
 	n := 0
 	for _, root := range skills.Roots(opt) {
@@ -41,7 +42,7 @@ func (r *runner) extensions() {
 	}
 
 	// mcp.json
-	mc := mcp.Load(mcp.LoadOptions{Home: r.home, Getenv: r.env, Workspace: r.o.Cwd})
+	mc := mcp.Load(mcp.LoadOptions{Home: r.home, Getenv: r.env, Workspace: r.o.Cwd, Trust: trust.Default()})
 	mpath := filepath.Join(r.home, ".sarina", "mcp.json")
 	if len(mc.Problems) > 0 {
 		r.add("ext_mcp", Warn, fmt.Sprintf("mcp.json %s; problems: %s", presence(mpath), strings.Join(mc.Problems, "; ")),
@@ -51,7 +52,7 @@ func (r *runner) extensions() {
 	}
 
 	// policy.json: a malformed operator file stops startup
-	pol := policy.Load(policy.Options{Home: r.home, Getenv: r.env, Workspace: r.o.Cwd})
+	pol := policy.Load(policy.Options{Home: r.home, Getenv: r.env, Workspace: r.o.Cwd, Trust: trust.Default()})
 	ppath := filepath.Join(r.home, ".sarina", "policy.json")
 	switch {
 	case len(pol.Fatal) > 0:

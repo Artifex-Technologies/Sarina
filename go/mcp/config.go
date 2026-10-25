@@ -53,7 +53,13 @@ type LoadOptions struct {
 	Getenv         func(string) string // default os.Getenv
 	Workspace      string              // the workspace directory
 	TrustWorkspace bool                // --trust-workspace-mcp
+	// Trust (optional) checks the operator files against the owner's signed list; an unapproved file starts nothing.
+	Trust Trust
 }
+
+// Trust refuses behaviour files the owner did not approve (Heimdall's signed list, package trust); "" means the file may be used.
+type Trust interface{ Refuse(path string) string }
+
 
 // Config is the discovery result. Problems never abort loading.
 type Config struct {
@@ -83,6 +89,14 @@ func Load(o LoadOptions) *Config {
 			return
 		}
 		seenFile[abs] = true
+		if o.Trust != nil && source == SourceOperator {
+			if _, err := os.Stat(abs); err == nil {
+				if why := o.Trust.Refuse(abs); why != "" {
+					c.Notices = append(c.Notices, fmt.Sprintf("tool connections in %s not used: %s", abs, why))
+					return
+				}
+			}
+		}
 		c.loadFile(abs, source, byName)
 	}
 	if o.Home != "" {

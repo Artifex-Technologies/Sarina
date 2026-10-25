@@ -217,6 +217,14 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-10-25 — Trust: behaviour files checked against Heimdall's signed list
+- **New package `go/trust`**: reads Heimdall's `/etc/heimdall/trust` (mode, `owner.pub`, `manifest.json` + `.sig`;
+  `SARINA_TRUST_DIR` for tests). Only in mode `enforce` does it refuse: an unapproved skill, section, agent profile or MCP file
+  is not used, an unapproved `skills.json` adds no folders, and an unapproved `policy.json` is Fatal (stops Sarina). Files under
+  `/usr` are not checked. Heimdall's side: `heimdalld trust` and `docs/TRUST.md` in the Heimdall repository.
+- The loaders take an optional `Trust` (nil = no check, so tests do not depend on the machine's mode); the CLI, doctor and
+  runkit pass `trust.Default()`.
+
 ### 2026-10-25 — Long skills: sections on demand and search by meaning
 - **The 64 KiB limit is now on the prompt, not the file.** A skill over it (up to 4 MiB) is split at its
   `##` headings (long sections into parts of at most 12 KiB); the prompt gets its introduction and a table
