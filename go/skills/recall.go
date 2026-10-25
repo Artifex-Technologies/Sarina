@@ -52,6 +52,34 @@ type Library struct {
 	indexes  map[string]*skillIndex
 	noModel  bool // the embedder failed once: words only from then on
 	lastNote string
+	started  map[string]bool // skills the operator ran in this session (lowercase names)
+}
+
+// Start records that the operator ran this skill, so its sections may be read in this session even when the model may not invoke it.
+func (l *Library) Start(name string) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.started[strings.ToLower(name)] = true
+}
+
+// Readable reports whether the model may read this skill's sections: it may invoke the skill itself, or the operator ran it in this
+// session. A skill only the operator may start (most collections downloaded from elsewhere) stays out of ordinary conversations.
+func (l *Library) Readable(s *Skill) bool {
+	if s == nil {
+		return false
+	}
+	if s.ModelInvocable {
+		return true
+	}
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.started[strings.ToLower(s.Name)]
 }
 
 type skillIndex struct {
@@ -66,7 +94,7 @@ type passageRef struct {
 
 // NewLibrary searches c's long skills. stateDir is where the indexes are kept (normally $XDG_STATE_HOME/sarina/skill-index).
 func NewLibrary(c *Catalog, emb Embedder, stateDir string) *Library {
-	return &Library{cat: c, emb: emb, dir: stateDir, indexes: map[string]*skillIndex{}}
+	return &Library{cat: c, emb: emb, dir: stateDir, indexes: map[string]*skillIndex{}, started: map[string]bool{}}
 }
 
 // DefaultIndexDir is $XDG_STATE_HOME/sarina/skill-index (~/.local/state/... without it).
@@ -231,10 +259,13 @@ func (l *Library) Search(skill, query string, limit int) ([]Passage, string, err
 		if !s.IsLibrary() {
 			return nil, "", fmt.Errorf("skill %q is short: all of it is in its prompt, there is nothing to search", s.Name)
 		}
+		if !l.Readable(s) {
+			return nil, "", fmt.Errorf("skill %q can only be used when the operator runs it", s.Name)
+		}
 		list = []*Skill{s}
 	} else if l.cat != nil {
 		for _, s := range l.cat.Skills {
-			if s.IsLibrary() {
+			if s.IsLibrary() && l.Readable(s) {
 				list = append(list, s)
 			}
 		}
@@ -392,6 +423,7 @@ func (s *Skill) prefetched(task string) string {
 // fit the task best follow (up to passageBudget), so the model starts from what the computer says and the right part of the skill.
 // Without a task it is Expand.
 func (s *Skill) ExpandWith(args string, lib *Library) string {
+	lib.Start(s.Name) // run by the operator (or invoked by the model, which may): its sections may be read now
 	text := s.prefetched(args) + s.Expand(args)
 	if lib == nil || !s.IsLibrary() || strings.TrimSpace(args) == "" {
 		return text

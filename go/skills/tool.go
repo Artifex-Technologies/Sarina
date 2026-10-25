@@ -73,18 +73,27 @@ const (
 
 // LibraryTools are skill_section and skill_search, for reading long skills a part at a time. None when no skill is long.
 func LibraryTools(c *Catalog, lib *Library) []tools.Tool {
+	// offered when any skill is long (the operator may start one); the descriptions name only those the model may use itself, and the
+	// handlers refuse a skill that is neither the model's to use nor started by the operator in this session
 	var long []string
+	anyLong := false
 	if c != nil {
 		for _, s := range c.Skills {
 			if s.IsLibrary() {
-				long = append(long, s.Name)
+				anyLong = true
+				if s.ModelInvocable {
+					long = append(long, s.Name)
+				}
 			}
 		}
 	}
-	if len(long) == 0 {
+	if !anyLong {
 		return nil
 	}
 	names := strings.Join(long, ", ")
+	if names == "" {
+		names = "(only one the operator has started)"
+	}
 	section := tools.Tool{
 		Class: tools.ClassReadOnly,
 		Spec: llm.ToolSpec{
@@ -103,8 +112,8 @@ func LibraryTools(c *Catalog, lib *Library) []tools.Tool {
 			name, _ := args["skill"].(string)
 			which := fmt.Sprint(args["section"])
 			s, ok := c.Get(name)
-			if !ok || !s.IsLibrary() {
-				return "", nil, fmt.Errorf("no long skill named %q; long skills: %s", name, names)
+			if !ok || !s.IsLibrary() || !lib.Readable(s) {
+				return "", nil, fmt.Errorf("no long skill named %q that you may read; long skills: %s", name, names)
 			}
 			n, sec, ok := s.Section(which)
 			if !ok {

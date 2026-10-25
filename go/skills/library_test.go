@@ -236,3 +236,23 @@ func TestPrefetchedContextGoesFirst(t *testing.T) {
 		t.Fatal("no task, nothing looked up")
 	}
 }
+
+func TestSkillsOnlyTheOperatorStartsStayOutOfOtherConversations(t *testing.T) {
+	e := newEnv(t)
+	text := strings.Replace(longSkill(), "model_invocable: true\n", "", 1)
+	write(t, filepath.Join(e.home, ".sarina", "skills", "fixit.md"), text)
+	c := Discover(e.opts(false))
+	s, _ := c.Get("fixit")
+	lib := NewLibrary(c, nil, "")
+	reg := tools.NewRegistry(LibraryTools(c, lib)...)
+	if res := reg.Execute(context.Background(), SectionToolName, map[string]any{"skill": "fixit", "section": "1"}, nil); res.OK {
+		t.Fatal("a skill the model may not use is not readable before the operator runs it")
+	}
+	if found, _, _ := lib.Search("", "wireplumber", 3); len(found) != 0 {
+		t.Fatal("nor searchable")
+	}
+	_ = s.ExpandWith("no sound", lib) // the operator runs it
+	if res := reg.Execute(context.Background(), SectionToolName, map[string]any{"skill": "fixit", "section": "1"}, nil); !res.OK {
+		t.Fatalf("readable once started: %+v", res)
+	}
+}
