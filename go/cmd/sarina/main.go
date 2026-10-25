@@ -22,7 +22,8 @@ import (
 	_ "github.com/Artifex-Technologies/Sarina/go/route"   // sarina route: what to look up before a spoken question (by meaning)
 	_ "github.com/Artifex-Technologies/Sarina/go/service" // adds the service command
 	_ "github.com/Artifex-Technologies/Sarina/go/sysinfo" // adds system_status: how the computer is doing, read-only
-	_ "github.com/Artifex-Technologies/Sarina/go/vault"   // adds the vault-* commands and, with SARINA_VAULT set, the vault tools
+	"github.com/Artifex-Technologies/Sarina/go/trust"
+	_ "github.com/Artifex-Technologies/Sarina/go/vault" // adds the vault-* commands and, with SARINA_VAULT set, the vault tools
 )
 
 // aliasCommand maps the packaging names to commands: a binary (or link) called
@@ -42,6 +43,11 @@ func main() {
 	args := os.Args[1:]
 	if c := aliasCommand(os.Args[0]); c != "" {
 		args = append([]string{c}, args...)
+	}
+	// Heimdall's lock: a contained Sarina does not start (only "version" and "help" still answer)
+	if on, why := trust.Contained(); on && !(len(args) > 0 && (args[0] == "version" || args[0] == "help" || args[0] == "--help")) {
+		os.Stderr.WriteString("sarina: Heimdall has contained me (" + why + "). The owner releases me in Settings > Security, or: sudo heimdalld contain release\n")
+		os.Exit(3)
 	}
 	os.Exit(cli.Main(args, cli.Env{}))
 }
