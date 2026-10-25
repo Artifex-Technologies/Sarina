@@ -276,16 +276,22 @@ rules out fully unattended pairing.
 
 ### Firmware version reporting
 
-As of 2026-09-12, `scripts/version.py` composes `firmware_version` as
-`<upstream>-CHY-<ours>[+<ahead>]` — e.g. `1.4.3-CHY-0.1.0`,
-`1.4.3-CHY-0.1.0+8` on a development build (`+N` commits since the last
-`chy-*` tag), or `1.4.3-CHY-dev` when no `chy-*` tag exists yet. The commit
-hash is no longer in this string — use the separate, exact `firmware_commit`
-field for that. `chymaera-device-info` parses this format and notes the
-tracked upstream release and dev-build status **without failing the check**; a
-device still running the pre-2026-09-12 format (`git describe --tags --always`,
-e.g. `chy-0.1.0-2-g540d03c7`) is recognised and noted as legacy rather than
-misparsed. `unknown` is still a warning — it means git failed outright.
+As of 2026-10-24, `scripts/version.py` composes `firmware_version` as
+`ARG-<upstream>r<ours>` — e.g. `ARG-1.4.3r1` — or `ARG-1.4.3-dev` when no
+`ARG-1.4.3r*` tag exists yet. Builds after a tag keep the tag's name: the `+N`
+commit-count suffix was dropped by maintainer choice (firmware `ebe7ab9e`), so
+the separate, exact `firmware_commit` field is what tells two builds apart.
+`firmware_origin_fork` reads `Argus`. `chymaera-device-info`
+(`go/chymaera/firmware/firmware.go`) parses this format, with `+N` still
+accepted as optional, and notes the tracked upstream release and dev-build
+status **without failing the check**. Older devices may still report the
+interim `1.4.3-CHY-0.1.0[+N]` format (fork `Chymaera`) or the pre-2026-09-12
+`git describe` form. `unknown` is still a warning — it means git failed outright.
+
+Argus_App uses the same scheme for its own version (`ARG-1.3.3r1`, after
+qFlipper 1.3.3). Since 2026-10-24 it warns in its Update/Install confirmation
+when `firmware_origin_fork` is not `Official`, because those channels install
+official firmware over the fork.
 
 `1.4.3` (`GitVersion.UPSTREAM_VERSION`) is a **hand-maintained constant** in
 the firmware repo, not derived from git — release tags aren't ancestors of
@@ -317,9 +323,10 @@ client half in `sarina/chymaera/console.py` and does not extend the protocol.
 | Request | `{"cmd": "status", "id": 7, "token": "optional"}` |
 | Response | `{"ok": true, "id": 7, ...}`; failures carry `"error"` |
 
-Commands Sarina implements, exactly those the App documents: `ping`, `help`,
+Commands Sarina implements, the App's v1.0 set: `ping`, `help`,
 `status`, `log.tail`, `log.add`, `session.start`, `session.end`, `capture.list`,
-`capture.import`.
+`capture.import`. API v1.1 (2026-09-12) added `device.status` and
+`capture.pull`, both read-only; Sarina does not call them yet.
 
 ```bash
 sarina chymaera-console [--host H] [--port 44700] [--token T] [--captures N]
