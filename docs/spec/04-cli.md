@@ -359,7 +359,7 @@ specs; the CLI contract below must not change.
   result: `<score 3dp>  <session_id>`, then `  task:    <text>`, `  outcome: <text>`.
   Exit 0.
 
-### 4.2 Chymaera ecosystem
+### 4.2 Artifex ecosystem (the `chymaera-*` commands, for the Argus App)
 
 | Command | Owner | Rating |
 |---|---|---|
