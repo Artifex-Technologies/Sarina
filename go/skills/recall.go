@@ -340,31 +340,103 @@ func byWords(list []*Skill, query string, limit int) []Passage {
 	return out
 }
 
-// passageBudget is how much of found passages goes into a long skill's prompt when it is run with a task.
-const passageBudget = 6 << 10
+// passageBudget is how much of found passages goes into a long skill's prompt when it is run with a task; passageBand keeps only
+// passages scoring close to the best (by words, scores are on another scale, so the band is relative there too).
+const (
+	passageBudget = 6 << 10
+	passageBand   = 0.08
+)
 
-// ExpandWith is Expand for a long skill run with a task: the passages that fit the task best are added (up to passageBudget), so the
-// model starts from the right part of the skill. Ordinary skills, and runs without a task or library, are Expand.
+// contextBudget is the most that prefetched context adds to a prompt.
+const contextBudget = 8 << 10
+
+var (
+	contextMu sync.RWMutex
+	contexts  = map[string]func(task string) string{}
+)
+
+// RegisterContext makes a kind of context a skill can ask for with "prefetch" (e.g. "status", registered by package sysinfo): given
+// the task, it returns text to put in front of the model, or "". Context is looked up before the model starts because the small local
+// model answers from what is in front of it far more reliably than from rules telling it to go and look.
+func RegisterContext(name string, fn func(task string) string) {
+	contextMu.Lock()
+	defer contextMu.Unlock()
+	contexts[name] = fn
+}
+
+func (s *Skill) prefetched(task string) string {
+	if len(s.Prefetch) == 0 || strings.TrimSpace(task) == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, name := range s.Prefetch {
+		contextMu.RLock()
+		fn := contexts[name]
+		contextMu.RUnlock()
+		if fn == nil {
+			continue
+		}
+		if t := strings.TrimSpace(fn(task)); t != "" {
+			b.WriteString(t)
+			b.WriteString("\n\n")
+		}
+	}
+	out := b.String()
+	if len(out) > contextBudget {
+		out = cutParts(out, contextBudget)[0] + "\n[…]\n\n"
+	}
+	return out
+}
+
+// ExpandWith is Expand for a run with a task: context the skill asks for (prefetch) goes first, and for a long skill the passages that
+// fit the task best follow (up to passageBudget), so the model starts from what the computer says and the right part of the skill.
+// Without a task it is Expand.
 func (s *Skill) ExpandWith(args string, lib *Library) string {
-	text := s.Expand(args)
+	text := s.prefetched(args) + s.Expand(args)
 	if lib == nil || !s.IsLibrary() || strings.TrimSpace(args) == "" {
 		return text
 	}
-	found, _, err := lib.Search(s.Name, args, 6)
+	found, _, err := lib.Search(s.Name, args, 8)
 	if err != nil || len(found) == 0 {
 		return text
 	}
-	var b strings.Builder
-	b.WriteString(text)
-	b.WriteString("\n\nPassages of this skill that look relevant to the task (open a whole section with skill_section when you need more):\n")
+	// only passages close to the best one (the rest is noise to a small model), within the budget, then in reading order with one
+	// heading per section
+	keep := found[:0:0]
 	used := 0
 	for _, p := range found {
-		block := fmt.Sprintf("\n--- section %d: %s ---\n%s\n", p.Section, p.Title, p.Text)
-		if used+len(block) > passageBudget {
+		if p.Score < found[0].Score-passageBand {
 			break
 		}
-		b.WriteString(block)
-		used += len(block)
+		if used+len(p.Text) > passageBudget {
+			break
+		}
+		keep = append(keep, p)
+		used += len(p.Text)
+	}
+	order := map[string]int{}
+	for si, sec := range s.Sections {
+		for i, t := range passages(sec) {
+			order[fmt.Sprintf("%d\x00%s", si+1, t)] = i
+		}
+	}
+	sort.SliceStable(keep, func(i, j int) bool {
+		if keep[i].Section != keep[j].Section {
+			return keep[i].Section < keep[j].Section
+		}
+		return order[fmt.Sprintf("%d\x00%s", keep[i].Section, keep[i].Text)] < order[fmt.Sprintf("%d\x00%s", keep[j].Section, keep[j].Text)]
+	})
+	var b strings.Builder
+	b.WriteString(text)
+	b.WriteString("\n\nThe parts of this skill that fit the task (open a whole section with skill_section when you need more):\n")
+	last := -1
+	for _, p := range keep {
+		if p.Section != last {
+			fmt.Fprintf(&b, "\n--- section %d: %s ---\n", p.Section, p.Title)
+			last = p.Section
+		}
+		b.WriteString(p.Text)
+		b.WriteString("\n")
 	}
 	return b.String()
 }

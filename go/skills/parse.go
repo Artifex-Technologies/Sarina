@@ -23,6 +23,9 @@ type Skill struct {
 	Source         string // "operator" or "workspace"
 	// Sections of a long skill, read on demand (see library.go); empty for an ordinary one.
 	Sections []Section
+	// Prefetch names context looked up before the model starts, when the skill runs with a task (front matter "prefetch", e.g.
+	// [status]: what the computer reports about the task's topic). See RegisterContext.
+	Prefetch []string
 }
 
 // Expand returns the prompt: the body with every $ARGUMENTS replaced, by plain
@@ -71,6 +74,9 @@ func Parse(data []byte, fallbackName string) (*Skill, error) {
 		return nil, fmt.Errorf("invalid skill name %q (letters, digits, . _ : - ; at most 64 characters)", s.Name)
 	}
 	s.Description, s.WhenToUse = fm.scalar("description"), fm.scalar("when_to_use")
+	if v, ok := fm["prefetch"]; ok {
+		s.Prefetch = v.items()
+	}
 	if v, ok := fm["allowed_tools"]; ok {
 		s.HasAllowed = true
 		s.AllowedTools = v.items()

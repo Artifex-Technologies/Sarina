@@ -221,3 +221,18 @@ func TestASkillFolderWithoutHeaderStillLoads(t *testing.T) {
 		t.Fatal("a loose file still needs its header")
 	}
 }
+
+func TestPrefetchedContextGoesFirst(t *testing.T) {
+	RegisterContext("test-status", func(task string) string { return "The sound card reports: muted (for " + task + ")" })
+	s, err := Parse([]byte("---\nname: p\nprefetch: [test-status, unknown]\n---\nFix: $ARGUMENTS"), "p")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := s.ExpandWith("no sound", nil)
+	if !strings.HasPrefix(got, "The sound card reports: muted (for no sound)") || !strings.HasSuffix(got, "Fix: no sound") {
+		t.Fatalf("%q", got)
+	}
+	if s.ExpandWith("", nil) != "Fix: " {
+		t.Fatal("no task, nothing looked up")
+	}
+}
