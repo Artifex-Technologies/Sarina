@@ -925,3 +925,13 @@ func fixPendingText(file string) string {
 	return "Carry on: the check after your last change to " + file + " failed, and you have described the fix without making it. Make it now with edit_file, then answer with what the check said."
 }
 
+// editLoopStopped is a task in which the edit-loop guard already refused further changes to a file.
+func editLoopStopped(msgs []session.Message) bool {
+	for _, m := range msgs {
+		if m.Role == "tool" && strings.Contains(m.Content, "refusing attempt") {
+			return true
+		}
+	}
+	return false
+}
+

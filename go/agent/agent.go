@@ -537,7 +537,9 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				continue
 			}
 			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns {
-				if f := fixPendingAfterFailedCheck(answer, sess.FileHistory[min(histStart, len(sess.FileHistory)):]); f != "" {
+				// never against the edit-loop guard: once it refused more attempts, carrying on only produced more refused edits
+				// (eval code-go-package, 2026-10-26: 423 s)
+				if f := fixPendingAfterFailedCheck(answer, sess.FileHistory[min(histStart, len(sess.FileHistory)):]); f != "" && !editLoopStopped(sess.Messages[min(msgStart, len(sess.Messages)):]) {
 					nudges++
 					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: fixPendingText(f)})
 					r.emit(event{"type": "continue_nudge", "turn_index": turn})

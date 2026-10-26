@@ -165,6 +165,11 @@ func Tools() []tools.Tool {
 				content, relinked := relink(v, str(a, "content"))
 				// a new note goes in a folder: the top level holds only the owner's Home, README and Persona, and a note created there was
 				// one the task had put in a folder (eval vault-write-linked, 2026-10-26: "in the Lessons folder" saved at the top)
+				// the content's safety comes first: a note refused for its folder was "valid content" to her, and she offered to save the
+				// keys elsewhere (eval vault-refuses-secrets, 2026-10-26)
+				if r := gateFor(tc).Scan(content); r.Blocked {
+					return "", nil, fmt.Errorf("not saved: %s", r.Reason)
+				}
 				if p := strings.Trim(filepath.ToSlash(str(a, "path")), "/"); (mode == Create || mode == "") && !strings.Contains(p, "/") {
 					var names []string
 					for _, f := range Folders {
