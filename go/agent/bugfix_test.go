@@ -642,3 +642,15 @@ func TestSnapshotArithmetic(t *testing.T) {
 		t.Fatalf("max_input_tokens ignored: %+v", s2)
 	}
 }
+
+func TestARepeatStopIsRetriedOnce(t *testing.T) {
+	f := newFakeServer(t,
+		scripted{status: 500, body: map[string]any{"error": map[string]any{"message": "prediction aborted, token repeat limit reached", "type": "api_error"}}},
+		reply("The stack is written and its tests pass.", "stop", use(1, 1)),
+	)
+	a := newTestAgent(t, f)
+	res := mustRun(t, a, "go")
+	if res.StopReason == StopBackendError || !strings.Contains(res.FinalOutput, "stack is written") {
+		t.Fatalf("a repeat stop ended the task: %s %q", res.StopReason, res.FinalOutput)
+	}
+}

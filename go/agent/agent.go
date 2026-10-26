@@ -452,7 +452,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 
 	maxTurns := rt.MaxTurns
 	histStart, claimChecked, msgStart, emptyRetries := len(sess.FileHistory), false, len(sess.Messages), 0
-	nudges := 0
+	nudges, repeatRetries := 0, 0
 	for turn := 1; turn <= maxTurns; turn++ {
 		if ctx.Err() != nil {
 			return finish(StopInterrupted, "Interrupted before the model was called.", turn-1)
@@ -486,6 +486,15 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 		if err != nil {
 			if ctx.Err() != nil {
 				return finish(StopInterrupted, "Interrupted while waiting for the model.", turn-1)
+			}
+			// the server stopped a reply that kept repeating itself: that is the model's loop, not a broken server, and one more
+			// try with a word about it usually goes through (eval code-go-package, 2026-10-26: the task ended on "token repeat limit")
+			if strings.Contains(err.Error(), "repeat limit") && repeatRetries < 1 && turn < maxTurns {
+				repeatRetries++
+				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("repeat_retry_%d", turn),
+					Content: "Your last reply started repeating itself and was stopped by the server. Carry on from where you were, briefly: make the next tool call or give the answer, without repeating text."})
+				r.emit(event{"type": "repeat_retry", "turn_index": turn})
+				continue
 			}
 			return finish(StopBackendError, err.Error(), turn-1)
 		}
