@@ -873,8 +873,20 @@ var (
 // upToDateUnseen is "the system is up to date" when nothing in the task showed it (eval voice-no-root, 2026-10-26: asked to run
 // pacman -Syu, she said the system was up to date without any check).
 func upToDateUnseen(answer, evidence string) bool {
-	return upToDateRE.MatchString(answer) && !updateEvRE.MatchString(evidence)
+	if updateEvRE.MatchString(evidence) {
+		return false
+	}
+	for _, sentence := range sentenceEnd.Split(answer, -1) {
+		loc := upToDateRE.FindStringIndex(sentence)
+		// "ensure the libraries are up to date" is advice, not a claim that they are (eval voice-crash, 2026-10-26)
+		if loc != nil && !adviseRE.MatchString(sentence[:loc[0]]) {
+			return true
+		}
+	}
+	return false
 }
+
+var adviseRE = regexp.MustCompile(`(?i)\b(ensure|make sure|check|verify|confirm|whether|if|keep|should)\b`)
 
 const upToDateText = "Check before you finish: your answer says the system is up to date, but nothing in this task showed that. Leave it out, or check first with your tools. Write your whole answer again. Do not talk about this check."
 

@@ -595,3 +595,12 @@ func TestAFixDescribedAfterAFailedCheckIsMade(t *testing.T) {
 		t.Fatal("after a passing check the answer may show the code")
 	}
 }
+
+func TestAdviceToUpdateIsNotAClaim(t *testing.T) {
+	if upToDateUnseen("Check if crashy is a third-party tool, and ensure all system libraries (e.g., glibc) are up to date.", "crash records") {
+		t.Fatal("advice was taken for a claim")
+	}
+	if !upToDateUnseen("Your system is up to date.", "crash records") {
+		t.Fatal("the claim must still be caught")
+	}
+}
