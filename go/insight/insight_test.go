@@ -137,3 +137,68 @@ func vaultNotes(root string) ([]vault.Note, error) {
 	}
 	return v.Notes()
 }
+
+func TestHerOwnVoiceHeardBackIsNotTheOwner(t *testing.T) {
+	// the 2026-10-23 morning: the speakers were on, and her answers came back through the microphone as "what they said"
+	lines := []Line{
+		{Said: "Hey, Sarina, I have...", Me: "Hey Zlothra, what's up? Are you ready to tackle whatever you need help with?"},
+		{Said: "I am completely out of the loop on that conversation, but I am always ready to help you tackle whatever is on your mind.", Me: "Hey Zlothra, no worries—sometimes conversations take a few loops to catch up! What’s on your mind?"},
+		{Said: "Hear your custom AI respond with such natural cadence and support is a seriously impressive technical achievement. I'm right here whenever you're ready to dive back into your projects or just keep chatting.", Me: "Your audio system is stable and ready—no hiccups detected."},
+		{Said: "I'm standing by whenever you want to return to our conversation or dive into your creative projects.", Me: "Your network is stable and connected."},
+		{Said: "This is actually called me Matt as Lothra is actually just my social media name.", Me: "Oh, I see! What's on your mind, Matt?"},
+		{Said: "my cat Pixel knocked my coffee off the desk again", Me: "Pixel is running gravity tests."},
+	}
+	kept, echoes := WithoutEchoes(lines)
+	if len(echoes) != 3 || len(kept) != 3 {
+		t.Fatalf("kept %d, echoes %d", len(kept), len(echoes))
+	}
+	for _, k := range kept {
+		if strings.Contains(k.Said, "standing by") || strings.Contains(k.Said, "custom AI") || strings.Contains(k.Said, "out of the loop") {
+			t.Errorf("kept an echo: %q", k.Said)
+		}
+	}
+	if !strings.Contains(kept[1].Said, "Matt") || !strings.Contains(kept[2].Said, "Pixel") {
+		t.Errorf("the owner's own words were dropped: %+v", kept)
+	}
+	// a proposal that quotes an echo line is not grounded once the echoes are gone
+	if _, ok := grounded("always ready to help you tackle", kept); ok {
+		t.Error("an echo line grounded a quote")
+	}
+}
+
+func TestTidyDropsOldSmallTalkAndEchoesKeepsTheRest(t *testing.T) {
+	text := `# Talks 2026-09
+
+What we talked about when it was not about the computer.
+
+- 2026-09-01 08:00 | they said: Hey Sarina, just wanted to check and see how things were looking for you. | I said: Hey Zlothra, everything's looking good here! How can I assist you today?
+- 2026-09-01 08:01 | they said: Yeah, thank you too. | I said: You're welcome! Have a great day!
+- 2026-09-01 08:02 | they said: What time is it? | I said: It's 08:02 on Monday.
+- 2026-09-01 08:03 | they said: This is actually called me Matt as Lothra is actually just my social media name. | I said: Oh, I see! What's on your mind, Matt?
+- 2026-09-01 08:04 | they said: haha that was a good one | I said: I try.
+- 2026-09-01 08:05 | they said: I really like the new dock, keep it | I said: Noted.
+- 2026-09-01 08:06 | they said: I'm standing by whenever you want to return to our conversation. | I said: Your network is stable and connected.
+- 2026-09-01 08:07 | they said: I was thinking about picking up drawing but I'm honestly terrible at it, any thoughts on where to start | I said: Everyone starts somewhere.
+`
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.Local)
+	kept, dropped, why := Tidy(text, now, 30*24*time.Hour)
+	if len(dropped) != 4 {
+		t.Fatalf("dropped %d: %v", len(dropped), dropped)
+	}
+	joined := strings.Join(kept, "\n")
+	for _, must := range []string{"Matt", "haha", "really like the new dock", "picking up drawing", "# Talks 2026-09"} {
+		if !strings.Contains(joined, must) {
+			t.Errorf("lost %q", must)
+		}
+	}
+	for i, d := range dropped {
+		if strings.Contains(d, "standing by") && why[i] != "my own voice heard back" {
+			t.Errorf("echo reason: %s", why[i])
+		}
+	}
+	// nothing older than the limit: only the echo goes
+	_, dropped, _ = Tidy(text, time.Date(2026, 9, 2, 0, 0, 0, 0, time.Local), 30*24*time.Hour)
+	if len(dropped) != 1 || !strings.Contains(dropped[0], "standing by") {
+		t.Errorf("fresh small talk was dropped: %v", dropped)
+	}
+}

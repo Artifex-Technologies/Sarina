@@ -348,3 +348,57 @@ func computedSummary(r auditReport, held []heldEntry) string {
 	}
 	return b.String()
 }
+
+// SecurityHeadline is one line on where security stands, for the day's note: Heimdall's open findings counted in code (the kernel
+// that runs, packages with known holes, settings that could be safer, files held), or why Heimdall could not be asked.
+func SecurityHeadline(ctx context.Context) string {
+	base, err := heimdallBase()
+	if err != nil {
+		return "Heimdall is not set up here"
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/audit", nil)
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		return "Heimdall does not answer"
+	}
+	defer resp.Body.Close()
+	var r auditReport
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&r) != nil {
+		return "Heimdall's answer could not be read"
+	}
+	var parts []string
+	for _, k := range r.Kernels {
+		if k.Running {
+			if k.Count == 0 {
+				parts = append(parts, "running kernel has no known holes")
+			} else {
+				parts = append(parts, fmt.Sprintf("running kernel has %d known holes (update)", k.Count))
+			}
+		}
+	}
+	if n := len(r.Packages); n > 0 {
+		worst := ""
+		rank := map[string]int{"critical": 4, "high": 3, "medium": 2, "low": 1}
+		for _, p := range r.Packages {
+			if rank[strings.ToLower(p.Severity)] > rank[strings.ToLower(worst)] {
+				worst = strings.ToLower(p.Severity)
+			}
+		}
+		parts = append(parts, fmt.Sprintf("%d package(s) with known holes (worst %s)", n, worst))
+	} else {
+		parts = append(parts, "no packages with known holes")
+	}
+	if n := len(r.Hardening); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d setting(s) could be safer", n))
+	}
+	held := 0
+	for _, e := range fetchHeld(ctx, base) {
+		if e.Status == "held" {
+			held++
+		}
+	}
+	if held > 0 {
+		parts = append(parts, fmt.Sprintf("%d file(s) held", held))
+	}
+	return "Heimdall: " + strings.Join(parts, "; ")
+}

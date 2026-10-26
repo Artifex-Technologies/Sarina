@@ -25,8 +25,15 @@ var Folders = []struct{ Name, Purpose string }{
 	{"Projects", "one note per project: goal, state, where things are"},
 	{"Entities", "people, tools, machines and places, one note each"},
 	{"Reflections", "notes that pull several others together (the vault's own summaries)"},
-	{"Daily", "a short log of each day"},
-	{"Inbox", "unsorted: things to file later"},
+	{"Daily", "each day's note: the check-up's lines and the computer's status and numbers (sarina daily-report, sarina trends)"},
+	{"Inbox", "unsorted: files dropped here become linked notes under Sources/ (sarina vault-ingest)"},
+	{"Guides", "how this computer and its desktop work, read before a question about them (the owner or their tools write these)"},
+	{"Playbooks", "how she works through a kind of task (pentest, reverse engineering); hers to read, never to change"},
+	{"Study", "subjects she is learning, one note each, and a learning log"},
+	{"Talks", "the talk log, one file a month: what was said when it was not about the computer (what she learns about the owner comes from here)"},
+	{"Jokes", "the jokes she told and what was said just before, one file a month"},
+	{"Security", "Heimdall's new findings with her proposal for each, one note per review"},
+	{"Sources", "notes made from files dropped in the Inbox"},
 }
 
 // Note is one Markdown file.

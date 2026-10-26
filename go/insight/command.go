@@ -143,9 +143,20 @@ func reflectCommand(env *cli.Env, args []string) int {
 	if b, err := os.ReadFile(*statePath); err == nil {
 		_ = json.Unmarshal(b, &st)
 	}
-	lines := ReadTalks(v.Root, st.Last)
+	lines, echoes := WithoutEchoes(ReadTalks(v.Root, st.Last))
+	for _, e := range echoes {
+		// her own answer heard back through the microphone is not something the owner said
+		fmt.Fprintf(env.Stdout, "skipped (my own voice heard back): %q\n", e.Said)
+	}
 	if len(lines) == 0 {
 		fmt.Fprintln(env.Stdout, "nothing new to reflect on")
+		if len(echoes) > 0 {
+			st.Last = echoes[len(echoes)-1].When
+			if err := os.MkdirAll(filepath.Dir(*statePath), 0o700); err == nil {
+				b, _ := json.Marshal(st)
+				_ = os.WriteFile(*statePath, b, 0o600)
+			}
+		}
 		return 0
 	}
 	model := config.ModelFromEnv(env.Getenv)
@@ -192,6 +203,9 @@ func reflectCommand(env *cli.Env, args []string) int {
 		v.Commit("what I learned from our talks")
 	}
 	st.Last = lines[len(lines)-1].When
+	if len(echoes) > 0 && echoes[len(echoes)-1].When.After(st.Last) {
+		st.Last = echoes[len(echoes)-1].When
+	}
 	if err := os.MkdirAll(filepath.Dir(*statePath), 0o700); err == nil {
 		b, _ := json.Marshal(st)
 		_ = os.WriteFile(*statePath, b, 0o600)
