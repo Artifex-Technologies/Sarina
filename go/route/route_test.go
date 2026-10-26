@@ -1,6 +1,9 @@
 package route
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestPick(t *testing.T) {
 	if got := pick([]Score{{"performance", 0.80}, {"crashes", 0.78}, {"disk", 0.70}}); len(got) != 2 || got[0] != "performance" || got[1] != "crashes" {
@@ -14,5 +17,17 @@ func TestPick(t *testing.T) {
 	}
 	if got := pick([]Score{{"guides", 0.75}, {"chat", 0.74}}); len(got) != 1 || got[0] != "guides" {
 		t.Fatalf("%v", got)
+	}
+}
+
+func TestCacheFileNeverRelative(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("HOME", "")
+	if p := cacheFile("m"); !filepath.IsAbs(p) {
+		t.Fatalf("relative cache path %q", p)
+	}
+	t.Setenv("XDG_STATE_HOME", "/tmp/x")
+	if p := cacheFile("m"); p != "/tmp/x/sarina/route-m.json" {
+		t.Fatal(p)
 	}
 }

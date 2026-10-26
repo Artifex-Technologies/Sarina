@@ -42,7 +42,11 @@ const (
 func cacheFile(model string) string {
 	base := os.Getenv("XDG_STATE_HOME")
 	if base == "" {
-		h, _ := os.UserHomeDir()
+		h, err := os.UserHomeDir()
+		if err != nil || h == "" {
+			// no home (a service, a test with HOME unset): the cache must never land in the working directory
+			return filepath.Join(os.TempDir(), "sarina-route", "route-"+model+".json")
+		}
 		base = filepath.Join(h, ".local", "state")
 	}
 	return filepath.Join(base, "sarina", "route-"+model+".json")

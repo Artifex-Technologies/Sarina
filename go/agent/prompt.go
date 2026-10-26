@@ -41,14 +41,19 @@ func BuildSystemPromptParts(opts PromptOptions, env envInfo, toolNames []string,
 		return []string{opts.Override}
 	}
 	var parts []string
-	if strings.TrimSpace(opts.System) != "" {
+	custom := strings.TrimSpace(opts.System) != ""
+	if custom {
 		parts = append(parts, opts.System)
 	} else {
 		parts = append(parts, defaultParts(toolNames, perms)...)
-		parts = append(parts, environmentSection(env))
 	}
 	if strings.TrimSpace(opts.Append) != "" {
 		parts = append(parts, opts.Append)
+	}
+	// What changes between sessions (the working directory and the scratchpad) goes last, so everything before it is the same text
+	// every time and the model server can reuse its cached prefix instead of reading the whole prompt again (seconds per first turn).
+	if !custom {
+		parts = append(parts, environmentSection(env))
 	}
 	return parts
 }

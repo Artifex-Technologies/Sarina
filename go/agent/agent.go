@@ -246,7 +246,6 @@ func (a *Agent) newSessionFor(prompt string) (*session.Session, error) {
 
 	var userCtx, sysCtx session.OrderedMap
 	userCtx.Set("currentDate", "Today's date is "+a.opts.Now().Format("2006-01-02")+".")
-	userCtx.Set("scratchpad", "Scratch space for temporary working files you create yourself (use it instead of /tmp): "+scratch+". Files the user asks for belong in the workspace, not here.")
 	if !rt.DisableClaudeMdDiscovery {
 		if g := discoverGuidance(rt.CWD, rt.AdditionalWorkingDirectories, a.opts.Home); g != "" {
 			userCtx.Set("claudeMd", g)
@@ -255,6 +254,8 @@ func (a *Agent) newSessionFor(prompt string) (*session.Session, error) {
 			userCtx.Set("curatedMemory", block)
 		}
 	}
+	// last, for the same reason as the environment section: this path is different in every session
+	userCtx.Set("scratchpad", "Scratch space for temporary working files you create yourself (use it instead of /tmp): "+scratch+". Files the user asks for belong in the workspace, not here.")
 	if gs := gitSnapshot(rt.CWD); gs != "" {
 		sysCtx.Set("gitStatus", gs)
 	}
@@ -544,6 +545,14 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = inventedHistoryText(h)
 				} else if defaultOutputForOneApp(answer, prompt) {
 					text = oneAppSilentText
+				} else if id := ungroundedIdentifier(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); id != "" {
+					text = ungroundedIdentifierText(id)
+				} else if f := checkedUnseenFile(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); f != "" {
+					text = checkedUnseenText(f)
+				} else if toolErrorIgnored(answer, sess.Messages[min(msgStart, len(sess.Messages)):]) {
+					text = toolErrorIgnoredText
+				} else if why := codeWorksUnverified(answer, hist); why != "" {
+					text = codeWorksText(why)
 				}
 				if text != "" {
 					claimChecked = true

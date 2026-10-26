@@ -554,6 +554,28 @@ func TestPromptOverrides(t *testing.T) {
 	}
 }
 
+// The prompt's static text must come before anything that differs between sessions: the model server reuses a cached prefix only
+// up to the first difference, and the working directory and scratchpad path differ every time.
+func TestPerSessionPromptPartsComeLast(t *testing.T) {
+	env := envInfo{CWD: "/tmp/work", Scratchpad: "/tmp/scratch/abc123", Model: "m"}
+	parts := BuildSystemPromptParts(PromptOptions{Append: "tail"}, env, []string{"read_file"}, perms())
+	if len(parts) < 3 {
+		t.Fatalf("want the default parts, the appendix and the environment: %d", len(parts))
+	}
+	last := parts[len(parts)-1]
+	if !strings.Contains(last, "/tmp/scratch/abc123") || !strings.Contains(last, "/tmp/work") {
+		t.Fatalf("the environment section is not last: %q", last)
+	}
+	for _, p := range parts[:len(parts)-1] {
+		if strings.Contains(p, "/tmp/scratch/abc123") || strings.Contains(p, "/tmp/work") {
+			t.Fatalf("a per-session path appears before the last part: %q", p)
+		}
+	}
+	if parts[len(parts)-2] != "tail" {
+		t.Fatalf("the appendix should sit before the environment: %q", parts[len(parts)-2])
+	}
+}
+
 func TestGuidanceDiscoveryOrderAndDedup(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
