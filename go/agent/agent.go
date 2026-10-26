@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -451,6 +452,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 
 	maxTurns := rt.MaxTurns
 	histStart, claimChecked, msgStart, emptyRetries := len(sess.FileHistory), false, len(sess.Messages), 0
+	nudges := 0
 	for turn := 1; turn <= maxTurns; turn++ {
 		if ctx.Err() != nil {
 			return finish(StopInterrupted, "Interrupted before the model was called.", turn-1)
@@ -524,6 +526,14 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					"continuation_index": len(r.segments)})
 				continue
 			}
+			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns && announcedNotDone(answer) {
+				// not a wrong claim, an unfinished task: told to carry on, apart from the one claim check
+				nudges++
+				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: announcedText})
+				r.emit(event{"type": "continue_nudge", "turn_index": turn})
+				r.segments = nil
+				continue
+			}
 			if answer := strings.Join(r.segments, ""); !claimChecked && turn < maxTurns {
 				hist := sess.FileHistory[min(histStart, len(sess.FileHistory)):]
 				text := ""
@@ -531,14 +541,25 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = toolWorkText
 				} else if what := suggestsSecurityOff(answer); what != "" {
 					text = securityOffText(what)
+					// the work not done comes before the quote checks: her proposed fix is "quoted" nowhere in the tools, and that
+					// send-back (the only one) told her to drop it instead of making it (eval code-fix-failing-test, 2026-10-26)
+				} else if fixDescribedNotMade(prompt, answer, slices.Contains(a.baseToolNames(), "edit_file") || slices.Contains(a.baseToolNames(), "write_file"), hist) {
+					text = fixDescribedText
+				} else if f := deniedReadable(answer, prompt, rt.CWD, sess.Messages[min(msgStart, len(sess.Messages)):], slices.Contains(a.baseToolNames(), "read_file")); f != "" {
+					text = deniedReadableText(f)
 				} else if f := taskInsteadOfFile(prompt, rt.CWD, sess.Messages[min(msgStart, len(sess.Messages)):], hist); f != "" {
 					text = taskInsteadOfFileText(f)
 				} else if f := unbackedFileClaim(answer, hist); f != "" {
 					text = claimCheckText(f)
 				} else if f := unreportedChange(answer, hist); f != "" {
 					text = unreportedText(f)
+					// before the quote check: a made-up function outweighs one made-up word in it, and only one send-back is made
+				} else if l, omitted := inventedCode(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); l != "" {
+					text = inventedCodeText(l, omitted)
 				} else if q := ungroundedQuote(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); q != "" {
 					text = ungroundedText(q)
+				} else if decompileClaimed(answer, sess.Messages[min(msgStart, len(sess.Messages)):]) {
+					text = decompileClaimedText
 				} else if c := unsourcedCommand(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); c != "" {
 					text = unsourcedText(c)
 				} else if h := inventedHistory(answer, sess.Messages, msgStart); h != "" {
@@ -746,8 +767,25 @@ func (a *Agent) callModel(ctx context.Context, r *run, turn, preserve int) (*llm
 		streamIdx = -1
 		var on func(llm.StreamEvent)
 		if req.Stream {
+			red := newStreamRedactor(r.sess.Messages)
 			on = func(e llm.StreamEvent) {
-				r.emit(streamEventDict(e))
+				if red != nil {
+					// what is streamed out has the task's secrets hidden as it goes; the stored message keeps the raw text
+					if e.Type == "content_delta" {
+						out := e
+						out.Delta = red.push(e.Delta)
+						if out.Delta != "" {
+							r.emit(streamEventDict(out))
+						}
+					} else {
+						if rest := red.flush(); rest != "" {
+							r.emit(streamEventDict(llm.StreamEvent{Type: "content_delta", Delta: rest}))
+						}
+						r.emit(streamEventDict(e))
+					}
+				} else {
+					r.emit(streamEventDict(e))
+				}
 				switch e.Type {
 				case "message_start":
 					streamIdx = r.sess.Append(session.Message{Role: "assistant", MessageID: r.sess.NextMessageID("assistant"),

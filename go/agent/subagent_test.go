@@ -207,7 +207,7 @@ func TestChildCannotStartAnotherAgent(t *testing.T) {
 func TestUnknownProfileIsAnErrorNotAFallback(t *testing.T) {
 	f := newFakeServer(t,
 		reply("", "tool_calls", use(1, 1), tcall{"c1", "agent", `{"profile":"general-purpose","prompt":"x"}`}),
-		reply("ok", "stop", use(1, 1)),
+		reply("ok: that profile is unknown, so the agent could not run", "stop", use(1, 1)),
 	)
 	a := newTestAgent(t, f, withSubagents)
 	res := mustRun(t, a, "go")
@@ -239,7 +239,7 @@ func TestPolicyDeniesTheAgentToolAndFiltersTheChild(t *testing.T) {
 	}})
 	f := newFakeServer(t,
 		reply("", "tool_calls", use(1, 1), callAgent("c1", "explorer", "x")),
-		reply("ok", "stop", use(1, 1)),
+		reply("ok: the agent tool was denied here", "stop", use(1, 1)),
 	)
 	a := newTestAgent(t, f, withSubagents, func(o *Options) { o.Tools.Deny = pol.Denied })
 	res := mustRun(t, a, "go")

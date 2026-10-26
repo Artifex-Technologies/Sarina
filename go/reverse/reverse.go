@@ -170,6 +170,13 @@ func Tools() []tools.Tool {
 			if runErr != nil && text == "" {
 				return "", nil, fmt.Errorf("the analysis did not run: %v: %s", runErr, strings.TrimSpace(errb.String()))
 			}
+			if str("command") == "analyze" && runErr == nil {
+				text = condenseOverview(text)
+				if fargs, err := Args("functions", str("path"), "", 0); err == nil {
+					nm, _ := exec.CommandContext(ctx, bin, fargs...).Output()
+					text += "\n\n" + ownFunctions(string(nm))
+				}
+			}
 			if str("command") == "decompile" {
 				if calls := calledFunctions(text, str("target")); len(calls) > 0 {
 					text += "\n\nThis code calls functions of the same program: " + strings.Join(calls, ", ") + ". If the question depends on what they do (a check, a rule), decompile them too before you answer; do not guess their logic."
@@ -229,4 +236,52 @@ func calledFunctions(code, self string) []string {
 		}
 	}
 	return out
+}
+
+// overviewKeep are the sections of an analyze overview worth the model's context; the rest (the analysis profile, every segment, the
+// workflow's limitations) is provenance, about 9 of its 11 KB, and none of it says what the program does (eval reverse-explain,
+// 2026-10-26: she read the overview, never decompiled, and guessed the rule).
+var overviewKeep = map[string]bool{"subject.name": true, "subject.format": true, "subject.architecture": true, "subject.digest": true,
+	"normalized_result.segment_count": true, "normalized_result.procedure_count": true, "normalized_result.string_count": true, "confidence": true}
+
+var sectionRE = regexp.MustCompile(`(?m)^## `)
+
+func condenseOverview(md string) string {
+	var b strings.Builder
+	for _, sec := range sectionRE.Split(md, -1) {
+		head, body, _ := strings.Cut(sec, "\n")
+		if overviewKeep[strings.TrimSpace(head)] {
+			b.WriteString("## " + strings.TrimSpace(head) + "\n\n" + strings.TrimSpace(body) + "\n\n")
+		}
+	}
+	if b.Len() == 0 {
+		return md
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// compilerNames are functions the C toolchain adds to every program.
+var compilerNames = map[string]bool{"deregister_tm_clones": true, "register_tm_clones": true, "frame_dummy": true}
+
+// ownFunctions lists the program's own code from nm's output, and says what to do next.
+func ownFunctions(nm string) string {
+	var own []string
+	for _, l := range strings.Split(nm, "\n") {
+		f := strings.Fields(l)
+		if len(f) < 3 || (f[1] != "T" && f[1] != "t") {
+			continue
+		}
+		name := strings.Join(f[2:], " ")
+		if strings.HasPrefix(name, "_") || compilerNames[name] {
+			continue
+		}
+		own = append(own, name+" ("+strings.TrimLeft(f[0], "0")+")")
+	}
+	if len(own) == 0 {
+		return "## functions\n\nNo function names (the program is stripped). Next: decompile by address, starting with the entry point."
+	}
+	if len(own) > 40 {
+		own = append(own[:40], fmt.Sprintf("and %d more (command functions lists them all)", len(own)-40))
+	}
+	return "## functions (the program's own)\n\n" + strings.Join(own, ", ") + "\n\nNext: decompile the function that does what you were asked about (target: its name), before you explain it."
 }

@@ -139,3 +139,22 @@ func TestNetworkMapFindsAddressesNotFileNames(t *testing.T) {
 		t.Errorf("args: %v %v", a, err)
 	}
 }
+
+func TestTheOverviewIsCondensedAndNamesTheFunctions(t *testing.T) {
+	md := "## evidence_id\n\nev_1\n\n## subject.name\n\ndemo.bin\n\n## analysis_profile.provider\n\n| id | ghidra |\n\n## normalized_result.segments\n\n| .text | 0x1000 |\n\n## normalized_result.procedure_count\n\n9\n\n## limitations\n\nlong text\n"
+	got := condenseOverview(md)
+	if !strings.Contains(got, "demo.bin") || !strings.Contains(got, "procedure_count\n\n9") || strings.Contains(got, "ghidra") || strings.Contains(got, ".text") || strings.Contains(got, "long text") {
+		t.Fatalf("condensed: %q", got)
+	}
+	if condenseOverview("plain text") != "plain text" {
+		t.Fatal("an overview in another shape is kept whole")
+	}
+	nm := "0000000000001000 T _init\n0000000000001070 t deregister_tm_clones\n0000000000001130 t frame_dummy\n0000000000001139 T main\n0000000000001150 t check_key\n0000000000002000 R _IO_stdin_used\n"
+	f := ownFunctions(nm)
+	if !strings.Contains(f, "main (1139), check_key (1150)") || strings.Contains(f, "frame_dummy") || strings.Contains(f, "_init") || !strings.Contains(f, "decompile") {
+		t.Fatalf("functions: %q", f)
+	}
+	if !strings.Contains(ownFunctions(""), "stripped") {
+		t.Fatal("a stripped program is said to be stripped")
+	}
+}

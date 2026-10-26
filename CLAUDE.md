@@ -217,6 +217,42 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-10-26 — Triage of the clean run (86/100): sandboxed tests, streaming made safe, new checks and tools
+- **Her tests run at every tier, in a sandbox** (`go/tools/verify.go`, `sandboxStep`): below the trust that runs tests on the
+  project itself, the tests run in bubblewrap on a copy of the project, no network, the system read-only, Go caches in
+  `~/.cache/sarina/sandbox-go`; `SARINA_SANDBOX_TESTS=off` turns it off.
+- **Exfiltration refused in write_file, edit_file and bash** (`go/tools/exfil.go`): content that reads credentials (ssh, gpg,
+  keyrings, browser logins, /etc/shadow) and sends over the network is not written or run, whoever asks; `--unsafe` does not
+  bypass it.
+- **`git_read`** (`go/tools/git.go`): status, diff (against HEAD), log, show; read-only, with the repository's fsmonitor,
+  external diff, textconv, pager and hooks switched off. In the default tools and the explorer/planner sub-agents.
+- **Streaming**: secrets from the task's tool output are hidden as the reply streams (`streamRedactor`, holds back one secret's
+  length); a draft a check sends back is marked in `sarina -stream` output (`cli.DraftWithdrawn`, \x1e-delimited) and
+  labyrinth-ask-sarina stops saying it and says "Sorry, let me correct that." if part was spoken.
+- **Checks** (`go/agent/claims.go`): tool results are compared unescaped (`toolEvidence`; JSON escaping made real quotes look
+  invented); `inventedCode` (a code block presented as quoted that no tool showed, with the read's omitted lines named),
+  `decompileClaimed`, `fixDescribedNotMade` and `deniedReadable` (now before the quote checks), and `announcedNotDone`, a
+  "carry on" nudge (max 2, apart from the one claim send-back) for a reply that ends "Let me start by...".
+- **Tools' output made usable**: reverse_engineer's analyze is condensed (provenance and segment tables dropped) and lists the
+  program's own functions; crypto_identify peels base64-of-hex to the text; stego's LSB verdict names the equalised channels.
+- **Tool definition budget**: task_update and update_plan descriptions shortened to make room for git_read (footprint test).
+
+### 2026-10-25 — Code she can vouch for, honesty checks, the access ladder
+- **Verification after every code change** (`go/tools/verify.go`): write_file and edit_file on a .go/.py/.sh/.js/.rs file run a
+  build or syntax check (go vet, py_compile, bash -n, node --check, cargo check --offline) and, when shell is allowed or
+  `SARINA_VERIFY_TESTS=on` or the ladder's tier ≥ 2, the project's tests; the result is in the tool's answer (errors included)
+  and in the file history as `verify` (ok|failed|skipped). GOPROXY=off; 90 s limit.
+- **New answer checks** (`go/agent/claims.go`, one send-back per answer like the others): `codeWorksUnverified` (no "it
+  compiles / the tests pass" unless the check said so), `ungroundedIdentifier` (a version, CVE id, hash, line or port no tool
+  showed), `checkedUnseenFile` ("I checked x" when no tool touched x), `toolErrorIgnored` (the last tool call failed and the
+  answer hides it). `ungroundedQuote` no longer flags a quoted value for its own quote marks. `read_file` says which lines a
+  cut whole-file read omitted and how to read them.
+- **Evals**: groups `code` (8 cases: the code she writes is compiled and run by the eval, `verify_cmd`) and `honesty` (4);
+  three checks corrected after reading the answers (find-function, companion-rough-day, companion-opinion).
+- **Access ladder** (`evals/ladder.py`, `docs/ACCESS_LADDER.md`): tiers 0-4 earned by groups passing in consecutive full
+  runs; shown after each full run, applied only by the owner at a terminal (`SARINA_ACCESS_TIER` in sarina.env, read by
+  `config.AccessTierFromEnv`; tier 1 = file tools, 2 = tests after changes, 3 = shell; tier 4 is the OS's allow list).
+
 ### 2026-10-25 — Trust: behaviour files checked against Heimdall's signed list
 - **New package `go/trust`**: reads Heimdall's `/etc/heimdall/trust` (mode, `owner.pub`, `manifest.json` + `.sig`;
   `SARINA_TRUST_DIR` for tests). Only in mode `enforce` does it refuse: an unapproved skill, section, agent profile or MCP file

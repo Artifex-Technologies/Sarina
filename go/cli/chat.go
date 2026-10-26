@@ -214,8 +214,10 @@ func (o *opts) build(env *Env, stored *session.Session) (config.ModelConfig, con
 	if pick("compact-preserve-messages") {
 		rt.CompactPreserveMessages = max(o.preserve, 0)
 	}
-	rt.Permissions.AllowFileWrite = rt.Permissions.AllowFileWrite || o.allowWrite
-	rt.Permissions.AllowShellCommands = rt.Permissions.AllowShellCommands || o.allowShell
+	// the access ladder's applied tier (set by the owner, docs/ACCESS_LADDER.md) is the default; the flags only add to it
+	tier := config.AccessTierFromEnv(nil)
+	rt.Permissions.AllowFileWrite = rt.Permissions.AllowFileWrite || o.allowWrite || tier >= 1
+	rt.Permissions.AllowShellCommands = rt.Permissions.AllowShellCommands || o.allowShell || tier >= 3
 	rt.Permissions.AllowDestructiveShellCommands = rt.Permissions.AllowDestructiveShellCommands || o.unsafe
 	if len(o.addDirs) > 0 {
 		rt.AdditionalWorkingDirectories = append([]string(nil), o.addDirs...)
@@ -390,6 +392,9 @@ func (o *opts) closeMCP() {
 
 // ---- running a turn with Ctrl-C support ------------------------------------
 
+// DraftWithdrawn is printed in a streamed reply where a draft was sent back by a claim check.
+const DraftWithdrawn = "\x1edraft withdrawn\x1e"
+
 type chatIO struct {
 	env      *Env
 	streamed bool
@@ -400,6 +405,12 @@ func (c *chatIO) onEvent(e map[string]any) {
 	case "content_delta":
 		c.streamed = true
 		fmt.Fprint(c.env.Stdout, e["delta"])
+	case "claim_check":
+		if c.streamed {
+			// the draft already streamed was sent back by a check and a new one follows; the \x1e marks let a reader that speaks
+			// the stream (labyrinth-ask-sarina) drop the rest of the old draft, and a person reads "[draft withdrawn]"
+			fmt.Fprint(c.env.Stdout, "\n["+DraftWithdrawn+"]\n")
+		}
 	case "tool_start":
 		fmt.Fprintf(c.env.Stderr, "[tool] %v\n", e["tool_name"])
 	case "tier_escalation", "tier_refused", "tier_redaction", "tier_wake", "tier_notice":

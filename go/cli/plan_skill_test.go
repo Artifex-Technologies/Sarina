@@ -228,7 +228,7 @@ func TestSkillRunAndList(t *testing.T) {
 func TestModelCanCallOnlyModelInvocableSkills(t *testing.T) {
 	b := newScripted(t,
 		callsReply(call{"c1", "skill", `{"name":"open","arguments":"X"}`}, call{"c2", "skill", `{"name":"private"}`}),
-		textReply("done"))
+		textReply("done; the private skill could not be called")) // the failed call is named: the answer check wants that
 	h := newHarness(t, strings.NewReader(""))
 	h.skill(t, "open.md", "---\ndescription: open\nmodel_invocable: true\nallowed_tools: [read_file]\n---\nDo X: $ARGUMENTS")
 	h.skill(t, "private.md", "---\ndescription: private\n---\nPRIVATE-STEPS")

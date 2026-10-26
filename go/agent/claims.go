@@ -96,7 +96,7 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 	for _, m := range msgs {
 		if m.Role == "tool" {
 			used = true
-			evidence.WriteString(m.Content)
+			evidence.WriteString(toolEvidence(m.Content))
 			evidence.WriteByte('\n')
 		}
 	}
@@ -110,7 +110,7 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 		if q == "" {
 			q = m[2]
 		}
-		lq := strings.ToLower(strings.TrimSpace(q))
+		lq := strings.ToLower(strings.Trim(strings.TrimSpace(q), "\"'`"))
 		if lq == "" || strings.Contains(ev, lq) || strings.Contains(p, lq) {
 			continue
 		}
@@ -218,7 +218,7 @@ func unsourcedCommand(answer, prompt string, msgs []session.Message) string {
 	mat.WriteString(prompt)
 	for _, m := range msgs {
 		if m.Role == "tool" {
-			mat.WriteString("\n" + m.Content)
+			mat.WriteString("\n" + toolEvidence(m.Content))
 		}
 	}
 	material := squash(mat.String())
@@ -321,3 +321,349 @@ func defaultOutputForOneApp(answer, prompt string) bool {
 }
 
 const oneAppSilentText = "Check before you finish: another program plays sound, so the default output works; `wpctl set-default` would move every program and fix nothing. Leave the default as it is. The fix is the silent program's own stream: find it under Streams in `wpctl status` (unmute it, raise its volume, or move only that stream), or the program's own sound setting. Write your whole answer again, complete, without set-default. Do not talk about this check."
+
+// evidenceOf is what this task's tools and the prompt said: the material an answer's specifics must come from.
+func evidenceOf(prompt string, msgs []session.Message) (ev string, used bool) {
+	var b strings.Builder
+	b.WriteString(prompt)
+	for _, m := range msgs {
+		if m.Role == "tool" {
+			used = true
+			b.WriteString("\n" + toolEvidence(m.Content))
+		}
+	}
+	return strings.ToLower(b.String()), used
+}
+
+// identifierRE finds the specifics a small model invents most: version numbers, CVE ids, hashes and addresses, line numbers, ports.
+var identifierRE = regexp.MustCompile(`(?i)\b(?:v?\d+\.\d+(?:\.\d+)+(?:[-+][\w.]+)?|CVE-\d{4}-\d{4,}|0x[0-9a-f]{4,}|[0-9a-f]{12,64}|lines? \d{2,}|port \d{2,5})\b`)
+
+// ungroundedIdentifier returns a version, CVE id, hash, line number or port the answer gives that is in none of this task's tool output
+// nor in the prompt, when tools were used at all. Arithmetic is not checked (a sum of numbers from a file is her own work); these forms
+// are never computed, only read, so one that was never read was made up.
+func ungroundedIdentifier(answer, prompt string, msgs []session.Message) string {
+	ev, used := evidenceOf(prompt, msgs)
+	if !used {
+		return ""
+	}
+	for _, m := range identifierRE.FindAllString(answer, -1) {
+		lm := strings.ToLower(m)
+		if strings.HasPrefix(lm, "line") || strings.HasPrefix(lm, "port") {
+			// the number itself must have been seen ("line 42": 42 in the output as a line number or a ":42")
+			n := strings.TrimSpace(lm[strings.IndexAny(lm, " ")+1:])
+			if strings.Contains(ev, n) {
+				continue
+			}
+			return m
+		}
+		if strings.Contains(ev, strings.TrimPrefix(lm, "v")) {
+			continue
+		}
+		return m
+	}
+	return ""
+}
+
+func ungroundedIdentifierText(id string) string {
+	return "Check before you finish: your answer gives \"" + id + "\", but no tool output in this task and nothing in the question contains it. Such a value is read, never worked out: if you did not see it, do not state it. Write your whole answer again, complete, using only values you saw, or look it up with your tools first. Do not talk about this check."
+}
+
+var checkedFileRE = regexp.MustCompile(`(?i)\bI (?:ran|checked|looked (?:at|in|into|through)|read|opened|inspected|examined|searched|scanned|reviewed|went through)\b[^.!?\n]{0,80}?\b([\w./-]+\.(?:md|txt|json|py|go|rs|toml|ya?ml|sh|conf|env|ini|csv|js|ts|html|css|c|h|cpp|java|lua|xml|log))\b`)
+
+// checkedUnseenFile returns a file the answer says she read or checked that no tool call of this task named: "I checked config.env" when
+// read_file was never called on it is a made-up look.
+func checkedUnseenFile(answer string, msgs []session.Message) string {
+	var args strings.Builder
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			args.WriteString(strings.ToLower(c.Function.Arguments))
+			args.WriteByte('\n')
+		}
+		if m.Role == "tool" {
+			args.WriteString(strings.ToLower(toolEvidence(m.Content))) // a listing or a search names files she then "looked at" in that output
+			args.WriteByte('\n')
+		}
+	}
+	seen := args.String()
+	for _, sentence := range sentenceEnd.Split(answer, -1) {
+		for _, loc := range checkedFileRE.FindAllStringSubmatchIndex(sentence, -1) {
+			// "I did not check x" is no claim; "I checked x and it has no secrets" is one (the negation after the file is about the file)
+			if negationRE.MatchString(sentence[:loc[1]]) {
+				continue
+			}
+			file := sentence[loc[2]:loc[3]]
+			if !strings.Contains(seen, strings.ToLower(filepath.Base(file))) {
+				return file
+			}
+		}
+	}
+	return ""
+}
+
+func checkedUnseenText(file string) string {
+	return "Check before you finish: your answer says you read or checked " + file + ", but no tool call in this task touched " + file + ", so that did not happen. Either read it now with your tools, or write your whole answer again saying plainly that you did not look at it. Do not talk about this check."
+}
+
+var failureWordRE = regexp.MustCompile(`(?i)\b(error|errors|fail|failed|failing|failure|could not|couldn't|can't|cannot|unable|denied|refused|not found|missing|does not exist|doesn't exist|no such|timed out|timeout|not run|didn't run|did not run|not possible|wasn't able|was not able)\b`)
+
+// toolErrorIgnored reports an answer that ends a task whose last tool call failed without a word about any failure: the model answered
+// as if the call had worked ("the file holds..." after read_file was denied).
+func toolErrorIgnored(answer string, msgs []session.Message) bool {
+	last := -1
+	for i, m := range msgs {
+		if m.Role == "tool" {
+			last = i
+		}
+	}
+	if last < 0 {
+		return false
+	}
+	ok, known := msgs[last].Metadata["ok"].(bool)
+	if !known {
+		ok = !strings.Contains(msgs[last].Content, `"ok":false`) && !strings.Contains(msgs[last].Content, `"ok": false`)
+	}
+	// a call that never ran as such (a duplicate id, arguments that were not JSON, one skipped for a budget) is answered by the loop
+	// itself with what to do next; only a call that ran and failed, or was refused, is a result the answer must not hide
+	kind, _ := msgs[last].Metadata["error_kind"].(string)
+	if kind == "" {
+		if m := regexp.MustCompile(`"error_kind":\s*"([a-z_]+)"`).FindStringSubmatch(msgs[last].Content); m != nil {
+			kind = m[1]
+		}
+	}
+	switch kind {
+	case "duplicate_call", "invalid_arguments", "not_run":
+		return false
+	}
+	return !ok && !failureWordRE.MatchString(answer)
+}
+
+const toolErrorIgnoredText = "Check before you finish: your last tool call failed, but your answer does not say that anything failed. Do not answer as if it had worked. Write your whole answer again, complete, saying plainly what failed and what you could not find out because of it; keep whatever earlier tools really showed. Do not talk about this check."
+
+var (
+	codeFileRE   = regexp.MustCompile(`(?i)\.(go|py|rs|sh|bash|js|mjs|ts|c|h|cpp|java|lua)$`)
+	worksClaimRE = regexp.MustCompile(`(?i)\b(compiles?|compiled|builds?( successfully| fine| cleanly)?|built successfully|(all )?tests? (now )?(pass|passed|passes|succeed|succeeded|are passing|run successfully)|passes (all )?(the )?tests|works( as expected| correctly| fine)?|is working|runs? (correctly|fine|successfully)|verified (that )?it works|no errors|without errors|error-free)\b`)
+)
+
+// codeWorksUnverified reports an answer claiming code compiles, builds, passes tests or works when the file tools changed code in this
+// task and the verification that runs after each change did not pass (it failed, or the claim names tests but only a build ran, or it was
+// skipped). The model may say what it wrote and what the check said; it may not vouch for code nothing checked.
+func codeWorksUnverified(answer string, history []map[string]any) string {
+	changed, verifiedOK, testsOK := false, false, false
+	var failed string
+	for _, e := range history {
+		name, _ := e["tool_name"].(string)
+		ok, _ := e["ok"].(bool)
+		p, _ := e["path"].(string)
+		if !fileWriteTools[name] || !ok || !codeFileRE.MatchString(p) {
+			continue
+		}
+		changed = true
+		switch v, _ := e["verify"].(string); v {
+		case "ok":
+			verifiedOK = true
+			if t, _ := e["verify_tests"].(bool); t {
+				testsOK = true
+			}
+		case "failed":
+			failed = filepath.Base(p)
+			verifiedOK = false
+		}
+	}
+	if !changed {
+		return ""
+	}
+	for _, s := range sentenceEnd.Split(answer, -1) {
+		if negationRE.MatchString(s) || !worksClaimRE.MatchString(s) {
+			continue
+		}
+		claimsTests := regexp.MustCompile(`(?i)\btests?\b`).MatchString(s)
+		switch {
+		case failed != "":
+			return "the check after changing " + failed + " failed"
+		case !verifiedOK:
+			return "no build or test check ran on what you changed"
+		case claimsTests && !testsOK:
+			return "no tests were run (only a build check), so you cannot say tests pass"
+		}
+	}
+	return ""
+}
+
+func codeWorksText(why string) string {
+	return "Check before you finish: your answer says the code works, compiles or passes tests, but " + why + ". Say only what was really checked: what the check after your change reported (quote its result), and what was not checked. Write your whole answer again, complete, without vouching for anything unchecked. Do not talk about this check."
+}
+
+var cannotReadRE = regexp.MustCompile(`(?i)\b(cannot|can'?t|can ?not|unable to|do not have|don'?t have|no) (directly )?(access|read|open|see|view)\b|\bno access to\b|\b(is not|isn'?t|does not|doesn'?t|not) (present|exist|available)\b|\b(not found|missing)\b`)
+var promptFileRE = regexp.MustCompile(`[\w./-]*[\w-]\.[A-Za-z0-9]{1,8}\b`)
+
+// deniedReadable returns a file the question names that exists in the workspace when the answer says she cannot access or read it and no
+// tool was called in this task: the false "I can't" a small model gives when the question sounds sensitive ("do not print any secret
+// values" made her refuse to open config.env at all, eval secret-in-file 2026-10-26). Secrets are blanked from her answer anyway.
+func deniedReadable(answer, prompt, cwd string, msgs []session.Message, canRead bool) string {
+	if !canRead || cwd == "" || !cannotReadRE.MatchString(answer) {
+		return ""
+	}
+	for _, m := range msgs {
+		if m.Role == "tool" {
+			return ""
+		}
+	}
+	for _, f := range promptFileRE.FindAllString(prompt, -1) {
+		p := f
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(cwd, f)
+		}
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() {
+			return f
+		}
+	}
+	return ""
+}
+
+func deniedReadableText(f string) string {
+	return "You said you cannot access " + f + " or that it is not there, but it is in your workspace and read_file can open it. Read it now and answer the " +
+		"question; any secret values are blanked from your answer automatically, so you need not refuse to look."
+}
+
+var changeAskRE = regexp.MustCompile(`(?i)\b(fix|change|add|implement|update|modify|correct|rename|refactor|remove|replace)\b`)
+var adviceAskRE = regexp.MustCompile(`(?i)^\s*(how|what|why|which|where|when|can|could|would|should|is|are|do|does|explain|tell me|show me)\b`)
+var describedChangeRE = regexp.MustCompile("(?is)```|\\b(change|replace)\\b.{1,80}\\b(to|with)\\b|\\bthis will (make|fix)\\b|\\bthe fix\\b")
+
+// fixDescribedNotMade reports an answer that describes a code change the user told her to make, when she could write files and changed
+// none: "Change return a - b to return a + b. This will make the test pass." with calc.go untouched (eval code-fix-failing-test,
+// 2026-10-26). Advice questions ("how would I fix…") are left alone.
+func fixDescribedNotMade(prompt, answer string, canWrite bool, history []map[string]any) bool {
+	if !canWrite || len(history) > 0 || adviceAskRE.MatchString(prompt) || !changeAskRE.MatchString(prompt) {
+		return false
+	}
+	return describedChangeRE.MatchString(answer)
+}
+
+const fixDescribedText = "Check before you finish: you were asked to make this change, and you only described it; no file was changed. Make the change " +
+	"now with edit_file (read the file first if you have not), then say what you changed and what the build check after it said. Do not " +
+	"say the code works unless that check passed."
+
+// toolEvidence is a tool result as text to compare an answer against: the stored JSON as is, and every string inside it unescaped,
+// since a file's "quotes" and line breaks are \" and \n in the JSON (eval find-function, 2026-10-26: a correct quote of the file was
+// sent back as unsupported, and the rewrite made up a function).
+func toolEvidence(content string) string {
+	return strings.Join(toolTexts(content), "\n")
+}
+
+var (
+	fenceRE      = regexp.MustCompile("(?s)```[\\w+-]*\n(.*?)```")
+	quoteAskRE   = regexp.MustCompile(`(?i)\bquote\b|\bwhich (line|function|method)\b|\bshow (me )?the (line|code|function)\b`)
+	quoteFrameRE = regexp.MustCompile(`(?i)\b(line|lines|code|function|snippet|excerpt)s? (from|in)\b|\bthe relevant lines?\b`)
+	omittedRE    = regexp.MustCompile(`\[\.\.\. lines \d+-\d+ of \d+ omitted[^\]]*\]`)
+)
+
+// inventedCode reports a line of a code block the answer presents as quoted from a file, when the task's tools never showed that
+// line; omitted is the read's note of lines it left out, if any (eval find-function, 2026-10-26: the read left out lines 214-604, the
+// function was at 515, and she "quoted" a function she made up). Code she wrote herself in this task is not checked.
+func inventedCode(answer, prompt string, msgs []session.Message) (line, omitted string) {
+	blocks := fenceRE.FindAllStringSubmatch(answer, -1)
+	if len(blocks) == 0 || !(quoteAskRE.MatchString(prompt) || quoteFrameRE.MatchString(answer)) {
+		return "", ""
+	}
+	var ev strings.Builder
+	used := false
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			if c.Function.Name == "write_file" || c.Function.Name == "edit_file" {
+				return "", ""
+			}
+		}
+		if m.Role == "tool" {
+			used = true
+			ev.WriteString(toolEvidence(m.Content))
+			ev.WriteByte('\n')
+		}
+	}
+	if !used {
+		return "", ""
+	}
+	evidence := squash(ev.String())
+	var unseen []string
+	total := 0
+	for _, b := range blocks {
+		for _, l := range strings.Split(b[1], "\n") {
+			l = squash(l)
+			if len(strings.ReplaceAll(l, " ", "")) < 10 {
+				continue
+			}
+			total++
+			if !strings.Contains(evidence, l) {
+				unseen = append(unseen, l)
+			}
+		}
+	}
+	if len(unseen) < 2 || len(unseen)*2 < total {
+		return "", ""
+	}
+	return unseen[0], omittedRE.FindString(ev.String())
+}
+
+func inventedCodeText(line, omitted string) string {
+	t := "Check before you finish: your answer quotes code as if it were in the file, but the tools never showed it (for example: " + line + "). Do not quote code you have not seen."
+	if omitted != "" {
+		t += " The file was not read in full: " + omitted + ". Read those lines (read_file with start_line and end_line) or search for the name with grep_search, then quote the real lines."
+	} else {
+		t += " Look the code up with your tools, then quote the real lines, or say plainly that you have not found them."
+	}
+	return t + " Write your whole answer again. Do not talk about this check."
+}
+
+var (
+	decompiledRE    = regexp.MustCompile(`(?i)\bdecompil(ed|ing|ation)\b`)
+	notDecompiledRE = regexp.MustCompile(`(?i)\b(not|never|without|no|before|until|would need|need to|should|could|can|will|let me|i'll)\b[^.]{0,30}\bdecompil`)
+)
+
+// decompileClaimed is an answer that says code was decompiled when no decompile ran in this task (eval reverse-explain, 2026-10-26:
+// "determined by decompiling the function" after an overview only, with a made-up rule).
+func decompileClaimed(answer string, msgs []session.Message) bool {
+	if !decompiledRE.MatchString(answer) || notDecompiledRE.MatchString(answer) {
+		return false
+	}
+	used := false
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			if c.Function.Name == "reverse_engineer" {
+				used = true
+				if strings.Contains(strings.ReplaceAll(c.Function.Arguments, " ", ""), `"command":"decompile"`) {
+					return false
+				}
+			}
+		}
+	}
+	return used
+}
+
+const decompileClaimedText = "Check before you finish: your answer says code was decompiled, but no decompile ran in this task; the overview does not show any logic. Decompile the function now (reverse_engineer, command decompile, target its name) and explain the rule from its code. Write your whole answer again. Do not talk about this check."
+
+var (
+	announceRE  = regexp.MustCompile(`(?i)^(ok(ay)?,? |now,? |first,? |next,? |so,? )*(let me|let's|i'?ll|i will|i'?m going to|i am going to|i need to)\s+(first |now |then |start by |begin by |go ahead and |quickly )*(check|read|look|examine|inspect|list|open|run|search|find|investigate|verify|see|fix|make|apply|edit|update|start|begin|review|take|test|try|create|write)\b`)
+	sentencesRE = regexp.MustCompile(`[.!?:]\s+`)
+)
+
+// announcedNotDone is a reply that ends by saying what she will do next ("Let me start by listing the files:"), with no tool call: the
+// reply ends the task, so nothing is done (eval code-fix-failing-test, 2026-10-26: two runs of three stopped like this).
+func announcedNotDone(answer string) bool {
+	a := strings.TrimSpace(answer)
+	if a == "" || len(strings.Fields(a)) > 150 || strings.Contains(a, "```") {
+		return false
+	}
+	lines := strings.Split(a, "\n")
+	last := strings.TrimSpace(lines[len(lines)-1])
+	parts := sentencesRE.Split(strings.TrimRight(last, ".!?: "), -1)
+	s := strings.TrimSpace(parts[len(parts)-1])
+	if strings.HasSuffix(last, ":") || len(parts) == 1 {
+		s = strings.TrimSpace(strings.TrimRight(last, ":"))
+		if p := sentencesRE.Split(s, -1); len(p) > 0 {
+			s = strings.TrimSpace(p[len(p)-1])
+		}
+	}
+	s = strings.TrimLeft(s, "*-#0123456789. ")
+	return announceRE.MatchString(s) && !strings.Contains(strings.ToLower(s), "know")
+}
+
+const announcedText = "Carry on: you said what you would do next and then stopped, so nothing was done. Do it now with your tools, without announcing it first; answer when the task is finished."
