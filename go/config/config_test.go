@@ -154,3 +154,11 @@ func TestContextConfigRoundTripAndOmission(t *testing.T) {
 		t.Fatal("junk must load as defaults")
 	}
 }
+
+func TestAccessTierFromEnv(t *testing.T) {
+	for in, want := range map[string]int{"": 0, "x": 0, "-1": 0, "1": 1, "2": 2, "3": 3, "4": 3, " 2 ": 2} {
+		if got := AccessTierFromEnv(func(string) string { return in }); got != want {
+			t.Errorf("%q: got %d want %d", in, got, want)
+		}
+	}
+}

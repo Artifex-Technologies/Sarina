@@ -156,6 +156,21 @@ func RequestMaxTokensFromEnv(getenv func(string) string) int {
 	return n
 }
 
+// AccessTierFromEnv reads SARINA_ACCESS_TIER, the access ladder's applied tier (evals/ladder.py, docs/ACCESS_LADDER.md): the owner
+// sets it after full eval runs earned it; nothing in the program raises it. 0 (unset) is read-only; 1 allows the file tools by
+// default; 2 also runs a project's tests after her changes; 3 allows shell commands by default. Higher values are read as 3: tier 4
+// is an allow list on the operating system, not a flag here.
+func AccessTierFromEnv(getenv func(string) string) int {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(getenv("SARINA_ACCESS_TIER")))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return min(n, 3)
+}
+
 // ContextWindowFromEnv reads SARINA_CONTEXT_WINDOW; zero means "not set".
 func ContextWindowFromEnv(getenv func(string) string) int {
 	if getenv == nil {
