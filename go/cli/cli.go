@@ -82,6 +82,15 @@ func Main(args []string, env Env) int {
 		}
 		return 0
 	}
+	// SARINA_CRYPTO=auto is decided here, for every command (chat, resume, skill run ...), from the words given: flags and paths
+	// are not words of the question
+	var words []string
+	for _, a := range args[1:] {
+		if !strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "/") {
+			words = append(words, a)
+		}
+	}
+	cryptoForPrompt(strings.Join(words, " "))
 	mu.Lock()
 	e, ok := commands[args[0]]
 	mu.Unlock()

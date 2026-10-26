@@ -476,7 +476,6 @@ func chatCommand(env *Env, args []string) int {
 		return exitUsage
 	}
 	o.autoReview = !o.noAutoReview
-	cryptoForPrompt(strings.Join(positional, " "))
 	a, err := o.agent(env, nil)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "sarina: %v\n", err)
@@ -514,7 +513,6 @@ func resumeCommand(env *Env, args []string) int {
 		return exitFailure
 	}
 	o.autoReview = !o.noAutoReview
-	cryptoForPrompt(strings.Join(rest[1:], " "))
 	a, err := o.agent(env, stored)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "sarina: %v\n", err)

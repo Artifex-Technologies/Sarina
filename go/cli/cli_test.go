@@ -448,3 +448,16 @@ func TestCryptoToolsOnlyForCryptoQuestions(t *testing.T) {
 		t.Fatal("an explicit off is kept")
 	}
 }
+
+func TestCryptoAutoIsDecidedForEveryCommand(t *testing.T) {
+	t.Setenv("SARINA_CRYPTO", "auto")
+	Main([]string{"version", "--json"}, Env{Stdout: io.Discard, Stderr: io.Discard})
+	if os.Getenv("SARINA_CRYPTO") != "off" {
+		t.Fatal("auto left undecided")
+	}
+	t.Setenv("SARINA_CRYPTO", "auto")
+	Main([]string{"version", "--cwd", "/tmp/sarina-evals/crypto", "is there a hidden message in clean.png?"}, Env{Stdout: io.Discard, Stderr: io.Discard})
+	if os.Getenv("SARINA_CRYPTO") != "on" {
+		t.Fatal("a crypto question did not turn the tools on")
+	}
+}
