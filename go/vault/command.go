@@ -3,6 +3,8 @@ package vault
 import (
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/Artifex-Technologies/Sarina/go/cli"
@@ -13,6 +15,7 @@ func init() {
 	cli.Register("vault-init", "make the starting folders and Home note in the vault (never overwrites): vault-init [--path DIR]", initCommand)
 	cli.Register("vault-lint", "broken links, orphans and notes without front matter: vault-lint [--path DIR]", lintCommand)
 	cli.Register("vault-search", "search the vault: vault-search [--path DIR] WORDS...", searchCommand)
+	cli.Register("note", "drop a quick note into the vault's Inbox (today's note, one line each, with the time): note [--path DIR] TEXT... (or the text on stdin)", noteCommand)
 }
 
 func open(env *cli.Env, name string, args []string) (*Vault, []string, int) {
@@ -93,5 +96,41 @@ func searchCommand(env *cli.Env, args []string) int {
 	if len(hits) == 0 {
 		fmt.Fprintln(env.Stdout, "no notes matched")
 	}
+	return 0
+}
+
+// noteCommand is the owner's quick drop: one line, with the time, into Inbox/Notes YYYY-MM-DD.md (made when the first note of the day
+// arrives). The owner wrote it, so it is kept as written (no memory gate, which is for what she stores); vault-ingest files the
+// day's note under Sources/ later, like anything else dropped in the Inbox.
+func noteCommand(env *cli.Env, args []string) int {
+	v, rest, rc := open(env, "note", args)
+	if rc >= 0 {
+		return rc
+	}
+	text := strings.TrimSpace(strings.Join(rest, " "))
+	if text == "" && env.Stdin != nil {
+		b, _ := io.ReadAll(io.LimitReader(env.Stdin, MaxNoteChars))
+		text = strings.TrimSpace(string(b))
+	}
+	if text == "" {
+		fmt.Fprintln(env.Stderr, "sarina note: nothing to note (give the text, or pipe it in)")
+		return 2
+	}
+	t := now()
+	name := "Inbox/Notes " + t.Format("2006-01-02")
+	line := "- " + t.Format("15:04") + " " + strings.ReplaceAll(text, "\n", "\n  ")
+	mode := Append
+	if _, abs, err := v.SafePath(name); err == nil {
+		if _, err := os.Stat(abs); err != nil {
+			mode = Create
+			line = "# Notes " + t.Format("2006-01-02") + "\n\n" + line
+		}
+	}
+	res, err := v.Write(nil, name, line, mode)
+	if err != nil {
+		fmt.Fprintln(env.Stderr, "sarina note:", err)
+		return 1
+	}
+	fmt.Fprintln(env.Stdout, "noted in "+res.Path)
 	return 0
 }
