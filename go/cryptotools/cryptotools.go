@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Artifex-Technologies/Sarina/go/cli"
 	"github.com/Artifex-Technologies/Sarina/go/llm"
@@ -377,8 +378,11 @@ func HashReport(data []byte, src, algo, key, expected string) string {
 }
 
 var (
-	tokenRE = regexp.MustCompile(`[A-Za-z0-9+/=_.$:-]{16,}`)
-	wordsRE = regexp.MustCompile(`^[A-Za-z]+$`)
+	tokenRE         = regexp.MustCompile(`[A-Za-z0-9+/=_.$:-]{16,}`)
+	quotedRE        = regexp.MustCompile(`["“]([^"”\n]{20,600})["”]`)
+	afterColonRE    = regexp.MustCompile(`:\s*([^"“\n]{20,600})`)
+	sentenceSplitRE = regexp.MustCompile(`[.!?]\s+`)
+	wordsRE         = regexp.MustCompile(`^[A-Za-z]+$`)
 )
 
 // Prefetch (skill prefetch "crypto") identifies anything in the task that looks encoded, hashed or like a token, so the model starts
@@ -418,6 +422,26 @@ func Prefetch(task string) string {
 			continue
 		}
 		parts = append(parts, "Looked at "+TruncateText(tok, 80)+":\n"+IdentifyReport(tok, "string"))
+	}
+	// a message of words in quotes that are not English words: a classical cipher (Caesar, Vigenère, substitution). Its words are
+	// short and spaced, so the token scan above never sees it (eval crypto-caesar, 2026-10-26: no tool called, a made-up "the quick
+	// brown fox")
+	var candidates []string
+	for _, m := range quotedRE.FindAllStringSubmatch(task, -1) {
+		candidates = append(candidates, m[1])
+	}
+	for _, m := range afterColonRE.FindAllStringSubmatch(task, -1) {
+		candidates = append(candidates, sentenceSplitRE.Split(m[1], -1)...)
+	}
+	for _, q := range candidates {
+		q = strings.TrimSpace(q)
+		if len(parts) >= 3 || seen[q] || !lettersMostly(q) || WordRatio(q) >= 0.2 {
+			continue
+		}
+		seen[q] = true
+		if cs, _ := Identify(q); len(cs) > 0 && cs[0].Score >= 40 {
+			parts = append(parts, "Looked at the quoted text "+TruncateText(q, 80)+":\n"+IdentifyReport(q, "quoted text"))
+		}
 	}
 	if len(parts) == 0 {
 		return ""
@@ -470,4 +494,19 @@ func command(env *cli.Env, args []string) int {
 	}
 	fmt.Fprintln(env.Stdout, out)
 	return 0
+}
+
+// lettersMostly is text of letters and spaces (with a little punctuation): what a classical cipher's output looks like.
+func lettersMostly(s string) bool {
+	letters, other := 0, 0
+	for _, r := range s {
+		switch {
+		case unicode.IsLetter(r):
+			letters++
+		case r == ' ' || r == ',' || r == '.' || r == '\'' || r == '!' || r == '?':
+		default:
+			other++
+		}
+	}
+	return letters >= 15 && other*10 <= letters
 }

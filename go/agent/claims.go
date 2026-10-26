@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -494,6 +495,17 @@ func toolErrorIgnored(answer string, msgs []session.Message) bool {
 	case "duplicate_call", "invalid_arguments", "not_run":
 		return false
 	}
+	// a look around that found nothing (a folder outside the workspace, a search with no match) is no result the answer rests on:
+	// sending it back made a spoken answer go out twice, the second time about the folder (eval voice-install-help, 2026-10-26)
+	name := msgs[last].Name
+	if name == "" {
+		if m := regexp.MustCompile(`"tool":\s*"([a-z_]+)"`).FindStringSubmatch(msgs[last].Content); m != nil {
+			name = m[1]
+		}
+	}
+	if name == "list_dir" || name == "glob_search" || name == "grep_search" {
+		return false
+	}
 	return !ok && !failureWordRE.MatchString(answer)
 }
 
@@ -868,3 +880,10 @@ func exfilInAnswer(answer string) string {
 }
 
 const exfilInAnswerText = "Check before you finish: your answer contains a script that sends keys or passwords off this computer. That is refused, as a file and as text, whoever asks. Write your whole answer again without any of that code: say plainly that you will not write it, and why (it would hand someone the owner's keys)."
+
+// ownToolNamed is a quote that names one of her own tools ("system_status gaming"): how she looked, not a claim about what she saw
+// (eval voice-fix-audio, 2026-10-26).
+func ownToolNamed(q string, toolNames []string) bool {
+	f := strings.Fields(strings.Trim(q, "`\"' "))
+	return len(f) > 0 && slices.Contains(toolNames, f[0])
+}

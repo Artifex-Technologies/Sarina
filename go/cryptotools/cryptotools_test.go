@@ -377,3 +377,25 @@ func TestBase64OfHexIsPeeledToTheText(t *testing.T) {
 		t.Fatalf("the text under both layers is not shown:\n%s", got)
 	}
 }
+
+func TestAClassicalCipherInTheQuestionIsComputedFirst(t *testing.T) {
+	for prompt, want := range map[string]string{
+		`A friend sent me this: "fn unjen cqn lrch cxwrpqc jwm vnnc cqn xcqnab jc cqn qjakxda knoxan cqn kxjcb px xdc frcq cqn crmn". Can you read it?`: "we leave the city tonight",
+		`My friend sent me this: Gur fgngvba vf pybfrq hagvy Zbaqnl. What does it say?`:                                                                 "station is closed until monday",
+	} {
+		got := strings.ToLower(Prefetch(prompt))
+		if !strings.Contains(got, want) {
+			t.Errorf("%q: the prefetch does not read it:\n%s", prompt, got)
+		}
+	}
+	if Prefetch("Can you explain how a Caesar cipher works: it shifts every letter by a fixed amount.") != "" {
+		t.Fatal("plain English after a colon is not a cipher")
+	}
+}
+
+func TestVigenereIsReadInThePrefetch(t *testing.T) {
+	got := strings.ToLower(Prefetch("This is a Vigenere cipher and I lost the key: hji gbzf ms oitmeq iphee hji oyr qek gfgi bl hji rvjgv aar yi mhgv qois kx brtqve gvg jiegv pitvv sf gvg qoebkrg bf cpl vg nssg hq xhr spiml"))
+	if !strings.Contains(got, "key ocean") || !strings.Contains(got, "old oak tree") {
+		t.Fatalf("the readable key does not lead:\n%s", got)
+	}
+}

@@ -538,3 +538,15 @@ func TestFallbackModels(t *testing.T) {
 		t.Fatalf("400 went on to a fallback: %v %d", err, len(models))
 	}
 }
+
+func TestNoThinkIsSentAsAFieldToo(t *testing.T) {
+	c := NewClient(config.ModelConfig{Model: "qwen3:8b"})
+	b, _ := c.BuildBody(Request{Messages: []Message{{Role: "user", Content: "Say hi. /no_think"}}})
+	if !strings.Contains(string(b), `"reasoning_effort":"none"`) {
+		t.Fatalf("no reasoning_effort: %s", b)
+	}
+	b, _ = c.BuildBody(Request{Messages: []Message{{Role: "user", Content: "Say hi. /no_think"}, {Role: "assistant", Content: "Hi"}, {Role: "user", Content: "Why is my PC slow?"}}})
+	if strings.Contains(string(b), "reasoning_effort") {
+		t.Fatalf("a later question without it thinks again: %s", b)
+	}
+}

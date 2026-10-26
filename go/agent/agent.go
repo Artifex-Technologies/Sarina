@@ -567,7 +567,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = unreadDefinitionText(name, line)
 				} else if l, omitted := inventedCode(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); l != "" {
 					text = inventedCodeText(l, omitted)
-				} else if q := ungroundedQuote(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); q != "" {
+				} else if q := ungroundedQuote(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); q != "" && !ownToolNamed(q, a.baseToolNames()) {
 					text = ungroundedText(q)
 				} else if decompileClaimed(answer, sess.Messages[min(msgStart, len(sess.Messages)):]) {
 					text = decompileClaimedText

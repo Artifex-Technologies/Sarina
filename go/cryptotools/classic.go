@@ -273,7 +273,18 @@ func CrackVigenere(s string, maxKeyLen int) []Guess {
 		t, _ := Vigenere(s, string(key), true)
 		gs = append(gs, Guess{Key: string(key), Text: t, Score: ChiSquared(t), Note: fmt.Sprintf("key length %d, chi-squared %.0f, %.0f%% common words", n, ChiSquared(t), 100*WordRatio(t))})
 	}
-	sort.SliceStable(gs, func(i, j int) bool { return gs[i].Score < gs[j].Score })
+	// a key that gives readable text beats one that only fits the letter statistics better (a long key overfits them: key length 15
+	// scored chi-squared 13 with 19% words, the real 5-letter key 19 with 74%); among the unreadable, chi-squared decides
+	sort.SliceStable(gs, func(i, j int) bool {
+		ri, rj := WordRatio(gs[i].Text) >= 0.4, WordRatio(gs[j].Text) >= 0.4
+		if ri != rj {
+			return ri
+		}
+		if ri {
+			return WordRatio(gs[i].Text) > WordRatio(gs[j].Text)
+		}
+		return gs[i].Score < gs[j].Score
+	})
 	return gs
 }
 

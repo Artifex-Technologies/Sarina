@@ -532,3 +532,20 @@ func TestShowingCodeWhenAskedToShowItIsFine(t *testing.T) {
 		t.Fatal("code asked for without a file name is an answer, not an unmade change")
 	}
 }
+
+func TestAFailedLookAroundIsNotAHiddenFailure(t *testing.T) {
+	msgs := []session.Message{{Role: "tool", Name: "list_dir", Content: `{"tool":"list_dir","ok":false,"content":"/usr/share/applications is outside the workspace"}`, Metadata: map[string]any{"ok": false}}}
+	if toolErrorIgnored("Open Agora, search for Spotify and click Install.", msgs) {
+		t.Fatal("a failed folder listing the answer does not rest on was sent back")
+	}
+	msgs[0].Name, msgs[0].Content = "crash_detail", `{"tool":"crash_detail","ok":false,"content":"no such program"}`
+	if !toolErrorIgnored("The crash was caused by a bad pointer.", msgs) {
+		t.Fatal("a failed tool the answer rests on must still be caught")
+	}
+}
+
+func TestHerOwnToolIsNotAQuote(t *testing.T) {
+	if !ownToolNamed("system_status gaming", []string{"read_file", "system_status"}) || ownToolNamed("retries_max", []string{"system_status"}) {
+		t.Fatal("tool names")
+	}
+}

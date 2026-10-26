@@ -44,6 +44,8 @@ type chatRequest struct {
 	ToolChoice     string         `json:"tool_choice,omitempty"`
 	ResponseFormat any            `json:"response_format,omitempty"`
 	MaxTokens      int            `json:"max_tokens,omitempty"`
+	// "none" turns a reasoning model's hidden thinking off for this request (Ollama's OpenAI endpoint reads it; others ignore it)
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
 // BuildBody builds the JSON request body. tools and tool_choice are omitted
@@ -62,6 +64,9 @@ func (c *Client) BuildBody(req Request) ([]byte, error) {
 	}
 	if req.Stream {
 		body.StreamOptions = &streamOptions{IncludeUsage: true}
+	}
+	if noThink(msgs) {
+		body.ReasoningEffort = "none"
 	}
 	if len(req.Tools) > 0 {
 		body.Tools = req.Tools
@@ -529,4 +534,16 @@ func (a *streamAcc) process(m map[string]any, emit func(StreamEvent)) error {
 		}
 	}
 	return nil
+}
+
+// noThink is a turn whose latest user message ends with Qwen3's "/no_think". Written in the text it does nothing on Ollama 0.40 (a
+// "Say hi. /no_think" still reasoned for 155 tokens; with reasoning_effort "none" the answer took 12), so the request says it too:
+// spoken chat turns were meant to skip the reasoning and never did (2026-10-26).
+func noThink(msgs []Message) bool {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == "user" {
+			return strings.HasSuffix(strings.TrimSpace(msgs[i].Content), "/no_think")
+		}
+	}
+	return false
 }
