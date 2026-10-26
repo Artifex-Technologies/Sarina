@@ -495,3 +495,16 @@ func TestASuggestedCommandIsNotAQuote(t *testing.T) {
 		t.Fatalf("a suggested command was taken for a quote: %q", q)
 	}
 }
+
+func TestAdviceIsNeitherAQuoteNorAToolComplaint(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "crash: parse_config line 6"}}
+	if q := ungroundedQuote("The settings file may be unreadable: fix it with `chmod 644 settings.conf`.", "why did it crash?", tool); q != "" {
+		t.Fatalf("a suggested command was taken for a quote: %q", q)
+	}
+	if claimsNoTools("Try Ctrl+Alt+S. If that fails, check if your keyboard's Windows key is disabled.", nil, []string{"read_file"}) {
+		t.Fatal("advice to check a keyboard is not a complaint about tools")
+	}
+	if !claimsNoTools("The system status tools are restricted, so I can't check real-time performance.", nil, []string{"system_status"}) {
+		t.Fatal("the real complaint must still be caught")
+	}
+}

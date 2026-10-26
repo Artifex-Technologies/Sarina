@@ -150,7 +150,9 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 			q = m[2]
 		}
 		// a program she suggests ("install `paru`, or use `yay`") is advice, not a quote (eval voice-install-help, 2026-10-26)
-		if m[1] != "" && (!strings.ContainsAny(q, " \t") || isCommand(q)) && suggestRE.MatchString(sentenceAt(answer, loc[0])) {
+		// a command line starting with a program this computer has is advice too, however the sentence puts it ("search with
+		// `pacman -Ss spotify`", "fix it with `chmod 644 settings.conf`"); a claim that it ran is claimsToolWork's business
+		if m[1] != "" && (isCommand(q) || (!strings.ContainsAny(q, " \t") && suggestRE.MatchString(sentenceAt(answer, loc[0])))) {
 			continue
 		}
 		lq := strings.ToLower(strings.Trim(strings.TrimSpace(q), "\"'`"))
@@ -800,7 +802,7 @@ func unreadDefinitionText(name string, line int) string {
 	return fmt.Sprintf("Check before you finish: your answer says what %s does, but you have seen only its first line (line %d, in the list of what the read left out). Read its lines now (read_file start_line %d, end_line %d), then write your whole answer again from the code you saw. Do not talk about this check.", name, line, line, line+40)
 }
 
-var cannotCheckRE = regexp.MustCompile(`(?i)\b(tools?|status|checks?|access)\b[^.\n]{0,40}\b(restricted|unavailable|not available|disabled|limited)\b|` +
+var cannotCheckRE = regexp.MustCompile(`(?i)\b(my|the|system|status) (tools?|access)\b[^.\n]{0,30}\b(are|is) (restricted|unavailable|not available|disabled|limited)\b|` +
 	`\b(can'?t|cannot|can not|unable to|not able to)\s+(directly\s+)?(check|look at|see|access|run|use|monitor)\b[^.\n]{0,30}\b(system|computer|machine|status|tools?|performance|logs?|processes)\b`)
 
 // claimsNoTools is an answer that says it cannot look (the tools are "restricted") when it has not tried a single tool and has some:
