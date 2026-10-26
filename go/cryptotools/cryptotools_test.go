@@ -371,7 +371,6 @@ func TestCaesarIsFoundInShortText(t *testing.T) {
 	}
 }
 
-
 func TestBase64OfHexIsPeeledToTheText(t *testing.T) {
 	got := IdentifyReport("NzQ2ODY1MjA2ZDY1NjU3NDY5NmU2NzIwNjk3MzIwNjE3NDIwNzQ2ODY1MjA2ZjZjNjQyMDZkNjk2YzZjMjA2MTc0MjA2ZTY5NmU2NQ==", "")
 	if !strings.Contains(got, "the meeting is at the old mill at nine") {
