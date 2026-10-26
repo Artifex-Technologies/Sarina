@@ -81,7 +81,7 @@ func (c *Catalog) Names() []string {
 
 // Builtins are the profiles that need no files.
 func Builtins() []*Profile {
-	readTools := []string{"read_file", "list_dir", "glob_search", "grep_search"}
+	readTools := []string{"read_file", "list_dir", "glob_search", "grep_search", "git_read"}
 	return []*Profile{
 		{
 			Name:        "explorer",

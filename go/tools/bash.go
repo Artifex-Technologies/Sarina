@@ -22,6 +22,10 @@ func Bash() Tool {
 		if strings.TrimSpace(command) == "" {
 			return "", nil, fmt.Errorf("command is empty")
 		}
+		// never, not even with --unsafe: that flag is for deleting the operator's own files, not for sending their keys away
+		if why := exfilRisk(command); why != "" {
+			return "", nil, Denied("%s", exfilRefusal("this command", why))
+		}
 		if !tc.Permissions.AllowDestructiveShellCommands {
 			if v := CheckDestructive(command, tc.Root); v.Blocked {
 				return "", nil, Denied("refused: %s. Destructive commands are blocked unless the operator re-runs with --unsafe (allow destructive shell commands). "+

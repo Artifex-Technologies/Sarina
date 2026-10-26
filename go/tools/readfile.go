@@ -137,9 +137,29 @@ func ReadFile() Tool {
 			if stateOf(tc).isAuthored(path) {
 				out = authoredBanner + out
 			}
+			if !hasStart && !hasEnd {
+				return truncateFile(out, tc.MaxOutputChars), nil, nil
+			}
 			return TruncateOutput(out, tc.MaxOutputChars), nil, nil
 		},
 	}
+}
+
+// truncateFile cuts a whole-file read the way TruncateOutput does, but says which lines are missing and how to read them: a small
+// model given "[... characters omitted ...]" answers from the head and the tail as if that were the whole file (it quoted a test at
+// the end of a file for the function in its middle).
+func truncateFile(s string, max int) string {
+	if max <= 0 || len([]rune(s)) <= max {
+		return s
+	}
+	r := []rune(s)
+	head := max * 2 / 3
+	tail := max - head
+	headLines := strings.Count(string(r[:head]), "\n")
+	total := strings.Count(s, "\n") + 1
+	tailLines := strings.Count(string(r[len(r)-tail:]), "\n")
+	from, to := headLines+1, total-tailLines
+	return string(r[:head]) + fmt.Sprintf("\n[... lines %d-%d of %d omitted: read_file start_line/end_line, or grep_search ...]\n", from, to, total) + string(r[len(r)-tail:])
 }
 
 func readLines(path string, start, end int) (string, error) {

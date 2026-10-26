@@ -96,7 +96,7 @@ func TestEveryToolDeclaresItsPermission(t *testing.T) {
 		"todo_write": PermWrite, "update_plan": PermWrite,
 		"bash": PermShell, "TaskStop": PermShell,
 		// read-only
-		"read_file": PermNone, "list_dir": PermNone, "glob_search": PermNone, "grep_search": PermNone, "TaskOutput": PermNone,
+		"read_file": PermNone, "list_dir": PermNone, "glob_search": PermNone, "grep_search": PermNone, "git_read": PermNone, "TaskOutput": PermNone,
 		"task_list": PermNone, "plan_get": PermNone,
 		// plan-mode switches (they request a state change; the agent owns the state)
 		"enter_plan_mode": PermNone, "exit_plan_mode": PermNone,

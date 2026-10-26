@@ -4,7 +4,7 @@ package tools
 // background processes and the to-do list. Each state-changing tool declares
 // the permission it needs; the registry enforces it before the handler runs.
 func DefaultTools() []Tool {
-	ts := []Tool{ReadFile(), ListDir(), WriteFile(), EditFile(), GlobSearch(), GrepSearch(), Bash(), TaskOutput(), TaskStop()}
+	ts := []Tool{ReadFile(), ListDir(), WriteFile(), EditFile(), GlobSearch(), GrepSearch(), GitRead(), Bash(), TaskOutput(), TaskStop()}
 	ts = append(ts, TodoTools()...)
 	return append(ts, PlanTools()...)
 }

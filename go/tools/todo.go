@@ -775,12 +775,9 @@ func taskUpdate() Tool {
 		Requires: PermWrite, Class: ClassMutating,
 		Spec: llm.ToolSpec{
 			Name:        "task_update",
-			Description: "Change the given fields of a to-do task; omitted fields stay as they are. " +
-				"Move it through its life with status: in_progress starts it (it becomes blocked instead, waiting on them, if a blocked_by task is unfinished); " +
-				"completed finishes it and releases tasks that were blocked only on it; cancelled drops it (reason is recorded); " +
-				"blocked marks it blocked (reason is recorded; a task blocked by a reason alone is only released by setting its status again). " +
-				"Edit dependencies with add_blocked_by / remove_blocked_by; blocked_by replaces the whole list. " +
-				"Cycles are refused; an unknown dependency id is reported, not blocking; a cancelled one keeps dependants waiting until removed or replaced.",
+			Description: "Change the given fields of a to-do task (the rest stay). status: in_progress starts it (blocked instead while a blocked_by task is unfinished); " +
+				"completed finishes it and releases tasks waiting only on it; cancelled and blocked record the reason. " +
+				"add_blocked_by / remove_blocked_by edit dependencies; blocked_by replaces the list; an unknown dependency id is reported, not blocking.",
 			Parameters: obj(map[string]any{
 				"task_id":           taskIDProp(),
 				"title":             prop("string", "", "minLength", 1),
@@ -791,7 +788,7 @@ func taskUpdate() Tool {
 				"owner":             prop("string", ""),
 				"reason":            prop("string", "Why it is blocked or cancelled."),
 				"blocks":            map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"blocked_by":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids that must finish first (replaces the list)."},
+				"blocked_by":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Ids that must finish first."},
 				"add_blocked_by":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 				"remove_blocked_by": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 				"metadata":          map[string]any{"type": "object"},
@@ -990,8 +987,7 @@ func updatePlan() Tool {
 			Name:        "update_plan",
 			Description: "Replace the plan with the given steps; mirrors them into the to-do list unless sync_tasks is false. " +
 				"The to-do list is merged by id and never emptied: tasks that are not steps stay (removed only with prune_tasks, and only if an earlier plan created them). " +
-				"clear=true empties the plan instead of giving items; it leaves the to-do list alone unless prune_tasks=true, which then removes the tasks plans created. " +
-				"With neither or both of items/clear it only returns usage.",
+				"clear=true empties the plan instead of giving items; it leaves the to-do list alone unless prune_tasks=true, which then removes the tasks plans created.",
 			Parameters: obj(map[string]any{
 				"items": map[string]any{
 					"type": "array",

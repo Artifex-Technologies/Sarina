@@ -11,7 +11,7 @@ import (
 // added a tool: decide whether it is read-only and add it to the table.
 func TestEveryToolHasAnExplicitPlanModeClass(t *testing.T) {
 	want := map[string]Class{
-		"read_file": ClassReadOnly, "list_dir": ClassReadOnly, "glob_search": ClassReadOnly, "grep_search": ClassReadOnly,
+		"read_file": ClassReadOnly, "list_dir": ClassReadOnly, "glob_search": ClassReadOnly, "grep_search": ClassReadOnly, "git_read": ClassReadOnly,
 		"TaskOutput": ClassReadOnly, "task_list": ClassReadOnly,
 		"plan_get":   ClassReadOnly,
 		"write_file": ClassMutating, "edit_file": ClassMutating, "bash": ClassMutating, "TaskStop": ClassMutating,

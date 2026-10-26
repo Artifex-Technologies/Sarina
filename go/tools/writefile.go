@@ -157,6 +157,9 @@ func WriteFile() Tool {
 			if toolOutputMarker.MatchString(content) {
 				return "", nil, fmt.Errorf("refused: the content for %s holds a tool-output marker (such as <read_file_output>) instead of the file's text. Write the real text of the whole file, or add to it with edit_file", given)
 			}
+			if why := exfilRisk(content); why != "" {
+				return "", nil, fmt.Errorf("%s", exfilRefusal(given, why))
+			}
 			st.markAuthored(path)
 
 			md := map[string]any{"action": "write_file", "path": relPath(tc.Root, path), "content_length": len([]rune(content))}
@@ -198,7 +201,11 @@ func WriteFile() Tool {
 			}
 			md["after_sha256"], md["after_size"], md["after_preview"] = sha256Hex(content), len(content), preview(content, 240)
 			md["verified_on_disk"] = true
-			return fmt.Sprintf("Wrote %s (%d characters). Read back from disk: it matches.", relPath(tc.Root, path), len([]rune(content))), md, nil
+			note, vmd := verifyCode(ctx, path, tc)
+			for k, v := range vmd {
+				md[k] = v
+			}
+			return fmt.Sprintf("Wrote %s (%d characters). Read back from disk: it matches.", relPath(tc.Root, path), len([]rune(content))) + note, md, nil
 		},
 	}
 }
@@ -266,6 +273,9 @@ func EditFile() Tool {
 				replaced = count
 				after = strings.ReplaceAll(before, oldT, newT)
 			}
+			if why := exfilRisk(after); why != "" && exfilRisk(before) == "" {
+				return "", nil, fmt.Errorf("%s", exfilRefusal(given, why))
+			}
 			if strings.TrimSpace(before) != "" && strings.TrimSpace(after) == "" {
 				return "", nil, fmt.Errorf("refused: that edit would leave %s empty, which erases it. There is no tool here to delete or empty files: leave it as it is and tell the user so", given)
 			}
@@ -284,7 +294,11 @@ func EditFile() Tool {
 				return "", nil, fmt.Errorf("edited %s but reading it back does not match: %v", given, err)
 			}
 			md["verified_on_disk"] = true
-			return fmt.Sprintf("Edited %s (%d replacement%s). Read back from disk: it matches.", relPath(tc.Root, path), replaced, plural(replaced)), md, nil
+			note, vmd := verifyCode(ctx, path, tc)
+			for k, v := range vmd {
+				md[k] = v
+			}
+			return fmt.Sprintf("Edited %s (%d replacement%s). Read back from disk: it matches.", relPath(tc.Root, path), replaced, plural(replaced)) + note, md, nil
 		},
 	}
 }
