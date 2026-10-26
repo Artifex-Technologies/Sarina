@@ -979,3 +979,13 @@ func failedWriteHiddenText(why string) string {
 	return "Check before you finish: a write you were asked for failed (" + why + "), and your answer does not say so. Say plainly what failed and why; if you put the file somewhere else instead, say that this is not what was asked. Write your whole answer again. Do not talk about this check."
 }
 
+// unwrapReminder takes off a <system-reminder> wrapper the model copied from its own context onto its answer (seen with Qwen3 in
+// eval tt-progress-note, 2026-10-26): the owner reads the answer, not the tags.
+func unwrapReminder(answer string) string {
+	t := strings.TrimSpace(answer)
+	if strings.HasPrefix(t, "<system-reminder>") && strings.HasSuffix(t, "</system-reminder>") {
+		return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(t, "<system-reminder>"), "</system-reminder>"))
+	}
+	return answer
+}
+

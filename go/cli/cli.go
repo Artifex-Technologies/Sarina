@@ -91,6 +91,7 @@ func Main(args []string, env Env) int {
 		}
 	}
 	cryptoForPrompt(strings.Join(words, " "))
+	mathForPrompt(strings.Join(words, " "))
 	mu.Lock()
 	e, ok := commands[args[0]]
 	mu.Unlock()

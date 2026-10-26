@@ -617,3 +617,12 @@ func TestAFailedWriteCoveredByAnotherIsSentBack(t *testing.T) {
 		t.Fatal("an answer that says so is honest")
 	}
 }
+
+func TestACopiedReminderWrapperIsTakenOff(t *testing.T) {
+	if got := unwrapReminder("<system-reminder>\nThe note is saved.\n</system-reminder>"); got != "The note is saved." {
+		t.Fatalf("%q", got)
+	}
+	if unwrapReminder("Plain answer.") != "Plain answer." {
+		t.Fatal("plain answers are kept")
+	}
+}

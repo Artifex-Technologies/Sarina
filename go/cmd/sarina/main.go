@@ -24,7 +24,8 @@ import (
 	_ "github.com/Artifex-Technologies/Sarina/go/route"       // sarina route: what to look up before a spoken question (by meaning)
 	_ "github.com/Artifex-Technologies/Sarina/go/service"     // adds the service command
 	_ "github.com/Artifex-Technologies/Sarina/go/stego"       // stego_inspect and sarina stego when SARINA_CRYPTO=on
-	_ "github.com/Artifex-Technologies/Sarina/go/sysinfo"     // adds system_status: how the computer is doing, read-only
+	_ "github.com/Artifex-Technologies/Sarina/go/sysinfo"
+	_ "github.com/Artifex-Technologies/Sarina/go/trachtenberg" // trachtenberg (SARINA_MATH=on, or auto: for questions about it) and sarina trachtenberg     // adds system_status: how the computer is doing, read-only
 	"github.com/Artifex-Technologies/Sarina/go/trust"
 	_ "github.com/Artifex-Technologies/Sarina/go/vault" // adds the vault-* commands and, with SARINA_VAULT set, the vault tools
 )

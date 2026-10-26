@@ -623,7 +623,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					continue
 				}
 			}
-			answer := strings.Join(r.segments, "")
+			answer := unwrapReminder(strings.Join(r.segments, ""))
 			if clean, changed := hideSecretsRead(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); changed {
 				answer = clean
 				for i := len(sess.Messages) - 1; i >= 0; i-- {

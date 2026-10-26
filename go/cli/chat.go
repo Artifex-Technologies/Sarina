@@ -674,6 +674,21 @@ var cryptoAskRE = regexp.MustCompile(`(?i)\b(base ?64|base ?32|hex(adecimal)?|ha
 	`encrypt\w*|decrypt\w*|encod\w*|decod\w*|crypto\w*|jwt|tokens?|certificate|x\.?509|pem|pgp|gpg|ssh key|public key|private key|` +
 	`steg\w*|hidden (message|data|text)|lsb|exif|metadata)\b|[A-Za-z0-9+]{24,}={0,2}|\b[0-9a-fA-F]{32,}\b`)
 
+// mathAskRE is a question for the Trachtenberg tool: the method by name, mental or speed arithmetic, or a multiplication.
+var mathAskRE = regexp.MustCompile(`(?i)\btrachtenberg\b|\b(mental|speed) (math|arithmetic|multiplication)\b|\bmultipl(y|ying|ication)\b|\b\d[\d,]*\s*(x|×|\*|times)\s*\d`)
+
+// mathForPrompt applies SARINA_MATH=auto the same way: the Trachtenberg tool only for questions about it.
+func mathForPrompt(prompt string) {
+	if os.Getenv("SARINA_MATH") != "auto" {
+		return
+	}
+	if mathAskRE.MatchString(prompt) {
+		os.Setenv("SARINA_MATH", "on")
+	} else {
+		os.Setenv("SARINA_MATH", "off")
+	}
+}
+
 // cryptoForPrompt applies SARINA_CRYPTO=auto: the crypto and stego tools (about 4,500 characters of definitions sent with every
 // request) are offered only when the question is about cryptography or hidden data. "on" and "off" are left as they are.
 func cryptoForPrompt(prompt string) {

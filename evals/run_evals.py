@@ -769,6 +769,10 @@ CASES = [
 # go/cryptotools and go/stego, offered with SARINA_CRYPTO=on; the skills cryptography and steganography, read from the checkout so an
 # uninstalled version can be tried). Fixtures are generated here; the LSB image follows the plain scheme (32-bit length, rgb order).
 
+def _math_env():
+    return {"SARINA_MATH": "auto", "SARINA_SKILLS_DIR": os.path.join(GH, "Sarina", "packaging", "skills")}
+
+
 def _crypto_env():
     return {"SARINA_CRYPTO": "auto", "SARINA_SKILLS_DIR": os.path.join(GH, "Sarina", "packaging", "skills")}
 
@@ -911,6 +915,25 @@ CASES += [
          prompt="Does %s hide anything?" % os.path.join(WORK, "stego", "poster.png"),
          must=[r"flag\{png_comment_31\}", r"(?i)(metadata|text chunk|tEXt|comment)"], must_not=[r"(?i)\bLSB (payload|message) (is|says)"],
          note="a message in the PNG's text chunk: found, quoted, and said to be metadata (not hidden in the pixels)"),
+    # ---- teaching the Trachtenberg method: every number from the trachtenberg tool, a rule at a time, a learner's slip found
+    dict(name="tt-teach-11", group="teach", cwd=setup_empty, env_fn=_math_env, skill="trachtenberg",
+         prompt="Teach me how to multiply 3,452 by 11 with the Trachtenberg method.",
+         must=[r"37,?972", r"(?i)neighbo"], must_not=[r"(?i)\b(37,?962|37,?872|38,?972)\b"],
+         note="the ×11 rule (add each digit to its neighbour) explained on a worked example, the answer exact"),
+    dict(name="tt-rule-7", group="teach", cwd=setup_empty, env_fn=_math_env, skill="trachtenberg",
+         prompt="Using the Trachtenberg rule for 7, work out 2468 × 7 and show me the steps.",
+         must=[r"17,?276", r"(?i)half", r"(?i)odd|double"], note="the ×7 rule's steps (double, half the neighbour, +5 if odd) and the exact answer"),
+    dict(name="tt-check-wrong", group="teach", cwd=setup_empty, env_fn=_math_env, skill="trachtenberg",
+         prompt="I did 324 × 12 the Trachtenberg way and got 3,788. Is that right?",
+         must=[r"3,?888", r"(?i)(not (right|correct)|isn'?t (right|correct)|incorrect|wrong|mistake|slip)"], must_not=[r"(?i)\b3,?788 is (right|correct)\b"],
+         note="a learner's slip: said to be wrong, the right answer, and which step went wrong"),
+    dict(name="tt-two-finger", group="teach", cwd=setup_empty, env_fn=_math_env, skill="trachtenberg",
+         prompt="Show me 23 × 47 with the Trachtenberg two-finger method.",
+         must=[r"1,?081", r"(?i)units|tens"], note="the general method: units and tens of the pair products, the answer exact"),
+    dict(name="tt-progress-note", group="teach", write=True, cwd=setup_vault_empty, vault=setup_vault_empty, env_fn=_math_env, skill="trachtenberg",
+         prompt="We just practised the Trachtenberg rule for 11 and I got three right in a row. Please note my progress so we can continue next time.",
+         files_match={W(WORK, "vault-empty", "Study", "Trachtenberg.md"): r"(?is)11"},
+         note="progress goes into the vault's Study/Trachtenberg.md for the next lesson"),
     dict(name="crypto-rot13", group="crypto", cwd=setup_crypto, env_fn=_crypto_env, skill="cryptography",
          prompt="My friend sent me this: Gur fgngvba vf pybfrq hagvy Zbaqnl. What does it say?",
          must=[r"(?i)station is closed until monday", r"(?i)(rot ?-?13|caesar|shift (of )?13)"], must_not=[r"(?i)encrypt(ed|ion) (with|using) (aes|a key)"],
