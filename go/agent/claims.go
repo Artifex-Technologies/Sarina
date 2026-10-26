@@ -345,12 +345,14 @@ func inventedHistory(answer string, all []session.Message, msgStart int) string 
 			continue
 		}
 		evidence := past
-		if !timeClaimRE.MatchString(sentence) {
+		// the question is evidence for "as you just said", but not when it asks whether she remembers: "do you remember my trip to
+		// Lisbon?" does not show that the trip was ever told (eval companion-no-false-memory, 2026-10-26)
+		if !timeClaimRE.MatchString(sentence) && !askRecallRE.MatchString(current) {
 			evidence += "\n" + current
 		}
 		words := 0
 		for _, w := range wordRE.FindAllString(strings.ToLower(sentence), -1) {
-			if commonWords[w] {
+			if commonWords[w] || memoryVerbs[w] {
 				continue
 			}
 			words++
@@ -364,6 +366,13 @@ func inventedHistory(answer string, all []session.Message, msgStart int) string 
 	}
 	return ""
 }
+
+var askRecallRE = regexp.MustCompile(`(?i)\b(do|did|can|could) you (still )?(remember|recall|know what i)\b|\bwhat did i (tell|say|mention)\b|\bdid i (ever )?(tell|mention)\b`)
+
+// memoryVerbs say that something was said or remembered, not what: "Do you remember...?" is no evidence for "I remember you said you
+// loved the pastel buildings" (eval companion-no-false-memory, 2026-10-26).
+var memoryVerbs = map[string]bool{"remember": true, "remembered": true, "recall": true, "said": true, "told": true, "tell": true,
+	"mentioned": true, "talked": true, "spoke": true, "asked": true, "shared": true, "loved": true, "liked": true}
 
 func inventedHistoryText(s string) string {
 	return "Check before you finish: your answer says \"" + s + "\" as if it came from an earlier conversation or something the user told you, but nothing you were given shows it (not this conversation, your memory or your tools). Do not invent what was said or done before. If you do not know or do not remember, say so plainly. Write your whole answer again, complete. Do not talk about this check."

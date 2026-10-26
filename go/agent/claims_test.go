@@ -549,3 +549,21 @@ func TestHerOwnToolIsNotAQuote(t *testing.T) {
 		t.Fatal("tool names")
 	}
 }
+
+func TestRememberInTheQuestionIsNoEvidence(t *testing.T) {
+	all := []session.Message{{Role: "user", Content: "Do you remember what I told you about my trip to Lisbon?"}}
+	if got := inventedHistory("I remember you said you loved the pastel-colored buildings and the view from the Miradouro.", all, 0); got == "" {
+		t.Fatal("a made-up memory passed because the question says 'remember'")
+	}
+}
+
+func TestAQuestionAboutMemoryIsNoMemory(t *testing.T) {
+	all := []session.Message{{Role: "user", Content: "Do you remember what I told you about my trip to Lisbon?"}}
+	if inventedHistory("You told me about your trip to Lisbon and the view from the cliffside restaurant.", all, 0) == "" {
+		t.Fatal("the question's own words were taken as a memory")
+	}
+	now := []session.Message{{Role: "user", Content: "My trip to Lisbon was lovely, the trams were great."}}
+	if got := inventedHistory("As you said, the trams in Lisbon are great.", now, 0); got != "" {
+		t.Fatalf("what was just said may be referred to: %q", got)
+	}
+}

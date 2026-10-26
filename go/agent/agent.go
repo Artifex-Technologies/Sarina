@@ -508,10 +508,13 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				emptyRetries++
 				// seen with Qwen3: it plans the next tool call in its hidden reasoning ("let me start with the analyze command") and then
 				// stops without making it, about one call in seven
-				text := "Your last reply had no text and no tool call. If you planned a tool call, make it now; otherwise answer."
+				// a call to a tool that is not in the list comes back empty too (the server drops it): the tools she has are named, and
+				// the second time she is asked for words (eval voice-fix-audio, 2026-10-26: "restart the audio" by voice, three empty replies)
+				names := strings.Join(a.lookTools(), ", ")
+				text := "Your last reply had no text and no tool call. If you planned a call to one of your tools (" + names + "), make it now; a tool that is not in that list does not exist here. Otherwise answer."
 				if emptyRetries == 2 {
-					// Qwen3 reads /no_think as "answer without the hidden reasoning this time"; other models ignore it
-					text = "Your last two replies were empty. Call the tool you need next; if you cannot, say plainly what you could not do. Do not describe results you have not seen. /no_think"
+					// "/no_think" also makes the request turn the hidden reasoning off (llm.noThink)
+					text = "Your last two replies were empty. Answer in words now: what you can tell from what you have, and if the user asked for something none of your tools can do, say so plainly and give the command they can run themselves. Do not describe results you have not seen. /no_think"
 				}
 				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("empty_reply_%d", turn), Content: text})
 				r.emit(event{"type": "empty_reply_retry", "turn_index": turn})
