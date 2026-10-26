@@ -135,6 +135,10 @@ had unloaded after 10 min idle; speech now starts after the first sentence. Roug
    recording" are the safeguards). Find a release signal that works in either order (a Hyprland Lua `input.keyboard.key` event
    handler for the S key-up, armed by the press, is the next thing to try — test WITH the owner; never ship a binding change
    untested; the last one broke Super+S).
+   Checked 2026-10-26: `hl.on("input.keyboard.key", fn)` does subscribe on this Hyprland (it returns a live subscription), but its
+   callback arguments are undocumented in `/usr/share/hypr/stubs/hl.meta.lua` and learning them needs a real key press. Do that WITH
+   the owner, and log only the argument TYPES and table field names, never values: a handler on every key is a keylogger otherwise.
+   Unsubscribe in the same session.
 
 ## Step 7 — The access ladder in use (needs the owner)
 
