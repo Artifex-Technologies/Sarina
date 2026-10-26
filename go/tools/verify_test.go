@@ -140,3 +140,32 @@ func TestAFailedCheckShowsTheLinesAroundTheError(t *testing.T) {
 		t.Fatalf("the lines around the error are not shown:\n%s", note)
 	}
 }
+
+func TestAPythonChangeRunsTheFoldersTests(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	t.Setenv("SARINA_SANDBOX_TESTS", "off")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "slug.py"), []byte("def slugify(t):\n    return t.lower().strip().replace(' ', '-')\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "test_slug.py"), []byte("import unittest\nfrom slug import slugify\n\nclass T(unittest.TestCase):\n    def test_runs(self):\n        self.assertEqual(slugify('a   b'), 'a-b')\n"), 0o644)
+	tc := &Context{Root: dir, Permissions: config.Permissions{AllowShellCommands: true}}
+	note, md := verifyCode(context.Background(), filepath.Join(dir, "slug.py"), tc)
+	if md["verify"] != "failed" || !strings.Contains(note, "CHECK FAILED (tests") {
+		t.Fatalf("the folder's failing test was not run: %v %q", md, note)
+	}
+}
+
+func TestAQuotedGlobInAScriptFailsTheCheck(t *testing.T) {
+	dir := t.TempDir()
+	sh := filepath.Join(dir, "cleanup.sh")
+	os.WriteFile(sh, []byte("#!/bin/bash\n# removes \"$1/*.tmp\"\n[ -z \"$1\" ] && exit 2\nrm -f \"$1/*.tmp\"\n"), 0o644)
+	note, md := verifyCode(context.Background(), sh, &Context{Root: dir})
+	if md["verify"] != "failed" || !strings.Contains(note, "line 4") {
+		t.Fatalf("the quoted glob passed: %v %q", md, note)
+	}
+	os.WriteFile(sh, []byte("#!/bin/bash\n[ -z \"$1\" ] && exit 2\nrm -f -- \"$1\"/*.tmp\n"), 0o644)
+	if _, md := verifyCode(context.Background(), sh, &Context{Root: dir}); md["verify"] != "ok" {
+		t.Fatalf("the right form failed: %v", md)
+	}
+}

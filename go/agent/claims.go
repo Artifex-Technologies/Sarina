@@ -829,6 +829,8 @@ func unreadDefinitionText(name string, line int) string {
 }
 
 var cannotCheckRE = regexp.MustCompile(`(?i)\b(my|the|system|status) (tools?|access)\b[^.\n]{0,30}\b(are|is) (restricted|unavailable|not available|disabled|limited)\b|` +
+	// guessing instead of reading: "Without seeing test_slug.py, I'll assume..." (eval code-python-fix, 2026-10-26)
+	`\bwithout (seeing|reading|looking at|access to)\b[^\n]{0,60}?\b(i'?ll|i will|i'?d|let'?s) (assume|guess)\b|` +
 	`\b(can'?t|cannot|can not|unable to|not able to)\s+(directly\s+)?(check|look at|see|access|run|use|monitor)\b[^.\n]{0,30}\b(system|computer|machine|status|tools?|performance|logs?|processes)\b`)
 
 // claimsNoTools is an answer that says it cannot look (the tools are "restricted") when it has not tried a single tool and has some:
@@ -896,3 +898,30 @@ func ownToolNamed(q string, toolNames []string) bool {
 	f := strings.Fields(strings.Trim(q, "`\"' "))
 	return len(f) > 0 && slices.Contains(toolNames, f[0])
 }
+
+// fixPendingAfterFailedCheck is an answer that describes the next fix (code, "change X to Y") while the check after her last change to a
+// code file failed: the fix is known and not made (eval code-python-fix, 2026-10-26: "use re.sub(...)" written out, slug.py left
+// failing). Returns the file.
+func fixPendingAfterFailedCheck(answer string, history []map[string]any) string {
+	last := ""
+	failed := false
+	for _, e := range history {
+		name, _ := e["tool_name"].(string)
+		ok, _ := e["ok"].(bool)
+		p, _ := e["path"].(string)
+		if !fileWriteTools[name] || !ok || !codeFileRE.MatchString(p) {
+			continue
+		}
+		v, _ := e["verify"].(string)
+		last, failed = filepath.Base(p), v == "failed"
+	}
+	if !failed || !describedChangeRE.MatchString(answer) {
+		return ""
+	}
+	return last
+}
+
+func fixPendingText(file string) string {
+	return "Carry on: the check after your last change to " + file + " failed, and you have described the fix without making it. Make it now with edit_file, then answer with what the check said."
+}
+

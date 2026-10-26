@@ -788,3 +788,12 @@ func TestTheSameInsertionTwiceIsRefused(t *testing.T) {
 	e.put("u.txt", "a\nab\n")
 	e.ok("edit_file", map[string]any{"path": "u.txt", "old_text": "a\nab", "new_text": "ab\nab"})
 }
+
+func TestANearMissShowsTheLinesThatAreThere(t *testing.T) {
+	e := newEnv(t, writeAll())
+	e.put("slug.py", "import re\n\ndef slugify(t):\n    return t\n")
+	r := e.fails("edit_file", map[string]any{"path": "slug.py", "old_text": "import re\ndef slugify(t):", "new_text": "x"}, "tool_execution_error")
+	if !strings.Contains(r.Content, "first line is at line 1") || !strings.Contains(r.Content, "2: \n3: def slugify(t):") {
+		t.Fatalf("the lines that are there are not shown: %q", r.Content)
+	}
+}

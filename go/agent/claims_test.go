@@ -567,3 +567,31 @@ func TestAQuestionAboutMemoryIsNoMemory(t *testing.T) {
 		t.Fatalf("what was just said may be referred to: %q", got)
 	}
 }
+
+func TestGuessingInsteadOfReadingIsSentOn(t *testing.T) {
+	if !claimsNoTools("The issue likely stems from edge cases. Without seeing test_slug.py, I'll assume common test expectations.", nil, []string{"read_file"}) {
+		t.Fatal("a guess instead of a read passed")
+	}
+}
+
+func TestAClearedEditKeepsItsOutcome(t *testing.T) {
+	c := `{"tool":"edit_file","ok":true,"content":"Edited text_test.go (1 replacement). Read back from disk: it matches.\nCHECK FAILED (build, go vet ./...):\ntext_test.go:22:4: string literal not terminated\n..."}`
+	got := outcomeLines(c)
+	if !strings.Contains(got, "Edited text_test.go (1 replacement)") || !strings.Contains(got, "CHECK FAILED (build, go vet ./...)") {
+		t.Fatalf("got %q", got)
+	}
+	if outcomeLines(`{"tool":"read_file","content":"package x"}`) != "" {
+		t.Fatal("a read has no outcome to keep")
+	}
+}
+
+func TestAFixDescribedAfterAFailedCheckIsMade(t *testing.T) {
+	hist := []map[string]any{{"tool_name": "edit_file", "ok": true, "path": "/w/slug.py", "verify": "failed"}}
+	if fixPendingAfterFailedCheck("The issue is multiple spaces. Here's the fix:\n```python\nimport re\n```", hist) != "slug.py" {
+		t.Fatal("not caught")
+	}
+	hist = append(hist, map[string]any{"tool_name": "edit_file", "ok": true, "path": "/w/slug.py", "verify": "ok"})
+	if fixPendingAfterFailedCheck("The fix:\n```python\nimport re\n```", hist) != "" {
+		t.Fatal("after a passing check the answer may show the code")
+	}
+}

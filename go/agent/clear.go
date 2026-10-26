@@ -2,6 +2,8 @@ package agent
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/Artifex-Technologies/Sarina/go/config"
 	"github.com/Artifex-Technologies/Sarina/go/session"
@@ -51,6 +53,11 @@ func clearToolOutputs(s *session.Session, window, specTokens int, st config.Cont
 			name = "a tool"
 		}
 		marker := fmt.Sprintf("[Output cleared to save context: %s returned about %d tokens. Run the tool again if you need it.]", name, before)
+		// a change's outcome stays: which file, and whether the check after it passed (edits went on blind once their results were
+		// cleared: eval code-add-function, 2026-10-26)
+		if kept := outcomeLines(m.Content); kept != "" {
+			marker = fmt.Sprintf("[Output cleared to save context (about %d tokens); what it said: %s]", before, kept)
+		}
 		after := CountTokens(marker)
 		if after >= before {
 			continue
@@ -69,4 +76,15 @@ func clearToolOutputs(s *session.Session, window, specTokens int, st config.Cont
 	}
 	return event{"type": "tool_output_cleared", "turn_index": turn, "cleared_count": len(ids),
 		"estimated_tokens_removed": removed, "cleared_message_ids": ids}, true
+}
+
+var outcomeRE = regexp.MustCompile(`(Edited [^|\\\n]{1,120}?\(\d+ replacements?\)|Wrote [^|\\\n]{1,120}?\(\d+ characters\)|Check passed: [^\\\n]{1,80}|CHECK FAILED \([^)]{1,80}\)[^\\\n]{0,10}|refused: [^\\\n]{1,120})`)
+
+// outcomeLines is what a write or edit result said about itself, short: the file changed and the verdict of the check after it.
+func outcomeLines(content string) string {
+	var out []string
+	for _, m := range outcomeRE.FindAllString(content, 4) {
+		out = append(out, strings.TrimSpace(m))
+	}
+	return strings.Join(out, " ")
 }

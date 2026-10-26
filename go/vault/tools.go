@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -162,6 +163,15 @@ func Tools() []tools.Tool {
 				// a link that misses an existing note only by wording is pointed at that note before saving (and said so), so the note and
 				// what she tells the user about it agree
 				content, relinked := relink(v, str(a, "content"))
+				// a new note goes in a folder: the top level holds only the owner's Home, README and Persona, and a note created there was
+				// one the task had put in a folder (eval vault-write-linked, 2026-10-26: "in the Lessons folder" saved at the top)
+				if p := strings.Trim(filepath.ToSlash(str(a, "path")), "/"); (mode == Create || mode == "") && !strings.Contains(p, "/") {
+					var names []string
+					for _, f := range Folders {
+						names = append(names, f.Name+"/")
+					}
+					return "", nil, fmt.Errorf("a new note goes in a folder: put the folder in the path (for example Lessons/%s). The folders: %s", strings.TrimSuffix(p, ".md"), strings.Join(names, ", "))
+				}
 				res, err := v.Write(gateFor(tc), str(a, "path"), content, mode)
 				if err != nil {
 					return "", nil, err

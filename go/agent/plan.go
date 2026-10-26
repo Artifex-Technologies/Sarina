@@ -241,3 +241,18 @@ func (a *Agent) lookTools() []string {
 	}
 	return out
 }
+
+// offeredTools are all the tools offered now (the file-changing ones too), apart from the to-do and plan bookkeeping: naming only
+// the read-only ones told her that edit_file "does not exist here" (eval code-python-fix, 2026-10-26).
+func (a *Agent) offeredTools() []string {
+	var out []string
+	for _, n := range a.registry.Names() {
+		if strings.HasPrefix(n, "task_") || strings.HasPrefix(n, "plan_") || n == "TaskOutput" || n == "TaskStop" || n == "todo_write" ||
+			n == "update_plan" || n == "enter_plan_mode" || n == "exit_plan_mode" {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}
+

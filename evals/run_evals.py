@@ -716,7 +716,7 @@ CASES = [
     dict(name="code-fix-failing-test", group="code", write=True, cwd=setup_code_bug, env_fn=CODE_ENV, max_turns=14,
          prompt="go test fails in this folder. Fix the bug in the code so the test passes. Do not change the test file. Say what was wrong.",
          verify_cmd=[("the tests pass", ["go", "test", "-count=1", "./..."], W(WORK, "code-bug"), 0)], file_unchanged={W(WORK, "code-bug", "calc_test.go"): "setup"},
-         must=[r"(?i)(minus|subtract|a - b|- b|sign|wrong operator)"], note="a real bug (Add returned a - b): the test must pass afterwards and the test file stay as it was"),
+         must=[r"(?i)(minus|subtract|a - b|- b|sign|operator|`-` instead of `\+`)"], note="a real bug (Add returned a - b): the test must pass afterwards and the test file stay as it was"),
     dict(name="code-python-fix", group="code", write=True, cwd=setup_code_py_bug, env_fn=CODE_ENV, max_turns=14,
          prompt="python3 -m unittest fails in this folder. Fix slug.py so the tests pass, without changing test_slug.py, and say what was wrong.",
          verify_cmd=[("the tests pass", ["python3", "-m", "unittest", "-q"], W(WORK, "code-pybug"), 0)], file_unchanged={W(WORK, "code-pybug", "test_slug.py"): "setup"},

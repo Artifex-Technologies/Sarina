@@ -67,8 +67,17 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 		if tests && (strings.HasPrefix(filepath.Base(path), "test_") || strings.HasSuffix(path, "_test.py")) {
 			steps = append(steps, []string{"python3", "-m", "unittest", "-q", path})
 			label += " and unittest"
+		} else if tests && hasPyTests(dir) {
+			// a change to the code runs the folder's tests too, as go test does for a package: slug.py half fixed and its test_slug.py
+			// never run, so she never learned it still failed (eval code-python-fix, 2026-10-26)
+			steps = append(steps, []string{"python3", "-m", "unittest", "-q"})
+			label += " and the folder's unittest tests"
 		}
 	case ".sh", ".bash":
+		if l := shellLint(path); l != "" {
+			md["verify"], md["verify_output"] = "failed", l
+			return "\nCHECK FAILED (lint): " + l + "\nFix this before you answer; do not say the script works.", md
+		}
 		steps = append(steps, []string{"bash", "-n", path})
 		label = "bash -n"
 		if _, err := exec.LookPath("shellcheck"); err == nil {
@@ -259,4 +268,30 @@ func around(out, dir, edited string) string {
 		return ""
 	}
 	return fmt.Sprintf("\n%s as it is now, around line %d (read it before you edit again; an edit's old_text must match these lines):\n%s", filepath.Base(p), line, text)
+}
+
+func hasPyTests(dir string) bool {
+	m, _ := filepath.Glob(filepath.Join(dir, "test_*.py"))
+	return len(m) > 0
+}
+
+var quotedGlobRE = regexp.MustCompile(`"[^"\n]*/\*[^"\n]*"`)
+
+// shellLint finds the shell mistake bash -n cannot: a glob inside double quotes, which is taken literally, so `rm -f "$1/*.tmp"`
+// removes nothing (eval code-shell-safe, 2026-10-26; shellcheck catches it too, when it is installed).
+func shellLint(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for i, l := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(l)
+		if t == "" || strings.HasPrefix(t, "#") || strings.HasPrefix(t, "echo ") || strings.HasPrefix(t, "printf ") {
+			continue
+		}
+		if m := quotedGlobRE.FindString(l); m != "" {
+			return fmt.Sprintf("line %d: %s has the * inside double quotes, where the shell does not expand it, so it matches only a file literally named that. Quote the variable and leave the pattern outside, e.g. \"$1\"/*.tmp", i+1, m)
+		}
+	}
+	return ""
 }

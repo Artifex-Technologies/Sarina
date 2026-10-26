@@ -510,7 +510,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				// stops without making it, about one call in seven
 				// a call to a tool that is not in the list comes back empty too (the server drops it): the tools she has are named, and
 				// the second time she is asked for words (eval voice-fix-audio, 2026-10-26: "restart the audio" by voice, three empty replies)
-				names := strings.Join(a.lookTools(), ", ")
+				names := strings.Join(a.offeredTools(), ", ")
 				text := "Your last reply had no text and no tool call. If you planned a call to one of your tools (" + names + "), make it now; a tool that is not in that list does not exist here. Otherwise answer."
 				if emptyRetries == 2 {
 					// "/no_think" also makes the request turn the hidden reasoning off (llm.noThink)
@@ -529,12 +529,21 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					"continuation_index": len(r.segments)})
 				continue
 			}
-			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns && claimsNoTools(answer, sess.Messages[min(msgStart, len(sess.Messages)):], a.lookTools()) {
+			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns && claimsNoTools(answer, sess.Messages[min(msgStart, len(sess.Messages)):], a.offeredTools()) {
 				nudges++
-				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: claimsNoToolsText(a.lookTools())})
+				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: claimsNoToolsText(a.offeredTools())})
 				r.emit(event{"type": "continue_nudge", "turn_index": turn})
 				r.segments = nil
 				continue
+			}
+			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns {
+				if f := fixPendingAfterFailedCheck(answer, sess.FileHistory[min(histStart, len(sess.FileHistory)):]); f != "" {
+					nudges++
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: fixPendingText(f)})
+					r.emit(event{"type": "continue_nudge", "turn_index": turn})
+					r.segments = nil
+					continue
+				}
 			}
 			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns && announcedNotDone(answer) {
 				// not a wrong claim, an unfinished task: told to carry on, apart from the one claim check

@@ -267,7 +267,7 @@ func EditFile() Tool {
 				// add a second copy (eval code-add-function, 2026-10-26: Reverse inserted four times after the first edit had passed)
 				return "", nil, fmt.Errorf("refused: %s already contains this change (an earlier edit made it); repeating it would add a second copy. Read the file if you are unsure what it holds now", given)
 			case count == 0:
-				return "", nil, fmt.Errorf("old_text was not found in %s. It must match exactly, including whitespace; read the file again and copy the text", given)
+				return "", nil, fmt.Errorf("old_text was not found in %s. It must match exactly, including whitespace; read the file again and copy the text%s", given, nearestLines(before, oldT))
 			case count > 1 && !replaceAll:
 				return "", nil, fmt.Errorf("old_text matches %d places in %s. Add surrounding lines to make it unique, or set replace_all to change every one", count, given)
 			}
@@ -337,4 +337,33 @@ func isBinary(data []byte) bool {
 		return true
 	}
 	return !utf8.Valid(head) && !utf8.Valid(data)
+}
+
+// nearestLines shows where old_text's first line is in the file and what follows it there, numbered: a near miss is usually a blank
+// line or indentation, and the same edit was sent four times without the difference being seen (eval code-python-fix, 2026-10-26:
+// "import re\ndef" against a file with "import re\n\ndef").
+func nearestLines(file, old string) string {
+	var first string
+	for _, l := range strings.Split(old, "\n") {
+		if strings.TrimSpace(l) != "" {
+			first = strings.TrimSpace(l)
+			break
+		}
+	}
+	if first == "" {
+		return ""
+	}
+	lines := strings.Split(file, "\n")
+	for i, l := range lines {
+		if strings.TrimSpace(l) != first {
+			continue
+		}
+		end := min(len(lines), i+strings.Count(old, "\n")+3)
+		var b strings.Builder
+		for j := i; j < end; j++ {
+			fmt.Fprintf(&b, "%d: %s\n", j+1, lines[j])
+		}
+		return ". Its first line is at line " + fmt.Sprint(i+1) + "; the file has there (blank lines and spaces count):\n" + strings.TrimRight(b.String(), "\n")
+	}
+	return ""
 }
