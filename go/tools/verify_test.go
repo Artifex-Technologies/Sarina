@@ -169,3 +169,18 @@ func TestAQuotedGlobInAScriptFailsTheCheck(t *testing.T) {
 		t.Fatalf("the right form failed: %v", md)
 	}
 }
+
+func TestAQuoteInsideAStringIsNamed(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go toolchain")
+	}
+	t.Setenv("SARINA_SANDBOX_TESTS", "off")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/v\n\ngo 1.21\n"), 0o644)
+	f := filepath.Join(dir, "a_test.go")
+	os.WriteFile(f, []byte("package v\n\nimport \"testing\"\n\nfunc TestS(t *testing.T) {\n\tif false {\n\t\tt.Errorf(\"Expected \"[1 2]\", got %s\", \"x\")\n\t}\n}\n"), 0o644)
+	note, _ := verifyCode(context.Background(), f, &Context{Root: dir})
+	if !strings.Contains(note, "double quote inside") {
+		t.Fatalf("the cause is not named:\n%s", note)
+	}
+}

@@ -564,6 +564,10 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = exfilInAnswerText
 				} else if what := suggestsSecurityOff(answer); what != "" {
 					text = securityOffText(what)
+					// a false "it builds, the tests pass" outweighs every quote check, and only one send-back is made (eval
+					// code-go-package, 2026-10-26: a quoted word took it and "builds successfully and all tests pass" went out)
+				} else if why := codeWorksUnverified(answer, hist); why != "" {
+					text = codeWorksText(why)
 					// the work not done comes before the quote checks: her proposed fix is "quoted" nowhere in the tools, and that
 					// send-back (the only one) told her to drop it instead of making it (eval code-fix-failing-test, 2026-10-26)
 				} else if fixDescribedNotMade(prompt, answer, slices.Contains(a.baseToolNames(), "edit_file") || slices.Contains(a.baseToolNames(), "write_file"), hist) {
@@ -601,8 +605,6 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = failedWriteHiddenText(why)
 				} else if toolErrorIgnored(answer, sess.Messages[min(msgStart, len(sess.Messages)):]) {
 					text = toolErrorIgnoredText
-				} else if why := codeWorksUnverified(answer, hist); why != "" {
-					text = codeWorksText(why)
 				}
 				if text != "" {
 					claimChecked = true

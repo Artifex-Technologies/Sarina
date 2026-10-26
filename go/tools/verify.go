@@ -267,8 +267,19 @@ func around(out, dir, edited string) string {
 	if err != nil || text == "" || line <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("\n%s as it is now, around line %d (read it before you edit again; an edit's old_text must match these lines):\n%s", filepath.Base(p), line, text)
+	hint := ""
+	for _, l := range strings.Split(text, "\n") {
+		if strings.HasPrefix(l, fmt.Sprintf("%d: ", line)) && innerQuoteRE.MatchString(l) {
+			// "Expected "[1 2]", got %s": the inner quote ends the string, and Go reports "expected ']', found 2" (eval
+			// code-go-package, 2026-10-26: the same line rewritten for 400 s)
+			hint = "\nLine " + fmt.Sprint(line) + " has a double quote inside a \"...\" string, which ends the string there. Write the inner quote as \\\" (in your edit's JSON that is \\\\\\\"), or use a `backquoted` string, or print the value with %q."
+		}
+	}
+	return fmt.Sprintf("\n%s as it is now, around line %d (read it before you edit again; an edit's old_text must match these lines):\n%s%s", filepath.Base(p), line, text, hint)
 }
+
+// innerQuoteRE is a "..." string with a bare " inside, followed by more of the same string: "Expected "[1 2]", got %s".
+var innerQuoteRE = regexp.MustCompile(`"[^"\\\n]*[A-Za-z:=] ?"[^",)\n]+"[^"\n]*%[a-z]`)
 
 func hasPyTests(dir string) bool {
 	m, _ := filepath.Glob(filepath.Join(dir, "test_*.py"))
