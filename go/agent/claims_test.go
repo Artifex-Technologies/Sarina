@@ -380,3 +380,34 @@ func TestAnnouncedNotDone(t *testing.T) {
 		}
 	}
 }
+
+func TestUnreadDefinitionIsReadBeforeItIsExplained(t *testing.T) {
+	cut := `{"tool":"read_file","ok":true,"content":"use std::fs;\n[... lines 214-604 of 690 omitted: read_file start_line/end_line, or grep_search ...]\n[defined in the omitted lines, first line only: read a definition's lines (start_line/end_line) before you say what it does or quote it]\n  515: pub fn protected(pkg: &str) -> bool {\n  520: fn protected_with(pkg: &str, os_list: &str) -> bool {\n[...]\nmod tests {}"}`
+	read := func(args string) session.Message {
+		return session.Message{Role: "assistant", ToolCalls: []llm.WireToolCall{{Function: llm.FunctionCall{Name: "read_file", Arguments: args}}}}
+	}
+	msgs := []session.Message{read(`{"path":"appmgr.rs"}`), {Role: "tool", Content: cut}}
+	answer := "The function `protected_with` checks the name against the prefixes in os_list."
+	if name, line := unreadDefinition(answer, msgs); name != "protected_with" || line != 520 {
+		t.Fatalf("got %q %d", name, line)
+	}
+	if !strings.Contains(unreadDefinitionText("protected_with", 520), "start_line 520") {
+		t.Fatal("the text names the lines to read")
+	}
+	msgs = append(msgs, read(`{"path":"appmgr.rs","start_line":510,"end_line":540}`), session.Message{Role: "tool", Content: "520: fn protected_with..."})
+	if name, _ := unreadDefinition(answer, msgs); name != "" {
+		t.Fatalf("after reading its lines it may be explained: %q", name)
+	}
+	if name, _ := unreadDefinition("I could not find it.", msgs[:2]); name != "" {
+		t.Fatal("an answer that does not name it is not checked")
+	}
+}
+
+func TestInventedCodeCatchesAOneLineBody(t *testing.T) {
+	cut := `{"tool":"read_file","ok":true,"content":"  520: fn protected_with(pkg: &str, os_list: &str) -> bool {\n"}`
+	msgs := []session.Message{{Role: "tool", Content: cut}}
+	made := "The relevant lines are:\n```rust\nfn protected_with(pkg: &str, os_list: &str) -> bool {\n    os_list.split('\\n').any(|p| pkg.starts_with(p))\n}\n```"
+	if l, _ := inventedCode(made, "Which function? Quote the line.", msgs); l == "" {
+		t.Fatal("a made-up one-line body under a real signature passed")
+	}
+}

@@ -554,6 +554,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				} else if f := unreportedChange(answer, hist); f != "" {
 					text = unreportedText(f)
 					// before the quote check: a made-up function outweighs one made-up word in it, and only one send-back is made
+				} else if name, line := unreadDefinition(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); name != "" {
+					text = unreadDefinitionText(name, line)
 				} else if l, omitted := inventedCode(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); l != "" {
 					text = inventedCodeText(l, omitted)
 				} else if q := ungroundedQuote(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); q != "" {

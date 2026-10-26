@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -159,7 +160,33 @@ func truncateFile(s string, max int) string {
 	total := strings.Count(s, "\n") + 1
 	tailLines := strings.Count(string(r[len(r)-tail:]), "\n")
 	from, to := headLines+1, total-tailLines
-	return string(r[:head]) + fmt.Sprintf("\n[... lines %d-%d of %d omitted: read_file start_line/end_line, or grep_search ...]\n", from, to, total) + string(r[len(r)-tail:])
+	return string(r[:head]) + fmt.Sprintf("\n[... lines %d-%d of %d omitted: read_file start_line/end_line, or grep_search ...]\n", from, to, total) +
+		outline(s, from, to) + string(r[len(r)-tail:])
+}
+
+var definitionRE = regexp.MustCompile(`^\s*((pub(\([\w:]+\))?|export|async|static|public|private|protected)\s+)*(fn|struct|enum|trait|impl|mod|func|def|class|function|interface|type)\b`)
+
+// outline lists the definitions in the lines a cut read left out, with their line numbers, so the part not shown can be found:
+// the function asked about was often in the middle (eval find-function, 2026-10-26: protected_with at line 515 of a read that
+// showed 1-213 and 605-690, and the answer came from the test at the end).
+func outline(s string, from, to int) string {
+	var b strings.Builder
+	n := 0
+	for i, l := range strings.Split(s, "\n") {
+		if i+1 < from || i+1 > to || !definitionRE.MatchString(l) {
+			continue
+		}
+		if n == 40 {
+			b.WriteString("  (more; grep_search finds the rest)\n")
+			break
+		}
+		fmt.Fprintf(&b, "  %d: %s\n", i+1, clipText(strings.TrimSpace(l), 120))
+		n++
+	}
+	if n == 0 {
+		return ""
+	}
+	return "[defined in the omitted lines, first line only: read a definition's lines (start_line/end_line) before you say what it does or quote it]\n" + b.String() + "[...]\n"
 }
 
 func readLines(path string, start, end int) (string, error) {

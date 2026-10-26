@@ -1,9 +1,12 @@
 package agent
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/Artifex-Technologies/Sarina/go/session"
@@ -597,7 +600,12 @@ func inventedCode(answer, prompt string, msgs []session.Message) (line, omitted 
 			}
 		}
 	}
-	if len(unseen) < 2 || len(unseen)*2 < total {
+	long := false
+	for _, l := range unseen {
+		long = long || len(strings.ReplaceAll(l, " ", "")) >= 20
+	}
+	// one made-up line is enough when it is a body's real content (a one-line "implementation" under a real signature)
+	if len(unseen) == 0 || (len(unseen) < 2 && !long) || len(unseen)*3 < total {
 		return "", ""
 	}
 	return unseen[0], omittedRE.FindString(ev.String())
@@ -667,3 +675,62 @@ func announcedNotDone(answer string) bool {
 }
 
 const announcedText = "Carry on: you said what you would do next and then stopped, so nothing was done. Do it now with your tools, without announcing it first; answer when the task is finished."
+
+var (
+	outlineEntryRE = regexp.MustCompile(`(?m)^  (\d+): .*?\b(?:fn|func|def|class|function)\s+(\w+)`)
+	nameWordRE     = func(n string) *regexp.Regexp { return regexp.MustCompile(`\b` + regexp.QuoteMeta(n) + `\b`) }
+)
+
+// unreadDefinition is a function the answer talks about that the task saw only as one line of a cut read's outline (read_file's
+// "defined in the omitted lines"), with no read of its lines since: what it does was then guessed (eval find-function, 2026-10-26:
+// "protected_with checks os_list" from the signature, while its body holds the prefixes asked about).
+func unreadDefinition(answer string, msgs []session.Message) (string, int) {
+	type span struct{ from, to int }
+	var reads []span
+	where := map[string]int{}
+	var order []string
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			if c.Function.Name != "read_file" {
+				continue
+			}
+			var a struct {
+				Start int `json:"start_line"`
+				End   int `json:"end_line"`
+			}
+			if json.Unmarshal([]byte(c.Function.Arguments), &a) == nil && (a.Start > 0 || a.End > 0) {
+				if a.End == 0 {
+					a.End = a.Start + 2000
+				}
+				reads = append(reads, span{a.Start, a.End})
+			}
+		}
+		if m.Role != "tool" || !strings.Contains(m.Content, "defined in the omitted lines") {
+			continue
+		}
+		for _, t := range toolTexts(m.Content) {
+			for _, e := range outlineEntryRE.FindAllStringSubmatch(t, -1) {
+				n, _ := strconv.Atoi(e[1])
+				if _, ok := where[e[2]]; !ok {
+					order = append(order, e[2])
+				}
+				where[e[2]] = n
+			}
+		}
+	}
+	for _, name := range order {
+		line := where[name]
+		covered := false
+		for _, r := range reads {
+			covered = covered || (r.from <= line+1 && r.to >= line+3)
+		}
+		if !covered && len(name) > 3 && nameWordRE(name).MatchString(answer) {
+			return name, line
+		}
+	}
+	return "", 0
+}
+
+func unreadDefinitionText(name string, line int) string {
+	return fmt.Sprintf("Check before you finish: your answer says what %s does, but you have seen only its first line (line %d, in the list of what the read left out). Read its lines now (read_file start_line %d, end_line %d), then write your whole answer again from the code you saw. Do not talk about this check.", name, line, line, line+40)
+}
