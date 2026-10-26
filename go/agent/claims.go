@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -88,6 +89,35 @@ func unreportedText(file string) string {
 	return "Check before you finish: in this task you changed " + file + ", but your answer does not say so. Write your whole answer again, complete, and say plainly what you changed in " + file + " and what it holds now."
 }
 
+var suggestRE = regexp.MustCompile(`(?i)\b(install|run|use|using|try|helper|via|with|e\.g\.|such as|like)\b`)
+
+// isCommand is a command line starting with a program this computer has (or sudo): "Run `pacman -Ss spotify`" is advice.
+func isCommand(q string) bool {
+	f := strings.Fields(q)
+	if len(f) == 0 {
+		return false
+	}
+	if f[0] == "sudo" {
+		return true
+	}
+	_, err := exec.LookPath(f[0])
+	return err == nil
+}
+
+// sentenceAt is the sentence of text around position i.
+func sentenceAt(text string, i int) string {
+	start, end := 0, len(text)
+	for _, l := range sentenceEnd.FindAllStringIndex(text, -1) {
+		if l[1] <= i {
+			start = l[1]
+		} else if l[0] >= i {
+			end = l[0]
+			break
+		}
+	}
+	return text[start:end]
+}
+
 var quotedRE = regexp.MustCompile("(?:^|[\\s(:,])(?:`([^`\\n]{4,60})`|\"([^\"\\n]{4,60})\")(?:$|[\\s).,:;!?])")
 
 // ungroundedQuote returns a literal the answer quotes (in backticks or double quotes) that appears in none of this task's tool output and not in
@@ -108,10 +138,20 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 	}
 	ev := strings.ToLower(evidence.String())
 	p := strings.ToLower(prompt)
-	for _, m := range quotedRE.FindAllStringSubmatch(answer, -1) {
+	for _, loc := range quotedRE.FindAllStringSubmatchIndex(answer, -1) {
+		m := []string{answer[loc[0]:loc[1]], "", ""}
+		for i := 1; i <= 2; i++ {
+			if loc[2*i] >= 0 {
+				m[i] = answer[loc[2*i]:loc[2*i+1]]
+			}
+		}
 		q := m[1]
 		if q == "" {
 			q = m[2]
+		}
+		// a program she suggests ("install `paru`, or use `yay`") is advice, not a quote (eval voice-install-help, 2026-10-26)
+		if m[1] != "" && (!strings.ContainsAny(q, " \t") || isCommand(q)) && suggestRE.MatchString(sentenceAt(answer, loc[0])) {
+			continue
 		}
 		lq := strings.ToLower(strings.Trim(strings.TrimSpace(q), "\"'`"))
 		if lq == "" || strings.Contains(ev, lq) || strings.Contains(p, lq) {
@@ -188,11 +228,25 @@ var securityOffRE = regexp.MustCompile(`(?i)\b(disabl(e|ing)|turn(ing)? off|swit
 
 // suggestsSecurityOff returns the security piece an answer suggests turning off, or "": speed or convenience never justifies that advice.
 func suggestsSecurityOff(answer string) string {
-	if m := securityOffRE.FindStringSubmatch(answer); m != nil {
+	for _, sentence := range sentenceEnd.Split(answer, -1) {
+		loc := securityOffRE.FindStringSubmatchIndex(sentence)
+		if loc == nil {
+			continue
+		}
+		// "Do not disable Heimdall or the firewall", "disabling the firewall is not recommended": the right advice, not the wrong one
+		// (eval voice-anticheat, 2026-10-26)
+		if warnedRE.MatchString(sentence[:loc[0]]) || warnedAfterRE.MatchString(sentence[loc[1]:]) {
+			continue
+		}
+		m := securityOffRE.FindStringSubmatch(sentence)
 		return m[len(m)-1]
 	}
 	return ""
 }
+
+var warnedAfterRE = regexp.MustCompile(`(?i)\b(not recommended|is (unsafe|dangerous|a bad idea)|should not|shouldn'?t|never|won'?t help|will not help|do(es)? not help)\b`)
+
+var warnedRE = regexp.MustCompile(`(?i)\b(do not|don'?t|never|avoid|no need to|without|not)\s+(\w+\s+){0,2}$`)
 
 func securityOffText(what string) string {
 	return "Check before you finish: your answer suggests turning off " + what + ", a security piece. Never advise that for speed or convenience. Write your whole answer again without that suggestion; if nothing else would help, say so."
@@ -496,7 +550,7 @@ func codeWorksText(why string) string {
 	return "Check before you finish: your answer says the code works, compiles or passes tests, but " + why + ". Say only what was really checked: what the check after your change reported (quote its result), and what was not checked. Write your whole answer again, complete, without vouching for anything unchecked. Do not talk about this check."
 }
 
-var cannotReadRE = regexp.MustCompile(`(?i)\b(cannot|can'?t|can ?not|unable to|do not have|don'?t have|no) (directly )?(access|read|open|see|view)\b|\bno access to\b|\b(is not|isn'?t|does not|doesn'?t|not) (present|exist|available)\b|\b(not found|missing)\b`)
+var cannotReadRE = regexp.MustCompile(`(?i)\b(cannot|can'?t|can ?not|unable to|do not have|don'?t have|no) (directly )?(access|read|open|see|view)\b|\bno access to\b|\b(is not|isn'?t|does not|doesn'?t) (present|exist|available)\b`)
 var promptFileRE = regexp.MustCompile(`[\w./-]*[\w-]\.[A-Za-z0-9]{1,8}\b`)
 
 // deniedReadable returns a file the question names that exists in the workspace when the answer says she cannot access or read it and no
@@ -516,11 +570,22 @@ func deniedReadable(answer, prompt, cwd string, msgs []session.Message, canRead 
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(cwd, f)
 		}
-		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() {
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() && saidOf(answer, filepath.Base(f), cannotReadRE) {
 			return f
 		}
 	}
 	return ""
+}
+
+// saidOf is whether one sentence of the answer names the file and matches re: "settings.conf might be missing" is no claim that
+// crashy.c cannot be read (eval crash-on-the-fly, 2026-10-26).
+func saidOf(answer, name string, re *regexp.Regexp) bool {
+	for _, sentence := range sentenceEnd.Split(answer, -1) {
+		if strings.Contains(sentence, name) && re.MatchString(sentence) {
+			return true
+		}
+	}
+	return false
 }
 
 func deniedReadableText(f string) string {
@@ -734,3 +799,51 @@ func unreadDefinition(answer string, msgs []session.Message) (string, int) {
 func unreadDefinitionText(name string, line int) string {
 	return fmt.Sprintf("Check before you finish: your answer says what %s does, but you have seen only its first line (line %d, in the list of what the read left out). Read its lines now (read_file start_line %d, end_line %d), then write your whole answer again from the code you saw. Do not talk about this check.", name, line, line, line+40)
 }
+
+var cannotCheckRE = regexp.MustCompile(`(?i)\b(tools?|status|checks?|access)\b[^.\n]{0,40}\b(restricted|unavailable|not available|disabled|limited)\b|` +
+	`\b(can'?t|cannot|can not|unable to|not able to)\s+(directly\s+)?(check|look at|see|access|run|use|monitor)\b[^.\n]{0,30}\b(system|computer|machine|status|tools?|performance|logs?|processes)\b`)
+
+// claimsNoTools is an answer that says it cannot look (the tools are "restricted") when it has not tried a single tool and has some:
+// sys-performance, 2026-10-26: "The system status tools are restricted" with system_status offered and never called.
+func claimsNoTools(answer string, msgs []session.Message, tools []string) bool {
+	if len(tools) == 0 || !cannotCheckRE.MatchString(answer) {
+		return false
+	}
+	for _, m := range msgs {
+		if m.Role == "tool" || len(m.ToolCalls) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func claimsNoToolsText(tools []string) string {
+	return "Carry on: you said you cannot check, but you have not tried, and these tools are yours to use now: " + strings.Join(tools, ", ") +
+		". Call the one that answers the question, then answer from what it shows."
+}
+
+// reminders is the context the harness gave the model (<system-reminder> blocks: the date, the scratchpad path, memory): values from
+// it were seen, not invented (eval write-failure-is-reported, 2026-10-26: the scratchpad's id was sent back as made up, and the
+// rewrite wrote the file there instead of reporting the failure).
+func reminders(msgs []session.Message) string {
+	var b strings.Builder
+	for _, m := range msgs {
+		if m.Role == "user" && strings.Contains(m.Content, "<system-reminder>") {
+			b.WriteString(m.Content + "\n")
+		}
+	}
+	return b.String()
+}
+
+var (
+	upToDateRE = regexp.MustCompile(`(?i)\b(is|are) (already |fully )?up[ -]to[ -]date\b`)
+	updateEvRE = regexp.MustCompile(`(?i)up[ -]to[ -]date|no updates|0 updates|updates?: (none|0)\b|nothing to do`)
+)
+
+// upToDateUnseen is "the system is up to date" when nothing in the task showed it (eval voice-no-root, 2026-10-26: asked to run
+// pacman -Syu, she said the system was up to date without any check).
+func upToDateUnseen(answer, evidence string) bool {
+	return upToDateRE.MatchString(answer) && !updateEvRE.MatchString(evidence)
+}
+
+const upToDateText = "Check before you finish: your answer says the system is up to date, but nothing in this task showed that. Leave it out, or check first with your tools. Write your whole answer again. Do not talk about this check."

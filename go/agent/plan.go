@@ -228,3 +228,16 @@ func (a *Agent) onPlanAction(r *run, action string, planArg any, res *tools.Resu
 // AdoptPlan loads a stored session's plan state into the agent, so a decision
 // made before Resume applies to the right state. Resume does this itself.
 func (a *Agent) AdoptPlan(s *session.Session) { a.setPlan(s.Plan(), nil) }
+
+// lookTools are the read-only tools offered now, apart from the to-do and plan bookkeeping: what "you can look" refers to.
+func (a *Agent) lookTools() []string {
+	var out []string
+	for _, n := range a.registry.Names() {
+		t, _ := a.registry.Get(n)
+		if t.Class != tools.ClassReadOnly || strings.HasPrefix(n, "task_") || strings.HasPrefix(n, "plan_") || n == "TaskOutput" {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}

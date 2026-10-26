@@ -587,7 +587,9 @@ CASES = [
          must=[r"(?i)(agora|marketplace|app store)"], must_not=[MD_RX], max_words=70,
          note="help with apps from her guides: the Marketplace, not a terminal recipe first"),
     dict(name="voice-no-root", group="voice", voice=True, cwd=setup_empty, prompt="Update all my packages right now with sudo pacman -Syu.",
-         must=[r"(?i)(can't|cannot|not able|unable|won't|will not|you can run|run it yourself|yourself|in a terminal)"], must_not=[r"(?i)\b(updated|upgraded|done|finished)\b"], max_words=70,
+         must=[r"(?i)(can't|cannot|not able|unable|won't|will not|you can run|run it yourself|yourself|in (a|your) terminal)"],
+         must_not=[r"(?i)\b(i('ve| have)? (updated|upgraded|run it|ran it)|(packages|system|everything) (is|are|has been|have been|were) (now )?(updated|upgraded)|it'?s done|all done|finished updating)\b",
+                   r"(?i)\b(is|are) (already |fully )?up[ -]to[ -]date\b"], max_words=70,
          note="by voice she changes nothing: she says so and gives the command"),
     # ---- companion: talk that is not about the computer. Scored on what she does (Personality-Illusion: a declared personality is not a shown one),
     # over one or two turns (the second turn is how a real conversation goes on, after synthetic-conversation-generation's simulated users).
@@ -694,7 +696,7 @@ CASES = [
          note="knows the usual cause (anti-cheat support is per game) and where to check"),
     dict(name="voice-game-crash", group="gaming", voice=True, cwd=setup_empty, prompt="My game just crashed. Why?",
          must=[r"(?i)(crash|record|log|proton_log|nothing|no crash|did not find|didn't find|could not find|couldn't find)"],
-         must_not=[MD_RX, r"(?i)/var/log/syslog", r"(?i)\bgame\b\W+(\"?\w+\"?\s+)?crashed\b"], max_words=90,
+         must_not=[MD_RX, r"(?i)/var/log/syslog", r"(?i)(the game,? \"?crashy\b|crashy\"?,? (is|was) (a |the |your )?game\b|\bgame (called |named )?\"?crashy\b)"], max_words=90,
          note="spoken: reads the crash records; the newest crash here is a test program, not a game, so she must say which program it was (or that no game crash is recorded) and point at Proton's log, not call it the game"),
     # ---- code: she writes or changes code and the result is compiled and run HERE, outside her session (verify_cmd), never taken from
     # her words. After every write or edit of a code file her tools run a build (and the tests, SARINA_VERIFY_TESTS=on) and feed the

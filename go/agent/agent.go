@@ -526,6 +526,13 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					"continuation_index": len(r.segments)})
 				continue
 			}
+			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns && claimsNoTools(answer, sess.Messages[min(msgStart, len(sess.Messages)):], a.lookTools()) {
+				nudges++
+				sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: claimsNoToolsText(a.lookTools())})
+				r.emit(event{"type": "continue_nudge", "turn_index": turn})
+				r.segments = nil
+				continue
+			}
 			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns && announcedNotDone(answer) {
 				// not a wrong claim, an unfinished task: told to carry on, apart from the one claim check
 				nudges++
@@ -568,7 +575,9 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = inventedHistoryText(h)
 				} else if defaultOutputForOneApp(answer, prompt) {
 					text = oneAppSilentText
-				} else if id := ungroundedIdentifier(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); id != "" {
+				} else if ev, _ := evidenceOf(prompt+"\n"+reminders(sess.Messages), sess.Messages[min(msgStart, len(sess.Messages)):]); upToDateUnseen(answer, ev) {
+					text = upToDateText
+				} else if id := ungroundedIdentifier(answer, prompt+"\n"+reminders(sess.Messages), sess.Messages[min(msgStart, len(sess.Messages)):]); id != "" {
 					text = ungroundedIdentifierText(id)
 				} else if f := checkedUnseenFile(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); f != "" {
 					text = checkedUnseenText(f)
