@@ -1040,6 +1040,43 @@ def score(case, res):
     return checks
 
 
+def build_info():
+    """Which build of Sarina is measured (`sarina version --json`): a result belongs to the code that produced it."""
+    try:
+        return json.loads(subprocess.run(["sarina", "version", "--json"], capture_output=True, text=True, timeout=10).stdout)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return {"commit": "unknown"}
+
+
+def card_shared(model):
+    """What else uses the graphics card now, or "": another model loaded in Ollama, or another program computing on the card. A run
+    measured on a shared card is slower and its failures partly contention (the 2026-10-25 21:26 run), so the report says so."""
+    notes = []
+    try:
+        ps = subprocess.run(["ollama", "ps"], capture_output=True, text=True, timeout=10).stdout.splitlines()[1:]
+        others = [l.split()[0] for l in ps if l.split() and l.split()[0] != model]
+        if others:
+            notes.append("other models loaded: " + ", ".join(others))
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:
+        q = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory", "--format=csv,noheader"], capture_output=True, text=True, timeout=10).stdout
+        # every desktop program has a small GPU process (a browser, the editor, her own voice): only something big competes
+        busy = []
+        for l in q.splitlines():
+            parts = [x.strip() for x in l.split(",")]
+            if len(parts) < 3 or "ollama" in parts[1]:
+                continue
+            mib = int("".join(ch for ch in parts[-1] if ch.isdigit()) or 0)
+            if mib >= 512:
+                busy.append("%s (%d MiB)" % (os.path.basename(parts[1].split()[0]), mib))
+        if busy:
+            notes.append("other programs on the card: " + ", ".join(busy))
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return "; ".join(notes)
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", nargs="*", help="run only these cases")
@@ -1062,6 +1099,10 @@ def main(argv):
                 pass
     shutil.rmtree(WORK, ignore_errors=True)
     os.makedirs(WORK)
+    build = build_info()
+    shared = card_shared(env.get("OPENAI_MODEL", ""))
+    if shared:
+        print("warning: the graphics card is shared (%s): times and some results will be worse than on an idle card" % shared, flush=True)
     rows, lines = [], []
     for case in CASES:
         if a.only and case["name"] not in a.only:
@@ -1075,6 +1116,7 @@ def main(argv):
         rows.append((case, res, checks))
         print("   %s in %.0fs" % ("PASS" if all(c[1] for c in checks) else "FAIL", res["took"]), flush=True)
     lines += ["# Sarina evals, %s" % time.strftime("%Y-%m-%d %H:%M"), "",
+              "Build: %s. Graphics card: %s." % (build.get("commit", "unknown")[:12] + (" with uncommitted changes" if build.get("modified") else ""), ("SHARED, " + shared) if shared else "idle"), "",
               "Model: %s via %s. Cases in the write group run with --allow-write inside throw-away folders under /tmp/sarina-evals; all others are read-only. Each case lists its checks; the full answer is below it." % (env.get("OPENAI_MODEL", "?"), env.get("OPENAI_BASE_URL", "?")), ""]
     tot = ok = 0
     for case, res, checks in rows:
@@ -1091,16 +1133,20 @@ def main(argv):
             if res["err"] and res["rc"] != 0:
                 lines += ["", "stderr: `%s`" % res["err"].strip()[-400:]]
         lines.append("")
-    lines.insert(3, "**%d of %d cases passed.**" % (ok, tot))
+    timed = sorted((res["took"], case["name"]) for case, res, _ in rows if res)
+    slow = ", ".join("%s %.0f s" % (n, t) for t, n in reversed(timed[-5:]))
+    lines.insert(3, "**%d of %d cases passed.** Slowest: %s." % (ok, tot, slow or "-"))
     # the same results for programs (the achievements ledger reads this, not the prose)
     results = []
     for case, res, checks in rows:
         graded = [c for c in checks if c[1] is not None]
-        results.append({"name": case["name"], "group": case["group"], "passed": (all(c[1] for c in graded) if graded else None)})
-    write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only), "results": results}, indent=1) + "\n")
+        results.append({"name": case["name"], "group": case["group"], "passed": (all(c[1] for c in graded) if graded else None), "took": round(res["took"], 1) if res else None})
+    write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only), "build": build, "card_shared": shared, "results": results}, indent=1) + "\n")
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     write(a.out, "\n".join(lines) + "\n")
     print("\n%d of %d passed; report: %s" % (ok, tot, a.out))
+    if slow:
+        print("slowest: " + slow)
     if not a.only:
         # the access ladder reads the full runs: shown, never applied here (the owner does that at a terminal: evals/ladder.py apply)
         try:
