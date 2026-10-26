@@ -597,6 +597,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = ungroundedIdentifierText(id)
 				} else if f := checkedUnseenFile(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); f != "" {
 					text = checkedUnseenText(f)
+				} else if why := failedWriteHidden(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); why != "" {
+					text = failedWriteHiddenText(why)
 				} else if toolErrorIgnored(answer, sess.Messages[min(msgStart, len(sess.Messages)):]) {
 					text = toolErrorIgnoredText
 				} else if why := codeWorksUnverified(answer, hist); why != "" {

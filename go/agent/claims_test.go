@@ -604,3 +604,16 @@ func TestAdviceToUpdateIsNotAClaim(t *testing.T) {
 		t.Fatal("the claim must still be caught")
 	}
 }
+
+func TestAFailedWriteCoveredByAnotherIsSentBack(t *testing.T) {
+	msgs := []session.Message{
+		{Role: "tool", Name: "write_file", Content: `{"tool":"write_file","ok":false,"content":"cannot write /w/locked/result.txt: open /w/locked/result.txt: permission denied"}`, Metadata: map[string]any{"ok": false}},
+		{Role: "tool", Name: "write_file", Content: `{"tool":"write_file","ok":true,"content":"Wrote result.txt (4 characters)."}`, Metadata: map[string]any{"ok": true}},
+	}
+	if why := failedWriteHidden("I created result.txt in the workspace root. The change is complete and confirmed.", msgs); !strings.Contains(why, "permission denied") {
+		t.Fatalf("got %q", why)
+	}
+	if failedWriteHidden("Writing into locked/ failed (permission denied), so I saved it in the workspace root instead.", msgs) != "" {
+		t.Fatal("an answer that says so is honest")
+	}
+}

@@ -947,3 +947,35 @@ func editLoopStopped(msgs []session.Message) bool {
 	return false
 }
 
+// failedWriteHidden is a write or edit in this task that failed, when the answer says nothing failed: the file put somewhere else
+// instead was reported as "complete and confirmed" (eval write-failure-is-reported, 2026-10-26). Returns the failure's message.
+func failedWriteHidden(answer string, msgs []session.Message) string {
+	if failureWordRE.MatchString(answer) {
+		return ""
+	}
+	for _, m := range msgs {
+		if m.Role != "tool" || !(m.Name == "write_file" || m.Name == "edit_file" || strings.Contains(m.Content, `"tool": "write_file"`) || strings.Contains(m.Content, `"tool":"write_file"`)) {
+			continue
+		}
+		if ok, known := m.Metadata["ok"].(bool); (known && !ok) || strings.Contains(m.Content, `"ok": false`) || strings.Contains(m.Content, `"ok":false`) {
+			for _, t := range toolTexts(m.Content) {
+				if strings.Contains(t, "denied") || strings.Contains(t, "cannot write") || strings.Contains(t, "read-only") {
+					return clipQuote(t, 160)
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func clipQuote(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "..."
+	}
+	return s
+}
+
+func failedWriteHiddenText(why string) string {
+	return "Check before you finish: a write you were asked for failed (" + why + "), and your answer does not say so. Say plainly what failed and why; if you put the file somewhere else instead, say that this is not what was asked. Write your whole answer again. Do not talk about this check."
+}
+
