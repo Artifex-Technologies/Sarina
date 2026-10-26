@@ -546,6 +546,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				text := ""
 				if claimsToolWork(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]) {
 					text = toolWorkText
+				} else if exfilInAnswer(answer) != "" {
+					text = exfilInAnswerText
 				} else if what := suggestsSecurityOff(answer); what != "" {
 					text = securityOffText(what)
 					// the work not done comes before the quote checks: her proposed fix is "quoted" nowhere in the tools, and that

@@ -124,3 +124,19 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("a failing test in the sandbox must fail the check: %v %q", md, note)
 	}
 }
+
+func TestAFailedCheckShowsTheLinesAroundTheError(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go toolchain")
+	}
+	t.Setenv("SARINA_SANDBOX_TESTS", "off")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/v\n\ngo 1.21\n"), 0o644)
+	bad := filepath.Join(dir, "a_test.go")
+	// what the eval saw: a new test inserted after a function's first line, its old body left behind at the top level
+	os.WriteFile(bad, []byte("package v\n\nimport \"testing\"\n\nfunc TestWords(t *testing.T) {\n}\n\nfunc TestReverse(t *testing.T) {\n}\n\tif 1 != 1 {\n\t\tt.Fatal()\n\t}\n}\n"), 0o644)
+	note, md := verifyCode(context.Background(), bad, &Context{Root: dir})
+	if md["verify"] != "failed" || !strings.Contains(note, "as it is now, around line 10") || !strings.Contains(note, "10: \tif 1 != 1 {") {
+		t.Fatalf("the lines around the error are not shown:\n%s", note)
+	}
+}

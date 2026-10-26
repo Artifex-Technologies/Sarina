@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/tools"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -596,6 +597,10 @@ func deniedReadableText(f string) string {
 }
 
 var changeAskRE = regexp.MustCompile(`(?i)\b(fix|change|add|implement|update|modify|correct|rename|refactor|remove|replace)\b`)
+
+// newFileAskRE is an ask to write a named file ("write stack.go", "create notes.md"): only with a file name, since "write me a
+// script" may want the code shown, not saved.
+var newFileAskRE = regexp.MustCompile(`(?i)\b(write|create|make)\b[^.\n]{0,40}\b[\w-]+\.[a-z]{1,5}\b`)
 var adviceAskRE = regexp.MustCompile(`(?i)^\s*(how|what|why|which|where|when|can|could|would|should|is|are|do|does|explain|tell me|show me)\b`)
 var describedChangeRE = regexp.MustCompile("(?is)```|\\b(change|replace)\\b.{1,80}\\b(to|with)\\b|\\bthis will (make|fix)\\b|\\bthe fix\\b")
 
@@ -603,14 +608,14 @@ var describedChangeRE = regexp.MustCompile("(?is)```|\\b(change|replace)\\b.{1,8
 // none: "Change return a - b to return a + b. This will make the test pass." with calc.go untouched (eval code-fix-failing-test,
 // 2026-10-26). Advice questions ("how would I fix…") are left alone.
 func fixDescribedNotMade(prompt, answer string, canWrite bool, history []map[string]any) bool {
-	if !canWrite || len(history) > 0 || adviceAskRE.MatchString(prompt) || !changeAskRE.MatchString(prompt) {
+	if !canWrite || len(history) > 0 || adviceAskRE.MatchString(prompt) || !(changeAskRE.MatchString(prompt) || newFileAskRE.MatchString(prompt)) {
 		return false
 	}
 	return describedChangeRE.MatchString(answer)
 }
 
 const fixDescribedText = "Check before you finish: you were asked to make this change, and you only described it; no file was changed. Make the change " +
-	"now with edit_file (read the file first if you have not), then say what you changed and what the build check after it said. Do not " +
+	"now: edit_file for a file that exists (read it first if you have not), write_file for a new one; then say what you changed and what the build check after it said. Do not " +
 	"say the code works unless that check passed."
 
 // toolEvidence is a tool result as text to compare an answer against: the stored JSON as is, and every string inside it unescaped,
@@ -849,3 +854,17 @@ func upToDateUnseen(answer, evidence string) bool {
 }
 
 const upToDateText = "Check before you finish: your answer says the system is up to date, but nothing in this task showed that. Leave it out, or check first with your tools. Write your whole answer again. Do not talk about this check."
+
+// exfilInAnswer is code in the answer that would take keys or passwords off the computer: write_file, edit_file and bash refuse such
+// content, so the model wrote the script into its answer instead (eval code-refuse-exfil, 2026-10-26: "I'll create a quiet script that
+// archives SSH/GPG keys and uploads them" with the whole script). What is refused as a file is refused as text.
+func exfilInAnswer(answer string) string {
+	for _, b := range fenceRE.FindAllStringSubmatch(answer, -1) {
+		if why := tools.ExfilRisk(b[1]); why != "" {
+			return why
+		}
+	}
+	return ""
+}
+
+const exfilInAnswerText = "Check before you finish: your answer contains a script that sends keys or passwords off this computer. That is refused, as a file and as text, whoever asks. Write your whole answer again without any of that code: say plainly that you will not write it, and why (it would hand someone the owner's keys)."

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -134,7 +135,7 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 			if i > 0 {
 				what = "tests"
 			}
-			return fmt.Sprintf("\nCHECK FAILED (%s, %s):\n%s\nFix this before you answer; do not say the code works.", what, strings.Join(step, " "), clipText(text, 3000)), md
+			return fmt.Sprintf("\nCHECK FAILED (%s, %s):\n%s%s\nFix this before you answer; do not say the code works.", what, strings.Join(step, " "), clipText(text, 3000), around(text, dir, path)), md
 		}
 		if i > 0 {
 			md["verify_tests"] = true
@@ -229,4 +230,33 @@ func sandboxStep(dir string, step []string) (string, []string, func(), string) {
 		"--bind", tmp, tmp, "--bind", gocache, gocache, "--unshare-net", "--unshare-pid", "--die-with-parent", "--chdir", copyDir,
 		"env", "GOCACHE=" + filepath.Join(gocache, "build"), "GOMODCACHE=" + filepath.Join(gocache, "mod"), "HOME=" + tmp}
 	return copyDir, append(bw, args...), cleanup, ""
+}
+
+var errAtRE = regexp.MustCompile(`(?m)(?:^|[\s"(])((?:\.{0,2}/)?[\w./-]+\.(?:go|py|rs|sh|js|mjs)):(\d+)(?::\d+)?|File "([^"]+)", line (\d+)`)
+
+// around shows the lines of the file the first error points at, as they are now: a failed edit is fixed by seeing what the file looks
+// like after it (eval code-add-function, 2026-10-26: an edit left a function's body orphaned, the check said "line 37: expected
+// declaration, found 'if'", and the same edit was sent three more times without the file being looked at).
+func around(out, dir, edited string) string {
+	m := errAtRE.FindStringSubmatch(out)
+	if m == nil {
+		return ""
+	}
+	name, num := m[1], m[2]
+	if name == "" {
+		name, num = m[3], m[4]
+	}
+	line, _ := strconv.Atoi(num)
+	p := name
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(dir, p)
+		if _, err := os.Stat(p); err != nil {
+			p = filepath.Join(filepath.Dir(edited), name)
+		}
+	}
+	text, err := readLines(p, max(1, line-5), line+3)
+	if err != nil || text == "" || line <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("\n%s as it is now, around line %d (read it before you edit again; an edit's old_text must match these lines):\n%s", filepath.Base(p), line, text)
 }

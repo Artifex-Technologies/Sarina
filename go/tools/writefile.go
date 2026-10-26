@@ -157,7 +157,7 @@ func WriteFile() Tool {
 			if toolOutputMarker.MatchString(content) {
 				return "", nil, fmt.Errorf("refused: the content for %s holds a tool-output marker (such as <read_file_output>) instead of the file's text. Write the real text of the whole file, or add to it with edit_file", given)
 			}
-			if why := exfilRisk(content); why != "" {
+			if why := ExfilRisk(content); why != "" {
 				return "", nil, fmt.Errorf("%s", exfilRefusal(given, why))
 			}
 			st.markAuthored(path)
@@ -262,6 +262,10 @@ func EditFile() Tool {
 			switch {
 			case oldT == newT:
 				return "", nil, fmt.Errorf("old_text and new_text are identical; nothing to change")
+			case strings.Contains(newT, oldT) && strings.Contains(before, newT):
+				// an edit that only adds text around old_text, whose result is already in the file: the same edit again, which would
+				// add a second copy (eval code-add-function, 2026-10-26: Reverse inserted four times after the first edit had passed)
+				return "", nil, fmt.Errorf("refused: %s already contains this change (an earlier edit made it); repeating it would add a second copy. Read the file if you are unsure what it holds now", given)
 			case count == 0:
 				return "", nil, fmt.Errorf("old_text was not found in %s. It must match exactly, including whitespace; read the file again and copy the text", given)
 			case count > 1 && !replaceAll:
@@ -273,7 +277,7 @@ func EditFile() Tool {
 				replaced = count
 				after = strings.ReplaceAll(before, oldT, newT)
 			}
-			if why := exfilRisk(after); why != "" && exfilRisk(before) == "" {
+			if why := ExfilRisk(after); why != "" && ExfilRisk(before) == "" {
 				return "", nil, fmt.Errorf("%s", exfilRefusal(given, why))
 			}
 			if strings.TrimSpace(before) != "" && strings.TrimSpace(after) == "" {

@@ -774,3 +774,17 @@ func TestWriteInTheSameStepAsTheReadIsRefused(t *testing.T) {
 		t.Fatal("placeholder content replaced the file")
 	}
 }
+
+func TestTheSameInsertionTwiceIsRefused(t *testing.T) {
+	e := newEnv(t, writeAll())
+	e.put("t.go", "package t\n\nfunc Words() {}\n")
+	edit := map[string]any{"path": "t.go", "old_text": "func Words() {}", "new_text": "func Words() {}\n\nfunc Reverse() {}"}
+	e.ok("edit_file", edit)
+	r := e.fails("edit_file", edit, "tool_execution_error")
+	if !strings.Contains(r.Content, "already contains this change") || strings.Count(e.read("t.go"), "func Reverse") != 1 {
+		t.Fatalf("a repeated insertion was applied again: %q\n%s", r.Content, e.read("t.go"))
+	}
+	// a real change whose result happens to exist elsewhere is still made
+	e.put("u.txt", "a\nab\n")
+	e.ok("edit_file", map[string]any{"path": "u.txt", "old_text": "a\nab", "new_text": "ab\nab"})
+}

@@ -19,7 +19,7 @@ var networkRE = regexp.MustCompile(`(?i)\b(curl|wget|nc|ncat|netcat|socat|scp|sf
 	`\bfetch\(|\bXMLHttpRequest\b|\bInvoke-(WebRequest|RestMethod)\b|\bnet/http\b|\bhttp\.(Post|NewRequest)\b|\bdiscord(app)?\.com/api/webhooks\b`)
 
 // exfilRisk returns what makes content a credential exfiltration (what it reads, how it sends), or "".
-func exfilRisk(content string) string {
+func ExfilRisk(content string) string {
 	cred := credentialRE.FindString(content)
 	if cred == "" {
 		return ""

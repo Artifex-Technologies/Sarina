@@ -11,6 +11,7 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/trust"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/Artifex-Technologies/Sarina/go/agent"
@@ -475,6 +476,7 @@ func chatCommand(env *Env, args []string) int {
 		return exitUsage
 	}
 	o.autoReview = !o.noAutoReview
+	cryptoForPrompt(strings.Join(positional, " "))
 	a, err := o.agent(env, nil)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "sarina: %v\n", err)
@@ -512,6 +514,7 @@ func resumeCommand(env *Env, args []string) int {
 		return exitFailure
 	}
 	o.autoReview = !o.noAutoReview
+	cryptoForPrompt(strings.Join(rest[1:], " "))
 	a, err := o.agent(env, stored)
 	if err != nil {
 		fmt.Fprintf(env.Stderr, "sarina: %v\n", err)
@@ -664,5 +667,24 @@ func conversation(env *Env, a *agent.Agent, o *opts, stored *session.Session, fi
 		} else {
 			last = code
 		}
+	}
+}
+
+// cryptoAskRE is a question the crypto and steganography tools are for: encodings, hashes, ciphers, keys, certificates, tokens, and
+// hidden data, or a long run of base64- or hex-looking characters.
+var cryptoAskRE = regexp.MustCompile(`(?i)\b(base ?64|base ?32|hex(adecimal)?|hash(es|ed)?|sha-?\d+|md5|bcrypt|argon2|hmac|cipher(text)?|caesar|vigen[eè]re|rot ?13|xor|` +
+	`encrypt\w*|decrypt\w*|encod\w*|decod\w*|crypto\w*|jwt|tokens?|certificate|x\.?509|pem|pgp|gpg|ssh key|public key|private key|` +
+	`steg\w*|hidden (message|data|text)|lsb|exif|metadata)\b|[A-Za-z0-9+]{24,}={0,2}|\b[0-9a-fA-F]{32,}\b`)
+
+// cryptoForPrompt applies SARINA_CRYPTO=auto: the crypto and stego tools (about 4,500 characters of definitions sent with every
+// request) are offered only when the question is about cryptography or hidden data. "on" and "off" are left as they are.
+func cryptoForPrompt(prompt string) {
+	if os.Getenv("SARINA_CRYPTO") != "auto" {
+		return
+	}
+	if cryptoAskRE.MatchString(prompt) {
+		os.Setenv("SARINA_CRYPTO", "on")
+	} else {
+		os.Setenv("SARINA_CRYPTO", "off")
 	}
 }

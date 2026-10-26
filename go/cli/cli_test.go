@@ -423,3 +423,28 @@ func TestVersionNamesTheBuild(t *testing.T) {
 		t.Fatal("a build always says something about its commit")
 	}
 }
+
+func TestCryptoToolsOnlyForCryptoQuestions(t *testing.T) {
+	cases := map[string]bool{
+		"What is this and what does it say? NzQ2ODY1MjA2ZDY1NjU3NDY5NmU2NzIwNjk3MzIw": true,
+		"Is there a hidden message in clean.png?":                                     true,
+		"Can you crack this Caesar cipher: Khoor":                                     true,
+		"Check this JWT for me":                                                       true,
+		"How is my computer doing?":                                                   false,
+		"Tell me a joke about backups":                                                false,
+		"Add a function Reverse to text.go":                                           false,
+		"Read /home/zlothra/Documents/Github/Labyrinth/README.md and summarise it":    false,
+	}
+	for prompt, want := range cases {
+		t.Setenv("SARINA_CRYPTO", "auto")
+		cryptoForPrompt(prompt)
+		if got := os.Getenv("SARINA_CRYPTO") == "on"; got != want {
+			t.Errorf("%q: crypto tools %v, want %v", prompt, got, want)
+		}
+	}
+	t.Setenv("SARINA_CRYPTO", "off")
+	cryptoForPrompt("decode this base64")
+	if os.Getenv("SARINA_CRYPTO") != "off" {
+		t.Fatal("an explicit off is kept")
+	}
+}

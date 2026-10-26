@@ -757,7 +757,7 @@ CASES = [
 # uninstalled version can be tried). Fixtures are generated here; the LSB image follows the plain scheme (32-bit length, rgb order).
 
 def _crypto_env():
-    return {"SARINA_CRYPTO": "on", "SARINA_SKILLS_DIR": os.path.join(GH, "Sarina", "packaging", "skills")}
+    return {"SARINA_CRYPTO": "auto", "SARINA_SKILLS_DIR": os.path.join(GH, "Sarina", "packaging", "skills")}
 
 
 def _png_rgb(w, h, pixels):
@@ -1054,7 +1054,8 @@ def card_shared(model):
     notes = []
     try:
         ps = subprocess.run(["ollama", "ps"], capture_output=True, text=True, timeout=10).stdout.splitlines()[1:]
-        others = [l.split()[0] for l in ps if l.split() and l.split()[0] != model]
+        # her own embedding model (vault search) is small and part of the run; another chat model is not
+        others = [l.split()[0] for l in ps if l.split() and l.split()[0] != model and "embed" not in l.split()[0]]
         if others:
             notes.append("other models loaded: " + ", ".join(others))
     except (OSError, subprocess.TimeoutExpired):

@@ -23,7 +23,7 @@ func Bash() Tool {
 			return "", nil, fmt.Errorf("command is empty")
 		}
 		// never, not even with --unsafe: that flag is for deleting the operator's own files, not for sending their keys away
-		if why := exfilRisk(command); why != "" {
+		if why := ExfilRisk(command); why != "" {
 			return "", nil, Denied("%s", exfilRefusal("this command", why))
 		}
 		if !tc.Permissions.AllowDestructiveShellCommands {
