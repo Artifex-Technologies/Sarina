@@ -593,3 +593,26 @@ func TestCeilingDefaultsFollowTheToken(t *testing.T) {
 		t.Fatal("a flag must override the env")
 	}
 }
+
+// A web page cannot reach the service: not through a name rebound to 127.0.0.1, not cross-site.
+func TestBrowserRequestsAreRefused(t *testing.T) {
+	h := New(Config{}).Handler()
+	for _, tc := range []struct {
+		name string
+		mod  func(*http.Request)
+		want int
+	}{
+		{"a program on this computer", func(*http.Request) {}, http.StatusOK},
+		{"a rebound name", func(r *http.Request) { r.Host = "evil.example:8899" }, http.StatusForbidden},
+		{"cross-site", func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "cross-site") }, http.StatusForbidden},
+		{"another origin", func(r *http.Request) { r.Header.Set("Origin", "http://evil.example") }, http.StatusForbidden},
+	} {
+		r := httptest.NewRequest("GET", "http://127.0.0.1:8899/healthz", nil)
+		tc.mod(r)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.want {
+			t.Errorf("%s: %d, want %d", tc.name, w.Code, tc.want)
+		}
+	}
+}

@@ -15,7 +15,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -100,7 +102,36 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/", s.auth(func(w http.ResponseWriter, r *http.Request) {
 		detail(w, http.StatusNotFound, "not found")
 	}))
-	return mux
+	return browserGuard(mux)
+}
+
+// browserGuard refuses what only a web page could send: a Host that is not a loopback name (DNS rebinding: a site whose name
+// now points at 127.0.0.1) and a cross-site request (Sec-Fetch-Site, or an Origin other than this server). Programs on this
+// computer are unaffected: they send a loopback Host and no Origin.
+func browserGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		host = strings.Trim(host, "[]")
+		ip := net.ParseIP(host)
+		if !(strings.EqualFold(host, "localhost") || (ip != nil && ip.IsLoopback())) {
+			detail(w, http.StatusForbidden, "unexpected Host header: this service only answers on a loopback address")
+			return
+		}
+		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
+			detail(w, http.StatusForbidden, "cross-site request refused")
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" {
+			if u, err := url.Parse(origin); err != nil || u.Host != r.Host {
+				detail(w, http.StatusForbidden, "cross-origin request refused")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // ---- helpers ---------------------------------------------------------------------
