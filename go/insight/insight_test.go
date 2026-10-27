@@ -202,3 +202,23 @@ What we talked about when it was not about the computer.
 		t.Errorf("fresh small talk was dropped: %v", dropped)
 	}
 }
+
+func TestTheOwnersNameAndPronouns(t *testing.T) {
+	t.Setenv("SARINA_OWNER_NAME", "Matt")
+	t.Setenv("SARINA_OWNER_PRONOUNS", "he/him")
+	if NoteName() != "Entities/About Matt.md" {
+		t.Fatalf("note: %s", NoteName())
+	}
+	p := prompt()
+	if strings.Contains(p, "Zlothra") || !strings.Contains(p, "what he likes") || !strings.Contains(p, "Matt said") && !strings.Contains(p, "things Matt said") {
+		t.Fatalf("prompt: %s", p[:300])
+	}
+	if r := (Note{}).Render(); !strings.HasPrefix(r, "# About Matt") || strings.Contains(r, "their own words") {
+		t.Fatalf("render: %s", r[:200])
+	}
+	t.Setenv("SARINA_OWNER_NAME", "")
+	t.Setenv("SARINA_OWNER_PRONOUNS", "")
+	if o := OwnerFromEnv(); o.Name != "the owner" || o.Subject != "they" {
+		t.Fatalf("default: %+v", o)
+	}
+}

@@ -18,7 +18,7 @@ import (
 )
 
 func init() {
-	cli.Register("reflect", "learn from the talk log what she knows about the owner (Entities/About Zlothra.md): reflect [--path VAULT] [--dry-run]", reflectCommand)
+	cli.Register("reflect", "learn from the talk log what she knows about the owner (Entities/About <SARINA_OWNER_NAME>.md): reflect [--path VAULT] [--dry-run]", reflectCommand)
 	cli.Register("vault-ingest", "turn new files in the vault's Inbox/ into linked notes under Sources/ (originals untouched): vault-ingest [--path VAULT] [--dry-run]", ingestCommand)
 }
 
@@ -166,7 +166,15 @@ func reflectCommand(env *cli.Env, args []string) int {
 	} else {
 		c = llm.NewClient(model)
 	}
-	notePath := filepath.Join(v.Root, filepath.FromSlash(NoteName))
+	notePath := filepath.Join(v.Root, filepath.FromSlash(NoteName()))
+	// the note written before the owner's name was set (About Zlothra) becomes this one, once: what was learned and forgotten is kept
+	if legacy := filepath.Join(v.Root, filepath.FromSlash(LegacyNoteName)); legacy != notePath {
+		if _, err := os.Stat(notePath); os.IsNotExist(err) {
+			if _, err := os.Stat(legacy); err == nil {
+				_ = os.Rename(legacy, notePath)
+			}
+		}
+	}
 	old, readErr := os.ReadFile(notePath)
 	n := ParseNote(string(old))
 	gate := gateAdapter{guard.Memory()}
@@ -196,7 +204,7 @@ func reflectCommand(env *cli.Env, args []string) int {
 		if readErr != nil {
 			mode = vault.Create
 		}
-		if _, err := v.Write(guard.Memory(), NoteName, n.Render(), mode); err != nil {
+		if _, err := v.Write(guard.Memory(), NoteName(), n.Render(), mode); err != nil {
 			fmt.Fprintln(env.Stderr, "sarina reflect:", err)
 			return 1
 		}

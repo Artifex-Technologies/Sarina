@@ -1,7 +1,7 @@
 // Package insight is how Sarina learns about the person she talks with, not only remembers what was said (the idea of
 // vectorize-io/hindsight's observations and mental models; no code taken). Once a day `sarina reflect` reads the talk log
 // her desktop keeps in the vault (Talks/YYYY-MM.md: what they said, what she said) since the last time, asks the model what
-// those lines show about them, and folds the answer into one note, Entities/About Zlothra.md:
+// those lines show about them, and folds the answer into one note, Entities/About <owner>.md (NoteName):
 //
 //   - every observation must come with a quote of their own words, and the quote is checked against the talk log: an
 //     observation whose quote is not really there is thrown away (the model cannot invent what they said)
@@ -27,8 +27,32 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/llm"
 )
 
-// NoteName is the note she keeps about the owner.
-const NoteName = "Entities/About Zlothra.md"
+// Owner is who the About note is about: SARINA_OWNER_NAME is what to call them (the account name is not it: "Zlothra" is a
+// social-media handle, the owner is Matt), SARINA_OWNER_PRONOUNS how to refer to them (he/him, she/her, they/them: the default).
+type Owner struct{ Name, Subject, Object, Possessive, Reflexive string }
+
+// OwnerFromEnv reads the owner's name and pronouns.
+func OwnerFromEnv() Owner {
+	o := Owner{Name: strings.TrimSpace(os.Getenv("SARINA_OWNER_NAME")), Subject: "they", Object: "them", Possessive: "their", Reflexive: "themselves"}
+	if o.Name == "" || strings.ContainsAny(o.Name, "/\\.") {
+		o.Name = "the owner"
+	}
+	switch strings.ToLower(strings.ReplaceAll(os.Getenv("SARINA_OWNER_PRONOUNS"), " ", "")) {
+	case "he/him", "he/him/his", "he":
+		o.Subject, o.Object, o.Possessive, o.Reflexive = "he", "him", "his", "himself"
+	case "she/her", "she/her/hers", "she":
+		o.Subject, o.Object, o.Possessive, o.Reflexive = "she", "her", "her", "herself"
+	}
+	return o
+}
+
+// NoteName is the note she keeps about the owner (Entities/About Matt.md).
+func NoteName() string {
+	return "Entities/About " + OwnerFromEnv().Name + ".md"
+}
+
+// LegacyNoteName is where the note was before the owner's name was set: it is renamed once, so nothing learned is lost.
+const LegacyNoteName = "Entities/About Zlothra.md"
 
 // Line is one exchange from the talk log.
 type Line struct {
@@ -121,8 +145,9 @@ func ParseNote(text string) Note {
 // Render writes the note's body (front matter is added by the vault).
 func (n Note) Render() string {
 	var b strings.Builder
-	b.WriteString("# About Zlothra\n\nWhat I have learned from talking with Zlothra, each with how often I have seen it and their own words that show it. ")
-	b.WriteString("I update this myself once a day. Zlothra can edit it: anything moved under Forgotten I will not add again.\n\n## Observations\n\n")
+	o := OwnerFromEnv()
+	fmt.Fprintf(&b, "# About %s\n\nWhat I have learned from talking with %s, each with how often I have seen it and %s own words that show it. ", o.Name, o.Name, o.Possessive)
+	fmt.Fprintf(&b, "I update this myself once a day. %s can edit it: anything moved under Forgotten I will not add again.\n\n## Observations\n\n", capital(o.Name))
 	obs := append([]Observation(nil), n.Observations...)
 	sort.SliceStable(obs, func(i, j int) bool {
 		if obs[i].Seen != obs[j].Seen {
@@ -294,24 +319,37 @@ type Completer interface {
 	Complete(ctx context.Context, req llm.Request, on func(llm.StreamEvent)) (*llm.Turn, error)
 }
 
-const prompt = `Below are things Zlothra said to you in conversation, with the date, and what you answered.
-Write what these show about Zlothra as a person: what they like or dislike, people and pets in their life, what they are working on or planning, what worries them, what makes them laugh, how they like to be talked to.
+const promptTemplate = `Below are things {name} said to you in conversation, with the date, and what you answered.
+Write what these show about {name} as a person: what {he} likes or dislikes, people and pets in {his} life, what {he} is working on or planning, what worries {him}, what makes {him} laugh, how {he} likes to be talked to.
 Rules:
-- Only what Zlothra said about themselves, not what you said.
-- Each observation is one short sentence in the third person ("Zlothra has a cat named Pixel").
-- Each needs a quote: Zlothra's exact words copied from the lines below, at least three words, that show it.
+- Only what {name} said about {himself}, not what you said.
+- Each observation is one short sentence in the third person ("{name} has a cat named Pixel").
+- Each needs a quote: {name}'s exact words copied from the lines below, at least three words, that show it.
 - Never anything about passwords, keys, account numbers or other secrets.
 - At most 8. If nothing is worth keeping, write nothing.
 Answer only with one JSON object per line: {"observation": "...", "quote": "..."}
 
 `
 
+// prompt is the template with the owner's name and pronouns: "Zlothra ... they" made the notes call Matt by his handle and "their".
+func prompt() string {
+	o := OwnerFromEnv()
+	return strings.NewReplacer("{name}", capital(o.Name), "{he}", o.Subject, "{him}", o.Object, "{his}", o.Possessive, "{himself}", o.Reflexive).Replace(promptTemplate)
+}
+
+func capital(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
 // Ask asks the model for proposals about these lines.
 func Ask(ctx context.Context, c Completer, lines []Line) ([]Proposal, error) {
 	var b strings.Builder
-	b.WriteString(prompt)
+	b.WriteString(prompt())
 	for _, l := range lines {
-		fmt.Fprintf(&b, "%s Zlothra: %s\n   You: %s\n", l.When.Format("2006-01-02 15:04"), l.Said, l.Me)
+		fmt.Fprintf(&b, "%s %s: %s\n   You: %s\n", l.When.Format("2006-01-02 15:04"), capital(OwnerFromEnv().Name), l.Said, l.Me)
 	}
 	turn, err := c.Complete(ctx, llm.Request{Messages: []llm.Message{{Role: "user", Content: b.String()}}, MaxTokens: 3000}, nil)
 	if err != nil {
