@@ -43,13 +43,14 @@ func Python() (string, error) {
 	return "", fmt.Errorf("no Python interpreter found (set %s)", PythonEnv)
 }
 
-// Command builds `python -m sarina_helpers args...` with PYTHONPATH adjusted.
+// Command builds `python -P -m sarina_helpers args...` with PYTHONPATH adjusted.
 func Command(args ...string) (*exec.Cmd, error) {
 	py, err := Python()
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(py, append([]string{"-m", "sarina_helpers"}, args...)...)
+	// -P: the current folder is not put on the import path, so a sarina_helpers/ folder planted where this runs is not used
+	cmd := exec.Command(py, append([]string{"-P", "-m", "sarina_helpers"}, args...)...)
 	cmd.Env = os.Environ()
 	if dir := os.Getenv(PathEnv); dir != "" {
 		pp := dir

@@ -294,6 +294,10 @@ func helpersReport(ctx context.Context, path string) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Helper programs: installed: %s; not installed: %s.", orNone(have), orNone(missing))
+	// an absolute path never starts with "-", so neither helper can read the file name as an option
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
 	for _, h := range have {
 		var args []string
 		switch h {

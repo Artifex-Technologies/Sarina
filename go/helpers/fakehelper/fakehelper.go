@@ -32,6 +32,9 @@ func MaybeRun() {
 
 // Run is the fake helper; args are what follows the interpreter name.
 func Run(args []string, in io.Reader, out io.Writer) int {
+	if len(args) > 0 && args[0] == "-P" { // the real interpreter's safe-path flag
+		args = args[1:]
+	}
 	if len(args) < 2 || args[0] != "-m" || args[1] != "sarina_helpers" {
 		fmt.Fprintln(out, "not the helper")
 		return 2
