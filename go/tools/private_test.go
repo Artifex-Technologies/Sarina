@@ -27,3 +27,22 @@ func TestPrivateFoldersAreOutOfReach(t *testing.T) {
 		t.Fatal("wrote into a private folder")
 	}
 }
+
+// Credential stores and browser profiles are private even when the owner listed nothing.
+func TestCredentialStoresArePrivateWithoutConfiguration(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SARINA_PRIVATE_DIRS", "")
+	for _, d := range []string{".ssh", ".config/vivaldi", ".config/Proton Pass", ".config/rclone", "notes"} {
+		os.MkdirAll(filepath.Join(home, d), 0o700)
+	}
+	os.WriteFile(filepath.Join(home, ".claude.json"), []byte("{}"), 0o600)
+	for _, p := range []string{".ssh/id_x", ".config/vivaldi/Default/Login Data", ".config/Proton Pass/x", ".config/rclone/rclone.conf", ".claude.json"} {
+		if !IsPrivate(filepath.Join(home, p)) {
+			t.Errorf("%s is readable", p)
+		}
+	}
+	if IsPrivate(filepath.Join(home, "notes", "todo.md")) || IsPrivate(filepath.Join(home, ".claude.json.txt")) {
+		t.Error("an ordinary file is private")
+	}
+}
