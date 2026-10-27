@@ -14,6 +14,7 @@ means nobody turned it on.
 from __future__ import annotations
 
 import json
+import os
 import socket
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +23,18 @@ from typing import Any
 DEFAULT_PORT = 44700
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_TIMEOUT = 5.0
+
+
+def default_token() -> str | None:
+    """The token Argus App wrote for this session ($XDG_RUNTIME_DIR/argus/token, readable only by this account)."""
+    runtime = os.environ.get('XDG_RUNTIME_DIR')
+    if not runtime:
+        return None
+    try:
+        with open(os.path.join(runtime, 'argus', 'token'), encoding='ascii') as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
 
 
 class ConsoleError(RuntimeError):
@@ -55,6 +68,8 @@ class ConsoleClient:
     timeout: float = DEFAULT_TIMEOUT
 
     def __post_init__(self) -> None:
+        if self.token is None:
+            self.token = default_token()
         self._socket: socket.socket | None = None
         self._reader: Any = None
         self._next_id = 1

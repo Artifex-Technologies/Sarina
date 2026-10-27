@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +56,25 @@ type Client struct {
 	conn   net.Conn
 	reader *bufio.Reader
 	nextID int
+}
+
+// TokenFile is where Argus App writes the token it made for this session ($XDG_RUNTIME_DIR/argus/token, readable only by
+// the account running it); "" when there is no runtime folder.
+func TokenFile() string {
+	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
+		return filepath.Join(d, "argus", "token")
+	}
+	return ""
+}
+
+// DefaultToken reads the token Argus App wrote, or returns "" when there is none.
+func DefaultToken() string {
+	if f := TokenFile(); f != "" {
+		if b, err := os.ReadFile(f); err == nil {
+			return strings.TrimSpace(string(b))
+		}
+	}
+	return ""
 }
 
 // New returns a client with the default host, port and timeout.

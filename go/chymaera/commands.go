@@ -53,7 +53,7 @@ func addConnFlags(fs *flag.FlagSet, env *cli.Env) connFlags {
 	return connFlags{
 		host:  fs.String("host", console.DefaultHost, "console host (loopback)"),
 		port:  fs.Int("port", console.DefaultPort, "console port"),
-		token: fs.String("token", env.Getenv(TokenEnv), "console token (default $"+TokenEnv+")"),
+		token: fs.String("token", firstNonEmpty(env.Getenv(TokenEnv), console.DefaultToken()), "console token (default $"+TokenEnv+", else the one Argus App wrote to $XDG_RUNTIME_DIR/argus/token)"),
 	}
 }
 
@@ -175,4 +175,13 @@ func mergeReportCommand(env *cli.Env, args []string) int {
 	}
 	fmt.Fprintln(env.Stdout, report.AsText())
 	return 0
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
