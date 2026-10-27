@@ -184,3 +184,51 @@ func TestAQuoteInsideAStringIsNamed(t *testing.T) {
 		t.Fatalf("the cause is not named:\n%s", note)
 	}
 }
+
+func TestTheSyntaxCheckDoesNotImportFromTheProject(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("no python3")
+	}
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "ran")
+	// a planted module named like the checker: python3 -m py_compile from the project folder would import it
+	os.WriteFile(filepath.Join(dir, "py_compile.py"), []byte("open("+strconvQuote(marker)+", 'w').write('x')\n"), 0o644)
+	good := filepath.Join(dir, "a.py")
+	os.WriteFile(good, []byte("x = 1\n"), 0o644)
+	t.Setenv("SARINA_SANDBOX_TESTS", "off")
+	verifyCode(context.Background(), good, &Context{Root: dir})
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the project's py_compile.py ran")
+	}
+}
+
+func TestTheSandboxHidesSecretsSocketsAndTheEnvironment(t *testing.T) {
+	if !haveBwrap() {
+		t.Skip("no bubblewrap")
+	}
+	dir := t.TempDir()
+	home, _ := os.UserHomeDir()
+	t.Setenv("SARINA_TEST_SECRET", "sk-should-not-be-seen")
+	probe := `import os, sys
+seen = []
+if os.environ.get("SARINA_TEST_SECRET"): seen.append("env")
+if os.path.exists("/run/user"): seen.append("/run/user")
+if os.path.exists(` + strconvQuote(filepath.Join(home, ".config")) + `): seen.append("home")
+print("SEEN:" + ",".join(seen))
+`
+	os.WriteFile(filepath.Join(dir, "probe.py"), []byte(probe), 0o644)
+	_, argv, cleanup, why := sandboxStep(dir, []string{"python3", "-I", filepath.Join(dir, "probe.py")})
+	if why != "" {
+		t.Fatal(why)
+	}
+	defer cleanup()
+	out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()
+	if err != nil {
+		t.Skipf("bubblewrap cannot run here: %v %s", err, out)
+	}
+	if !strings.Contains(string(out), "SEEN:\n") && !strings.HasSuffix(strings.TrimSpace(string(out)), "SEEN:") {
+		t.Fatalf("the sandbox showed: %s", out)
+	}
+}
+
+func strconvQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "\\'") + "'" }

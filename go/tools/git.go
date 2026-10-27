@@ -17,7 +17,35 @@ var gitRefRE = regexp.MustCompile(`^[\w./~^@{}-]{1,100}$`)
 // gitSafe are settings that keep a repository's own config from running programs when git only reads: an fsmonitor hook runs on
 // status, an external diff or textconv driver on diff, a pager on anything. Hooks are pointed nowhere as well.
 var gitSafe = []string{"-c", "core.fsmonitor=false", "-c", "core.pager=cat", "-c", "diff.external=", "-c", "core.hooksPath=/dev/null",
-	"-c", "color.ui=false", "--no-pager"}
+	"-c", "color.ui=false", "-c", "log.showSignature=false", "-c", "gpg.program=/bin/false", "-c", "gpg.ssh.program=/bin/false",
+	"-c", "gpg.x509.program=/bin/false", "-c", "core.sshCommand=/bin/false", "-c", "credential.helper=", "--no-pager"}
+
+// GitSafeArgs are gitSafe, for the session's git snapshot.
+func GitSafeArgs() []string { return append([]string{}, gitSafe...) }
+
+// gitRiskyKey are settings in a repository's own .git/config that make git run a program and that -c cannot switch off,
+// because their names are not known in advance: a filter driver runs on status and diff for every file its attributes name,
+// and an include pulls in more settings (filters among them). Everything else that runs a program on a read (fsmonitor,
+// pager, external diff, signature checks, ssh, credential helper, hooks) is switched off by gitSafe.
+var gitRiskyKey = regexp.MustCompile(`^(filter\..+\.(clean|smudge|process)|include\..*|includeif\..*)$`)
+
+// GitConfigRisk names the settings in root's own git config that would make git run a program, or "" when there are none.
+// The config is only listed (--local does not follow includes, so an include shows up as itself).
+func GitConfigRisk(ctx context.Context, root string) string {
+	cmd := exec.CommandContext(ctx, "git", append(GitSafeArgs(), "-C", root, "config", "--local", "--name-only", "--list")...)
+	cmd.Env = append(childEnv(nil), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	var risky []string
+	for _, k := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if k = strings.ToLower(strings.TrimSpace(k)); gitRiskyKey.MatchString(k) {
+			risky = append(risky, k)
+		}
+	}
+	return strings.Join(risky, ", ")
+}
 
 // GitRead shows what git knows about the workspace, without changing anything: a question about "the uncommitted change" could
 // not be answered at all without the shell (eval code-explain-diff, 2026-10-26).
@@ -73,6 +101,9 @@ func GitRead() Tool {
 			}
 			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			defer cancel()
+			if risky := GitConfigRisk(ctx, tc.Root); risky != "" {
+				return "", nil, fmt.Errorf("this repository's own git settings name programs for git to run (%s): git_read does not run git here; ask Matt to look at .git/config", risky)
+			}
 			cmd := exec.CommandContext(ctx, "git", append(append(append([]string{}, gitSafe...), "-C", tc.Root), gitArgs...)...)
 			cmd.Env = append(childEnv(tc), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat", "PAGER=cat")
 			var out bytes.Buffer

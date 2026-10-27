@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/tools"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -261,8 +262,10 @@ func discoverGuidance(cwd string, extra []string, home string) string {
 func git(cwd string, args ...string) (string, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", args...)
+	// the same settings as the git_read tool: a repository's own config never gets to run a program (gitSnapshot checks it first)
+	cmd := exec.CommandContext(ctx, "git", append(tools.GitSafeArgs(), args...)...)
 	cmd.Dir = cwd
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat")
 	out, err := cmd.Output()
 	if err != nil {
 		return "", false
@@ -281,6 +284,12 @@ func isGitRepo(cwd string) bool {
 func gitSnapshot(cwd string) string {
 	if !isGitRepo(cwd) {
 		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	risky := tools.GitConfigRisk(ctx, cwd)
+	cancel()
+	if risky != "" {
+		return "This repository's own git settings name programs for git to run (" + risky + "), so no git snapshot was taken."
 	}
 	branch, ok := git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
 	if !ok || branch == "" {

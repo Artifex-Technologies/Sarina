@@ -38,6 +38,7 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 	// Without that trust her tests still run, but in a sandbox (bubblewrap): a copy of the project, no network, everything else read-only.
 	// Otherwise she could not know whether tests she wrote pass until she had earned the tier that needs passing code (eval
 	// code-add-function, 2026-10-26: a correct function, a failing test of hers, and she never learned it).
+	trusted := tests
 	sandbox := !tests && os.Getenv("SARINA_SANDBOX_TESTS") != "off" && haveBwrap()
 	tests = tests || sandbox
 	var steps [][]string
@@ -62,7 +63,9 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 			label = "gofmt -e (no go.mod found, so no build)"
 		}
 	case ".py":
-		steps = append(steps, []string{"python3", "-m", "py_compile", path})
+		// -I: isolated, so the project's own folder is not on the import path (a planted py_compile.py would run) and PYTHON*
+		// variables are ignored
+		steps = append(steps, []string{"python3", "-I", "-m", "py_compile", path})
 		label = "python3 -m py_compile"
 		if tests && (strings.HasPrefix(filepath.Base(path), "test_") || strings.HasSuffix(path, "_test.py")) {
 			steps = append(steps, []string{"python3", "-m", "unittest", "-q", path})
@@ -113,7 +116,14 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 			return fmt.Sprintf("\nCheck skipped: %s is not installed, so the change was not verified.", step[0]), md
 		}
 		runDir, argv := dir, step
-		if sandbox && i > 0 && step[0] != "shellcheck" {
+		// cargo's build runs the project's own code (build scripts, procedural macros): without trust it goes in the sandbox with
+		// the tests, or does not run at all (Go is built so that compiling never runs the module's code)
+		builds := step[0] == "cargo"
+		if !trusted && !sandbox && builds {
+			md["verify"] = "skipped"
+			return fmt.Sprintf("\nCheck skipped: %s would run the project's own build code, and there is no sandbox here (bubblewrap): the change was not verified.", strings.Join(step[:2], " ")), md
+		}
+		if sandbox && (i > 0 || builds) && step[0] != "shellcheck" {
 			sd, sargv, cleanup, why := sandboxStep(dir, step)
 			if why != "" {
 				md["verify"] = "ok"
@@ -236,9 +246,24 @@ func sandboxStep(dir string, step []string) (string, []string, func(), string) {
 	for i, a := range step {
 		args[i] = strings.Replace(a, dir, copyDir, 1)
 	}
-	bw := []string{"bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
-		"--bind", tmp, tmp, "--bind", gocache, gocache, "--unshare-net", "--unshare-pid", "--die-with-parent", "--chdir", copyDir,
-		"env", "GOCACHE=" + filepath.Join(gocache, "build"), "GOMODCACHE=" + filepath.Join(gocache, "mod"), "HOME=" + tmp}
+	// Everything read-only, and then hidden: /run (the session's D-Bus, the compositor, Sarina's and Heimdall's sockets: a socket
+	// can be connected to through a read-only mount) and the home folder (Sarina's key, the vault, ssh keys), with only the
+	// toolchains put back, writable on a throw-away layer. All namespaces unshared, no network, a clean environment.
+	bw := []string{"bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run", "--tmpfs", home}
+	for _, d := range []string{".cargo", "go", ".local/lib"} {
+		if p := filepath.Join(home, d); dirExists(p) {
+			bw = append(bw, "--overlay-src", p, "--tmp-overlay", p)
+		}
+	}
+	path := os.Getenv("PATH")
+	if path == "" {
+		path = "/usr/local/bin:/usr/bin"
+	}
+	bw = append(bw, "--bind", tmp, tmp, "--bind", gocache, gocache, "--unshare-all", "--new-session", "--die-with-parent", "--clearenv",
+		"--setenv", "PATH", path, "--setenv", "HOME", tmp, "--setenv", "TMPDIR", "/tmp", "--setenv", "LANG", "C.UTF-8",
+		"--setenv", "GOCACHE", filepath.Join(gocache, "build"), "--setenv", "GOMODCACHE", filepath.Join(gocache, "mod"),
+		"--setenv", "GOPROXY", "off", "--setenv", "GOFLAGS", "-mod=mod", "--setenv", "GOTOOLCHAIN", "local",
+		"--setenv", "CARGO_NET_OFFLINE", "true", "--setenv", "NO_COLOR", "1", "--chdir", copyDir, "--")
 	return copyDir, append(bw, args...), cleanup, ""
 }
 
@@ -306,4 +331,9 @@ func shellLint(path string) string {
 		}
 	}
 	return ""
+}
+
+func dirExists(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
 }

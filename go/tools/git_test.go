@@ -48,3 +48,37 @@ func TestGitReadShowsTheChangeAndRunsNothingOfTheRepos(t *testing.T) {
 		t.Fatal("an option passed as a ref was accepted")
 	}
 }
+
+func TestGitReadRefusesARepositoryWithAFilterDriver(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	dir := t.TempDir()
+	git := func(a ...string) {
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, a...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", a, err, out)
+		}
+	}
+	git("init", "-q")
+	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("one\n"), 0o644)
+	git("add", ".")
+	git("commit", "-qm", "first")
+	// a planted repository: every file goes through a "clean" filter, which git runs on status and diff
+	marker := filepath.Join(dir, "ran")
+	os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("* filter=evil\n"), 0o644)
+	git("config", "filter.evil.clean", "sh -c 'touch "+marker+"; cat'")
+	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("two\n"), 0o644)
+	for _, c := range []string{"status", "diff"} {
+		_, _, err := GitRead().Handler(context.Background(), map[string]any{"command": c}, &Context{Root: dir})
+		if err == nil || !strings.Contains(err.Error(), "filter.evil.clean") {
+			t.Fatalf("%s ran in a repository with a filter driver: %v", c, err)
+		}
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the repository's filter program ran")
+	}
+	if r := GitConfigRisk(context.Background(), dir); r != "filter.evil.clean" {
+		t.Fatalf("risk: %q", r)
+	}
+}
