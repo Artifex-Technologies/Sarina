@@ -21,6 +21,11 @@ import sys
 import time
 import urllib.request
 
+# The sudo password (for the cases that run as the sarina service user) is read once and taken out of this process's
+# environment, so no program started from here inherits it: Sarina, the agent under test, can be prompt-injected. It reaches
+# sudo only on its standard input.
+SUDO_PASSWORD = os.environ.pop("SUDO_PASSWORD", "")
+
 HOME = os.path.expanduser("~")
 GH = os.path.join(HOME, "Documents", "Github")
 WORK = "/tmp/sarina-evals"
@@ -1029,7 +1034,7 @@ def sarina_cmd(case, base_env):
     if case.get("write"):
         cmd.append("--allow-write")
     if case.get("as_service"):
-        pw = os.environ.get("SUDO_PASSWORD", "")
+        pw = SUDO_PASSWORD
         pre = ["sudo", "-S", "-p", "", "systemd-run", "--quiet", "--wait", "--pipe", "--uid=sarina", "-p", "SupplementaryGroups=limbo-agent",
                "-p", "EnvironmentFile=/etc/sarina/service.env", "-p", "WorkingDirectory=/var/lib/sarina"]
         return pre + ["/usr/bin/" + cmd[0]] + cmd[1:], pw + "\n" if pw else None, cwd
@@ -1048,7 +1053,7 @@ def run_case(case, base_env, timeout):
     base_env = dict(base_env)  # a case's own settings (env_fn) end with it
     if case.get("sample"):
         d = setup_sample()
-        pw = os.environ.get("SUDO_PASSWORD", "")
+        pw = SUDO_PASSWORD
         if pw:
             subprocess.run(["sudo", "-S", "-p", "", "install", "-d", "-m", "755", "/var/lib/limbo/samples"], input=pw + "\n", text=True, capture_output=True)
             subprocess.run(["sudo", "-S", "-p", "", "install", "-m", "644", os.path.join(d, "demo.bin"), "/var/lib/limbo/samples/demo.bin"], input=pw + "\n", text=True, capture_output=True)
@@ -1205,7 +1210,7 @@ def main(argv):
     for case in CASES:
         if a.only and case["name"] not in a.only:
             continue
-        if case.get("as_service") and not os.environ.get("SUDO_PASSWORD"):
+        if case.get("as_service") and not SUDO_PASSWORD:
             rows.append((case, None, [("skipped: set SUDO_PASSWORD to run as the sarina user", None)]))
             continue
         print("== %s" % case["name"], flush=True)
