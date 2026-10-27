@@ -144,6 +144,7 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 			if i > 0 {
 				what = "tests"
 			}
+			md["verify_kind"] = what
 			return fmt.Sprintf("\nCHECK FAILED (%s, %s):\n%s%s\nFix this before you answer; do not say the code works.", what, strings.Join(step, " "), clipText(text, 3000), around(text, dir, path)), md
 		}
 		if i > 0 {

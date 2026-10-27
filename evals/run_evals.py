@@ -769,6 +769,13 @@ CASES = [
 # go/cryptotools and go/stego, offered with SARINA_CRYPTO=on; the skills cryptography and steganography, read from the checkout so an
 # uninstalled version can be tried). Fixtures are generated here; the LSB image follows the plain scheme (32-bit length, rgb order).
 
+def setup_tt_code():
+    """The owner's ×11 rule as code, with the classic slip: the carry left over after the zero in front is dropped (9999 × 11 gives 9989, not 109989)."""
+    d = os.path.join(WORK, "tt-code")
+    write(os.path.join(d, "rule11.py"), "def times11(n):\n    \"\"\"n × 11 by the Trachtenberg rule: each digit plus its neighbour, right to left.\"\"\"\n    digits = [0] + [int(c) for c in str(n)]\n    out, carry = [], 0\n    for k in range(len(digits) - 1, -1, -1):\n        neighbour = digits[k + 1] if k + 1 < len(digits) else 0\n        v = digits[k] + neighbour + carry\n        out.append(v % 10)\n        carry = v // 10\n    return int(\"\".join(str(x) for x in reversed(out)))\n")
+    return d
+
+
 def setup_watermark():
     """A small project another agent edited: an instruction hidden in tag characters in agent.go (with a Cyrillic letter in a name),
     a byte message in variation selectors in notes.md, and a clean file that must not be flagged."""
@@ -943,6 +950,12 @@ CASES += [
     dict(name="tt-two-finger", group="teach", cwd=setup_empty, env_fn=_math_env, skill="trachtenberg",
          prompt="Show me 23 × 47 with the Trachtenberg two-finger method.",
          must=[r"1,?081", r"(?i)units|tens"], note="the general method: units and tens of the pair products, the answer exact"),
+    dict(name="tt-code-test", group="teach", write=True, cwd=setup_tt_code, env_fn=_math_env, skill="trachtenberg", max_turns=14,
+         prompt="I wrote the Trachtenberg rule for 11 as a Python function in rule11.py. Can you test it for me and tell me if it's right?",
+         must=[r"(?i)carry", r"(?i)(9999|99,?999|fails?|wrong|not right|incorrect|bug)"], must_not=[r"(?i)\b(it is|it's|looks) (correct|right)\b(?![^.]*\bnot\b)"],
+         verify_cmd=[("her test file exists and runs (and fails on the owner's slip)", ["python3", "-c", "import glob,subprocess,sys; f=glob.glob('test_*.py'); sys.exit(0 if f and subprocess.run([sys.executable,'-m','unittest','-q'],capture_output=True).returncode!=0 else 1)"], W(WORK, "tt-code"), 0)],
+         file_unchanged={W(WORK, "tt-code", "rule11.py"): "setup"},
+         note="rules to code: she writes a test beside the owner's function, it runs, the dropped final carry is found (9999 × 11), the owner's file left as written"),
     dict(name="tt-progress-note", group="teach", write=True, cwd=setup_vault_empty, vault=setup_vault_empty, env_fn=_math_env, skill="trachtenberg",
          prompt="We just practised the Trachtenberg rule for 11 and I got three right in a row. Please note my progress so we can continue next time.",
          files_match={W(WORK, "vault-empty", "Study", "Trachtenberg.md"): r"(?is)11"},

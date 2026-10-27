@@ -93,6 +93,8 @@ func unreportedText(file string) string {
 
 var suggestRE = regexp.MustCompile(`(?i)\b(install|run|use|using|try|helper|via|with|e\.g\.|such as|like)\b`)
 
+var arithmeticRE = regexp.MustCompile(`^[\d\s,.()]+([×x*+\-/÷=^][\d\s,.()?]+)+$`)
+
 // isCommand is a command line starting with a program this computer has (or sudo): "Run `pacman -Ss spotify`" is advice.
 func isCommand(q string) bool {
 	f := strings.Fields(q)
@@ -156,6 +158,10 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 		// a program she suggests ("install `paru`, or use `yay`") is advice, not a quote (eval voice-install-help, 2026-10-26)
 		// a command line starting with a program this computer has is advice too, however the sentence puts it ("search with
 		// `pacman -Ss spotify`", "fix it with `chmod 644 settings.conf`"); a claim that it ran is claimsToolWork's business
+		// an arithmetic expression ("622 × 11") is a question or a problem she poses, not a claim from data
+		if arithmeticRE.MatchString(strings.TrimSpace(q)) {
+			continue
+		}
 		if m[1] != "" && (isCommand(q) || (!strings.ContainsAny(q, " \t") && suggestRE.MatchString(sentenceAt(answer, loc[0])))) {
 			continue
 		}
@@ -927,7 +933,12 @@ func fixPendingAfterFailedCheck(answer string, history []map[string]any) string 
 			continue
 		}
 		v, _ := e["verify"].(string)
-		last, failed = filepath.Base(p), v == "failed"
+		kind, _ := e["verify_kind"].(string)
+		// a failing test can be the finding itself (her test catching the owner's bug: eval tt-code-test, 2026-10-26, where this
+		// nudge made her "fix" the owner's file); only a build that fails is surely her own unfinished work
+		base := filepath.Base(p)
+		testFile := strings.HasPrefix(base, "test_") || strings.HasSuffix(base, "_test.go") || strings.HasSuffix(base, "_test.py")
+		last, failed = base, v == "failed" && (kind != "tests" || !testFile)
 	}
 	if !failed || !describedChangeRE.MatchString(answer) {
 		return ""

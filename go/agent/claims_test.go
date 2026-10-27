@@ -650,3 +650,24 @@ func TestHerOwnToolNamedAsANextStepIsCalled(t *testing.T) {
 		t.Fatal("naming a tool that ran is not a suggestion")
 	}
 }
+
+func TestAPracticeProblemIsNotAQuote(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "3452 × 11 = 37972"}}
+	if q := ungroundedQuote("Your turn: what is \"622 × 11\"?", "teach me", tool); q != "" {
+		t.Fatalf("a practice problem was taken for a quote: %q", q)
+	}
+}
+
+func TestAFailingTestIsNotAnUnmadeFix(t *testing.T) {
+	hist := []map[string]any{{"tool_name": "write_file", "ok": true, "path": "/w/test_rule11.py", "verify": "failed", "verify_kind": "tests"}}
+	if fixPendingAfterFailedCheck("Your function fails for 9999. Fix:\n```python\ncarry\n```", hist) != "" {
+		t.Fatal("a test that found the owner's bug was taken for her unfinished fix")
+	}
+}
+
+func TestAFailingTestAfterACodeChangeIsStillUnfinished(t *testing.T) {
+	hist := []map[string]any{{"tool_name": "edit_file", "ok": true, "path": "/w/slug.py", "verify": "failed", "verify_kind": "tests"}}
+	if fixPendingAfterFailedCheck("Here is the fix:\n```python\nimport re\n```", hist) != "slug.py" {
+		t.Fatal("a half-made fix to the code was let go")
+	}
+}
