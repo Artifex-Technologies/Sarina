@@ -21,6 +21,19 @@ NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+# A shell-capable agent gets no capabilities, devices, kernel modules, cgroup or clock changes (systemd-analyze: 8.3 -> 4.4).
+# Left out on purpose, because the test sandbox (bwrap) then fails: ProtectKernelTunables, ProtectKernelLogs and
+# ProtectHostname (the kernel refuses a fresh /proc under over-mounted ones; no hostname in the sandbox) and
+# RestrictSUIDSGID; also RestrictNamespaces (bwrap needs them) and MemoryDenyWriteExecute (interpreters it runs).
+CapabilityBoundingSet=
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target
