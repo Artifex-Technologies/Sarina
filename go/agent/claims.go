@@ -120,7 +120,9 @@ func sentenceAt(text string, i int) string {
 	return text[start:end]
 }
 
-var quotedRE = regexp.MustCompile("(?:^|[\\s(:,])(?:`([^`\\n]{4,60})`|\"([^\"\\n]{4,60})\")(?:$|[\\s).,:;!?])")
+// a quote in bold or italics (**"The secret is closed"**) is still a quote (eval crypto-rot13, 2026-10-26: the tool said "The station
+// is closed until Monday" and the answer gave it, in bold, as "The secret is closed until Monday")
+var quotedRE = regexp.MustCompile("(?:^|[\\s(:,*_])(?:`([^`\\n]{4,60})`|\"([^\"\\n]{4,60})\")(?:$|[\\s).,:;!?*_])")
 
 // ungroundedQuote returns a literal the answer quotes (in backticks or double quotes) that appears in none of this task's tool output and not in
 // the prompt, when tools were used at all: quoting a string as if it came from the evidence, when it did not, is how a small model invents
@@ -989,3 +991,26 @@ func unwrapReminder(answer string) string {
 	return answer
 }
 
+var suggestToolRE = func(name string) *regexp.Regexp {
+	return regexp.MustCompile(`(?i)\b(use|run|call|try|with|next step|you can|i can|i will|i'?ll|should)\b[^.\n]{0,40}` + "`?" + regexp.QuoteMeta(name) + "`?\\b")
+}
+
+// toolNamedNotCalled is an answer that tells the owner to use one of her own tools ("Next step: use stego_clean") instead of calling
+// it: the tool is hers (eval wm-clean, 2026-10-26: marks found, the cleaning described, nothing cleaned). Returns the tool.
+func toolNamedNotCalled(answer string, msgs []session.Message, offered []string) string {
+	called := map[string]bool{}
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			called[c.Function.Name] = true
+		}
+	}
+	for _, name := range offered {
+		if called[name] || !strings.Contains(answer, name) {
+			continue
+		}
+		if suggestToolRE(name).MatchString(answer) {
+			return name
+		}
+	}
+	return ""
+}

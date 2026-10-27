@@ -548,6 +548,13 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns {
 				// never against the edit-loop guard: once it refused more attempts, carrying on only produced more refused edits
 				// (eval code-go-package, 2026-10-26: 423 s)
+				if name := toolNamedNotCalled(answer, sess.Messages[min(msgStart, len(sess.Messages)):], a.offeredTools()); name != "" {
+					nudges++
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: "Carry on: you named " + name + " as the next step, and it is your own tool. Call it now if it does what was asked, then answer with what it did."})
+					r.emit(event{"type": "continue_nudge", "turn_index": turn})
+					r.segments = nil
+					continue
+				}
 				if f := fixPendingAfterFailedCheck(answer, sess.FileHistory[min(histStart, len(sess.FileHistory)):]); f != "" && !editLoopStopped(sess.Messages[min(msgStart, len(sess.Messages)):]) {
 					nudges++
 					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: fixPendingText(f)})

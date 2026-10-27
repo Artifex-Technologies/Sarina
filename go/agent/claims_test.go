@@ -626,3 +626,27 @@ func TestACopiedReminderWrapperIsTakenOff(t *testing.T) {
 		t.Fatal("plain answers are kept")
 	}
 }
+
+func TestABoldQuoteIsChecked(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "1. a shifted alphabet (Caesar/ROT), shift 13\n   -> The station is closed until Monday"}}
+	if q := ungroundedQuote("Decrypted content:\n**\"The secret is closed until Monday\"**", "what does it say?", tool); q == "" {
+		t.Fatal("a miscopied quote in bold passed")
+	}
+	if q := ungroundedQuote("Decrypted content:\n**\"The station is closed until Monday\"**", "what does it say?", tool); q != "" {
+		t.Fatalf("the right quote in bold was flagged: %q", q)
+	}
+}
+
+func TestHerOwnToolNamedAsANextStepIsCalled(t *testing.T) {
+	a := "Found tag characters. Next step: use `stego_clean` to write a cleaned copy next to agent.go."
+	if toolNamedNotCalled(a, nil, []string{"stego_inspect", "stego_clean"}) != "stego_clean" {
+		t.Fatal("not caught")
+	}
+	called := []session.Message{{Role: "assistant", ToolCalls: []llm.WireToolCall{{Function: llm.FunctionCall{Name: "stego_clean"}}}}}
+	if toolNamedNotCalled(a, called, []string{"stego_clean"}) != "" {
+		t.Fatal("after the call it may be named")
+	}
+	if toolNamedNotCalled("The stego_inspect report shows nothing hidden.", nil, []string{"stego_inspect"}) != "" {
+		t.Fatal("naming a tool that ran is not a suggestion")
+	}
+}

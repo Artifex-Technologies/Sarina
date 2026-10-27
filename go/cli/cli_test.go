@@ -461,3 +461,13 @@ func TestCryptoAutoIsDecidedForEveryCommand(t *testing.T) {
 		t.Fatal("a crypto question did not turn the tools on")
 	}
 }
+
+func TestWatermarkQuestionsGetTheTools(t *testing.T) {
+	for _, p := range []string{"Are there any watermarks in agent.go?", "Check this folder for invisible characters", "is there a homoglyph in main.go"} {
+		t.Setenv("SARINA_CRYPTO", "auto")
+		cryptoForPrompt(p)
+		if os.Getenv("SARINA_CRYPTO") != "on" {
+			t.Errorf("%q: no tools", p)
+		}
+	}
+}

@@ -38,15 +38,15 @@ func Tools() []tools.Tool {
 	if os.Getenv("SARINA_CRYPTO") != "on" {
 		return nil
 	}
-	return []tools.Tool{{
+	return []tools.Tool{cleanTool(), {
 		Class: tools.ClassReadOnly,
 		Spec: llm.ToolSpec{
 			Name:        "stego_inspect",
-			Description: "Look for hidden data in a file, read-only. action inspect (default): real type vs extension, metadata, data after the end of the format, files embedded inside, strings worth reading, and for images and WAV an LSB measurement and a first LSB extraction; lsb: extract the LSB bit stream (order rgb/r/g/b/rgba, 1-4 bits) to a temp file; text: invisible (zero-width, tag) characters in a text or in text given directly; diff: compare two images pixel by pixel (other = the second file).",
+			Description: "Look for hidden data in a file, read-only. action inspect (default): real type vs extension, metadata, data after the end of the format, files embedded inside, strings worth reading, and for images and WAV an LSB measurement and a first LSB extraction; lsb: extract the LSB bit stream (order rgb/r/g/b/rgba, 1-4 bits) to a temp file; text: invisible (zero-width, tag) characters in a text or in text given directly; watermark: every invisible or disguised mark in a text or code file or a whole folder (also variation selectors, look-alike letters, trailing whitespace bits); diff: compare two images pixel by pixel (other = the second file).",
 			Parameters: map[string]any{"type": "object", "properties": map[string]any{
 				"path":   map[string]any{"type": "string", "description": "The file (in the workspace)."},
 				"text":   map[string]any{"type": "string", "description": "For action text without a file: the text itself."},
-				"action": map[string]any{"type": "string", "enum": []string{"inspect", "lsb", "text", "diff"}},
+				"action": map[string]any{"type": "string", "enum": []string{"inspect", "lsb", "text", "watermark", "diff"}},
 				"other":  map[string]any{"type": "string", "description": "For diff: the second image."},
 				"order":  map[string]any{"type": "string", "description": "For lsb: rgb (default), r, g, b, rgba, bgr, a."},
 				"bits":   map[string]any{"type": "integer", "minimum": 1, "maximum": 4, "description": "For lsb: low bits per sample (default 1)."},
@@ -63,7 +63,19 @@ func Tools() []tools.Tool {
 				if t == "" {
 					return "", nil, fmt.Errorf("give text or a path")
 				}
-				return FindHidden(t).Describe() + evidenceNote, map[string]any{"action": "stego_text"}, nil
+				return Watermarks(t).Describe() + evidenceNote, map[string]any{"action": "stego_text"}, nil
+			}
+			if action == "watermark" {
+				if path == "" {
+					t, _ := a["text"].(string)
+					if t == "" {
+						return "", nil, fmt.Errorf("give text or a path")
+					}
+					return Watermarks(t).Describe() + evidenceNote, map[string]any{"action": "stego_watermark"}, nil
+				}
+				if dir, ok := folderIn(path, tc); ok {
+					return ScanFolder(dir, 2000) + evidenceNote, map[string]any{"action": "stego_watermark", "path": path}, nil
+				}
 			}
 			b, err := readFile(path, tc)
 			if err != nil {
@@ -81,7 +93,10 @@ func Tools() []tools.Tool {
 				}
 				out, err = ExtractReport(b, path, order, bits)
 			case "text":
-				out = FindHidden(string(b)).Describe()
+				// the full watermark scan: FindHidden alone missed variation selectors and called a marked file clean (eval wm-folder)
+				out = Watermarks(string(b)).Describe()
+			case "watermark":
+				out = Watermarks(string(b)).Describe()
 			case "diff":
 				other, _ := a["other"].(string)
 				b2, err2 := readFile(other, tc)
@@ -252,7 +267,7 @@ func Inspect(ctx context.Context, b []byte, name string) string {
 			out.WriteString("\nWAV: " + err.Error() + "\n")
 		}
 	case "text":
-		out.WriteString("\nInvisible characters: " + FindHidden(string(b)).Describe() + "\n")
+		out.WriteString("\nInvisible characters and other marks: " + Watermarks(string(b)).Describe() + "\n")
 	}
 	out.WriteString("\n" + helpersReport(ctx, name))
 	return out.String()
@@ -433,7 +448,7 @@ func Prefetch(task string) string {
 
 func command(env *cli.Env, args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(env.Stderr, "usage: sarina stego inspect FILE | lsb FILE [ORDER] | text FILE | diff A B | embed IN.png OUT.png TEXT")
+		fmt.Fprintln(env.Stderr, "usage: sarina stego inspect FILE | lsb FILE [ORDER] | text FILE | watermark FILE|DIR | clean FILE | diff A B | embed IN.png OUT.png TEXT")
 		return 2
 	}
 	read := func(p string) []byte {
@@ -456,7 +471,20 @@ func command(env *cli.Env, args []string) int {
 		}
 		out, err = ExtractReport(read(args[1]), args[1], order, 1)
 	case "text":
-		out = FindHidden(string(read(args[1]))).Describe()
+		out = Watermarks(string(read(args[1]))).Describe()
+	case "watermark":
+		if st, e := os.Stat(args[1]); e == nil && st.IsDir() {
+			out = ScanFolder(args[1], 5000)
+		} else {
+			out = Watermarks(string(read(args[1]))).Describe()
+		}
+	case "clean":
+		var copyPath, report string
+		copyPath, report, err = Clean(read(args[1]), args[1])
+		out = report
+		if copyPath != "" {
+			out += "\nCleaned copy: " + copyPath + " (the original is unchanged)"
+		}
 	case "diff":
 		if len(args) < 3 {
 			err = fmt.Errorf("diff needs two files")
@@ -489,4 +517,88 @@ func command(env *cli.Env, args []string) int {
 	}
 	fmt.Fprintln(env.Stdout, out)
 	return 0
+}
+
+// folderIn is path as a folder inside the workspace (and not a private one), for a folder-wide watermark scan.
+func folderIn(path string, tc *tools.Context) (string, bool) {
+	root := ""
+	if tc != nil {
+		root = tc.Root
+	}
+	if root == "" {
+		root, _ = os.Getwd()
+	}
+	resolved, err := tools.ResolveInRoot(root, path)
+	if err != nil || tools.IsPrivate(resolved) {
+		return "", false
+	}
+	st, err := os.Stat(resolved)
+	return resolved, err == nil && st.IsDir()
+}
+
+// cleanTool writes a cleaned copy of a text, code or picture file next to it; the original is never changed.
+func cleanTool() tools.Tool {
+	return tools.Tool{
+		Requires: tools.PermWrite, Class: tools.ClassMutating,
+		Spec: llm.ToolSpec{
+			Name:        "stego_clean",
+			Description: "Write a cleaned copy of a file next to it (NAME.clean.EXT); the original is not changed. Text and code: invisible characters, stray variation selectors and trailing whitespace removed (look-alike letters are only listed). Pictures: metadata and appended data dropped, the lowest bit of every colour randomised (removes LSB payloads; invisible).",
+			Parameters: map[string]any{"type": "object", "required": []string{"path"}, "properties": map[string]any{
+				"path": map[string]any{"type": "string", "description": "The file (in the workspace)."},
+			}},
+		},
+		Handler: func(ctx context.Context, a map[string]any, tc *tools.Context) (string, map[string]any, error) {
+			path, _ := a["path"].(string)
+			b, err := readFile(path, tc)
+			if err != nil {
+				return "", nil, err
+			}
+			resolved, _ := tools.ResolveInRoot(tc.Root, path)
+			out, report, err := Clean(b, resolved)
+			if err != nil {
+				return "", nil, err
+			}
+			if out == "" {
+				return report, map[string]any{"action": "stego_clean", "path": path}, nil
+			}
+			rel, _ := filepath.Rel(tc.Root, out)
+			return report + "\nThe original " + path + " is unchanged; the cleaned copy is " + rel + ". Compare them before replacing the original (that is the owner's choice).",
+				map[string]any{"action": "stego_clean", "path": path, "copy": rel}, nil
+		},
+	}
+}
+
+// Clean writes the cleaned copy of the file at path (whose bytes are b) and says what was removed. It refuses to overwrite anything.
+func Clean(b []byte, path string) (string, string, error) {
+	var data []byte
+	var report, ext string
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png", ".jpg", ".jpeg", ".gif":
+		var err error
+		if data, ext, err = CleanImage(b); err != nil {
+			return "", "", err
+		}
+		report = fmt.Sprintf("Cleaned the picture: written again from its pixels only (metadata and anything after the end of the format dropped: %d bytes became %d), the lowest bit of every colour randomised.", len(b), len(data))
+	default:
+		if bytes.IndexByte(b, 0) >= 0 {
+			return "", "", fmt.Errorf("%s is binary and not a picture: there is no safe way to clean it here", filepath.Base(path))
+		}
+		clean, removed := CleanText(string(b))
+		if len(removed) == 0 {
+			return "", "Nothing to clean: no invisible characters, stray variation selectors or trailing whitespace.", nil
+		}
+		data = []byte(clean)
+		report = "Removed: " + strings.Join(removed, ", ") + "."
+		if hs := Watermarks(string(b)).Homoglyphs; len(hs) > 0 {
+			report += fmt.Sprintf(" Not changed: %d word(s) with look-alike letters from another alphabet (they could be meant; fix them by hand), for example line %d: %q.", len(hs), hs[0].Line, hs[0].Word)
+		}
+	}
+	out := cleanPath(path, ext)
+	if _, err := os.Stat(out); err == nil {
+		return "", "", fmt.Errorf("%s already exists: I do not overwrite it", filepath.Base(out))
+	}
+	if err := os.WriteFile(out, data, 0o644); err != nil {
+		return "", "", err
+	}
+	return out, report, nil
 }

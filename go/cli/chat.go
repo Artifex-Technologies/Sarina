@@ -672,7 +672,7 @@ func conversation(env *Env, a *agent.Agent, o *opts, stored *session.Session, fi
 // hidden data, or a long run of base64- or hex-looking characters.
 var cryptoAskRE = regexp.MustCompile(`(?i)\b(base ?64|base ?32|hex(adecimal)?|hash(es|ed)?|sha-?\d+|md5|bcrypt|argon2|hmac|cipher(text)?|caesar|vigen[eè]re|rot ?13|xor|` +
 	`encrypt\w*|decrypt\w*|encod\w*|decod\w*|crypto\w*|jwt|tokens?|certificate|x\.?509|pem|pgp|gpg|ssh key|public key|private key|` +
-	`steg\w*|hidden (message|data|text)|lsb|exif|metadata)\b|[A-Za-z0-9+]{24,}={0,2}|\b[0-9a-fA-F]{32,}\b`)
+	`steg\w*|hidden (message|data|text|characters?)|lsb|exif|metadata|watermark\w*|invisible (characters?|text|marks?)|homoglyphs?|zero[- ]width|smuggl\w*)\b|[A-Za-z0-9+]{24,}={0,2}|\b[0-9a-fA-F]{32,}\b`)
 
 // mathAskRE is a question for the Trachtenberg tool: the method by name, mental or speed arithmetic, or a multiplication.
 var mathAskRE = regexp.MustCompile(`(?i)\btrachtenberg\b|\b(mental|speed) (math|arithmetic|multiplication)\b|\bmultipl(y|ying|ication)\b|\b\d[\d,]*\s*(x|×|\*|times)\s*\d`)
