@@ -195,6 +195,8 @@ func (a *Agent) runSubagent(ctx context.Context, args map[string]any, tc *tools.
 		Prompt: PromptOptions{Override: childPrompt}, ContextWindow: a.opts.ContextWindow,
 		Now: a.opts.Now, Home: a.opts.Home, Getenv: a.opts.Getenv, Discoverer: a.opts.Discoverer,
 		Scanner: a.opts.Scanner, SessionEnv: a.opts.SessionEnv, ParentLink: link,
+		// the child's state-changing calls (bash, for the verifier) go to the same operator as the parent's
+		Approver: a.opts.Approver, Confirm: a.opts.Confirm,
 	})
 	if err != nil {
 		return "", nil, fmt.Errorf("cannot start the %s helper: %v", p.Name, err)

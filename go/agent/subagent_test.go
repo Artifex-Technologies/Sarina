@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -332,4 +333,27 @@ func TestSubagentProfilesFromOperatorFilesNarrowOnly(t *testing.T) {
 		t.Fatalf("scout got %v; write_file and bash were requested but are not allowed", names)
 	}
 	_ = tools.ClassReadOnly
+}
+
+// A helper that may run commands asks the operator first, exactly as the parent does: the per-call question in the GUI
+// must not be skipped by delegating.
+func TestChildShellCallsGoToTheParentsApprover(t *testing.T) {
+	f := newFakeServer(t,
+		reply("", "tool_calls", use(1, 1), callAgent("c1", "verifier", "run the tests")),
+		reply("", "tool_calls", use(1, 1), tcall{"b1", "bash", `{"command":"echo hi"}`}),
+		reply("VERDICT: SKIP", "stop", use(1, 1)),
+		reply("done", "stop", use(1, 1)),
+	)
+	var asked []string
+	a := newTestAgent(t, f, withSubagents, func(o *Options) {
+		o.Runtime.Permissions.AllowShellCommands = true
+		o.Approver = func(_ context.Context, req tools.ApprovalRequest) (bool, string) {
+			asked = append(asked, req.Tool)
+			return false, "not now"
+		}
+	})
+	mustRun(t, a, "check it")
+	if !slices.Contains(asked, "bash") {
+		t.Fatalf("the child's bash call was not put to the operator: %v", asked)
+	}
 }

@@ -72,6 +72,8 @@ type opts struct {
 	notesEvery                            int
 	noSlash                               bool            // the prompt is already expanded (skill run): never treat it as a slash command
 	noAutoReview                          bool            // --no-auto-memory-review
+	foreignSession                        bool            // --accept-foreign-session
+	foreignLoaded                         bool            // the session being resumed belongs to another account
 	autoReview                            bool            // review memory when an interactive conversation ends; OFF unless a command turns it on
 	client                                agent.Completer // the model transport the agent uses (also used for the exit-time memory review)
 	cat                                   *skills.Catalog
@@ -126,6 +128,7 @@ func newOpts(name string, env *Env) *opts {
 	f.BoolVar(&o.trustWorkspaceMCP, "trust-workspace-mcp", false, "also load MCP server definitions from files in <cwd> (off by default: they start programs)")
 	f.BoolVar(&o.noNotes, "no-session-notes", false, "do not keep running session notes (env SARINA_SESSION_NOTES=0)")
 	f.IntVar(&o.notesEvery, "notes-every", 0, "refresh session notes every N tool-using turns (default 6; env SARINA_NOTES_EVERY)")
+	f.BoolVar(&o.foreignSession, "accept-foreign-session", false, "resume: allow a session file that belongs to another account (its history is then whatever that account wrote)")
 	f.BoolVar(&o.noAutoReview, "no-auto-memory-review", false, "do not review the session for memory proposals when an interactive conversation ends")
 	f.BoolVar(&o.noClear, "no-clear-tool-outputs", false, "do not clear old bulky tool outputs as the context fills (env SARINA_CLEAR_TOOL_OUTPUTS=0)")
 	f.BoolVar(&o.noLLMCompact, "no-llm-compaction", false, "compact with the heuristic digest only, never a summarising model call (env SARINA_LLM_COMPACTION=0)")
@@ -157,6 +160,16 @@ func (o *opts) build(env *Env, stored *session.Session) (config.ModelConfig, con
 	if stored != nil {
 		m, rt = stored.Model, stored.Runtime
 		m.APIKey = config.ModelFromEnv(env.Getenv).APIKey
+		if o.foreignLoaded {
+			// Another account's file is a transcript, not a configuration: the server, the permissions, the extra folders,
+			// escalation and where files are written come from this run, so it cannot send the API key elsewhere or widen
+			// what the agent may do (2026-10-27 audit). One's own file keeps what was granted.
+			fresh := config.ModelFromEnv(env.Getenv)
+			m.BaseURL, m.Fallbacks = fresh.BaseURL, fresh.Fallbacks
+			d := config.DefaultRuntime(rt.CWD)
+			rt.Permissions, rt.EscalationConfig, rt.AdditionalWorkingDirectories = d.Permissions, d.EscalationConfig, nil
+			rt.SessionDirectory, rt.ScratchpadRoot = d.SessionDirectory, d.ScratchpadRoot
+		}
 	} else {
 		m = config.ModelFromEnv(env.Getenv)
 		rt = config.DefaultRuntime(o.cwd)
@@ -506,6 +519,14 @@ func resumeCommand(env *Env, args []string) int {
 	dir := o.sessionDir
 	if dir == "" {
 		dir = config.DefaultRuntime(o.cwd).SessionDirectory
+	}
+	if owner, other := ownedByOther(session.Path(dir, id)); other {
+		if !o.foreignSession {
+			fmt.Fprintf(env.Stderr, "sarina: session %s belongs to another account (uid %d), which could have written anything "+
+				"into it; add --accept-foreign-session to resume it as history only\n", id, owner)
+			return exitFailure
+		}
+		o.foreignLoaded = true
 	}
 	stored, err := session.LoadByID(dir, id)
 	if err != nil {
