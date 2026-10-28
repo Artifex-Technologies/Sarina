@@ -1,5 +1,9 @@
 # Sarina training plan (written 2026-10-26, early morning)
 
+> **Superseded 2026-10-28** by [`TRAINING_PLAN_2026-10-28.md`](TRAINING_PLAN_2026-10-28.md), the six-day plan (Wed 2026-10-28 to
+> Mon 2026-11-02). Start there. This file stays as the record of the 2026-10-26 round; its Step 1 (prove the tree) was done on
+> 2026-10-26 (full runs 93/100 then 107/112), and its speed table is replaced by the new plan's section 6 on Day 2.
+
 The owner's goal: Sarina becomes the most effective assistant on this computer — faster without losing accuracy, honest, able to
 write code that works, knowledgeable in cryptography and steganography — and earns more access to the system as she passes tests
 (the owner approves each step). This is the plan for getting there, in order, with what is already done, what is half done and

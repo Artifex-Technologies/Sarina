@@ -217,6 +217,31 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-10-28 — Six-day plan written (Wed 2026-10-28 to Mon 2026-11-02): `docs/TRAINING_PLAN_2026-10-28.md`
+- **Owner's direction (Matt, 2026-10-27):** Sarina only; as fast as this hardware allows while accurate; cryptography and
+  "encryption capabilities" beyond any other 2080 Ti AI; troubleshoot and fix code rather than say it is broken; in the long run
+  near-full system access (updates, patches, an OS that adapts per user). Daily sessions may run on a smaller model; tokens are
+  limited, so the plan is written for a solo session with explicit commands and no sub-agents.
+- **How it was made:** eight read-only audits (speed, honesty, code-fixing, crypto, access, personalisation, evals, model options)
+  of the code, the eval reports, the Ollama journal and the live machine; a critic pass; three independent drafts judged by three
+  reviewers; synthesis. Nothing in the tree was changed by the audit; no eval or model was run.
+- **Findings a session must know before Day 1** (all in the plan's section 0 and brief): HEAD 7ad69f0 is eight unmeasured commits
+  past the last measured build d45bf38 (107/112); the code evals and tier 2 run her tests **unsandboxed** on the host
+  (`verify.go` lines 37-42: `SARINA_VERIFY_TESTS=on` makes `trusted` true); the machine still carries the broad 2026-10-16
+  sudoers and the narrowed `labyrinth-agent` from Labyrinth 63d68d4 is **not installed** (`/usr/local/sbin` empty) although its
+  commit message says applied, and `go/tools/destructive.go` does not know `claude-sudo`/`pkexec`/`run0`/`su -c` as wrappers,
+  so a shell-enabled session would have a passwordless root path; eval reports record no send-backs (hand count: ~44 extra
+  generations per 100 cases); the ladder has earned tier 2, applied tier 0; `docs/ECOSYSTEM.md` §4a and §5 above still say
+  Heimdall reads `.port_sessions/agent` while `/etc/heimdall/config.json` says `/var/lib/sarina/sessions` (Day 1 fixes the text);
+  the eight 2026-10-27 audit commits have no log entry yet (Day 1 writes it); Heimdall's `/v1/audit` lists 0 kernels (for its board).
+- **Plan shape:** Day 1 instruments and the two safety closes (wrapper hole in code; sandbox by default) and run #1 on HEAD;
+  Day 2 answer-neutral speed (cacheable prefix, streaming, keep-alive, stage timing); Day 3 claim-check false positives as
+  experiments; Day 4 de-flake, verify-hook localisation, tier-3 streak; Day 5 crypto E14 stage 1 part A with cases; Day 6
+  `check_code` (reproduce before edit), `crypto-hash-says` in code, handover. Eleven numbered full runs. Nineteen owner decisions.
+  Deferred with reasons: the rest of the code-fix loop, crypto stages 2-3 and post-quantum, the steward/tier-4 track (shape written),
+  adaptive-OS-per-user (no design exists), model-side speed levers, LoRA (2 of 173 examples ticked).
+— Signed: Sarina / Claude Mythos 5.1
+
 ### 2026-10-26 — Triage of the clean run (86/100): sandboxed tests, streaming made safe, new checks and tools
 - **Her tests run at every tier, in a sandbox** (`go/tools/verify.go`, `sandboxStep`): below the trust that runs tests on the
   project itself, the tests run in bubblewrap on a copy of the project, no network, the system read-only, Go caches in
