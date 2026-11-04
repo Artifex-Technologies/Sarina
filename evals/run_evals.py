@@ -1150,6 +1150,24 @@ def build_info():
         return {"commit": "unknown"}
 
 
+def head_commit():
+    """The commit of the Sarina checkout this runner belongs to, or "" when git cannot say."""
+    try:
+        return subprocess.run(["git", "-C", os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def stale_build(build, head):
+    """Why the measured binary is not the checked-out tree, or "": a different commit, or a build with uncommitted changes."""
+    commit = build.get("commit", "unknown")
+    if not head or commit != head:
+        return "the binary is %s, the checkout's HEAD is %s" % (commit[:12], (head or "unknown")[:12])
+    if build.get("modified"):
+        return "the binary was built from %s with uncommitted changes" % commit[:12]
+    return ""
+
+
 def card_shared(model):
     """What else uses the graphics card now, or "": another model loaded in Ollama, or another program computing on the card. A run
     measured on a shared card is slower and its failures partly contention (the 2026-10-25 21:26 run), so the report says so."""
@@ -1186,6 +1204,7 @@ def main(argv):
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--out", default=os.path.join(GH, "Labyrinth_OS", "docs", "sarina-evals", time.strftime("%Y-%m-%d-%H%M") + ".md"))
     ap.add_argument("--timeout", type=int, default=600)
+    ap.add_argument("--allow-stale", action="store_true", help="measure a binary that is not HEAD (the report and JSON say STALE)")
     a = ap.parse_args(argv[1:])
     if a.list:
         for c in CASES:
@@ -1203,6 +1222,12 @@ def main(argv):
     shutil.rmtree(WORK, ignore_errors=True)
     os.makedirs(WORK)
     build = build_info()
+    # one binary, one truth: a result belongs to the commit it was measured on (evals/install-dev.sh builds HEAD)
+    stale = stale_build(build, head_commit())
+    if stale:
+        print("STALE BUILD: %s. Build HEAD with evals/install-dev.sh%s." % (stale, "; measuring anyway (--allow-stale)" if a.allow_stale else ", or pass --allow-stale"), flush=True)
+        if not a.allow_stale:
+            return 2
     shared = card_shared(env.get("OPENAI_MODEL", ""))
     if shared:
         print("warning: the graphics card is shared (%s): times and some results will be worse than on an idle card" % shared, flush=True)
@@ -1219,7 +1244,7 @@ def main(argv):
         rows.append((case, res, checks))
         print("   %s in %.0fs" % ("PASS" if all(c[1] for c in checks) else "FAIL", res["took"]), flush=True)
     lines += ["# Sarina evals, %s" % time.strftime("%Y-%m-%d %H:%M"), "",
-              "Build: %s. Graphics card: %s." % (build.get("commit", "unknown")[:12] + (" with uncommitted changes" if build.get("modified") else ""), ("SHARED, " + shared) if shared else "idle"), "",
+              "Build: %s%s. Graphics card: %s." % (build.get("commit", "unknown")[:12] + (" with uncommitted changes" if build.get("modified") else ""), (" (STALE BUILD: %s)" % stale) if stale else "", ("SHARED, " + shared) if shared else "idle"), "",
               "Model: %s via %s. Cases in the write group run with --allow-write inside throw-away folders under /tmp/sarina-evals; all others are read-only. Each case lists its checks; the full answer is below it." % (env.get("OPENAI_MODEL", "?"), env.get("OPENAI_BASE_URL", "?")), ""]
     tot = ok = 0
     for case, res, checks in rows:
@@ -1244,7 +1269,7 @@ def main(argv):
     for case, res, checks in rows:
         graded = [c for c in checks if c[1] is not None]
         results.append({"name": case["name"], "group": case["group"], "passed": (all(c[1] for c in graded) if graded else None), "took": round(res["took"], 1) if res else None})
-    write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only), "build": build, "card_shared": shared, "results": results}, indent=1) + "\n")
+    write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only), "build": build, "stale": bool(stale), "card_shared": shared, "results": results}, indent=1) + "\n")
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     write(a.out, "\n".join(lines) + "\n")
     print("\n%d of %d passed; report: %s" % (ok, tot, a.out))

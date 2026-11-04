@@ -36,8 +36,9 @@ TIERS = [
 ]
 
 
-def full_runs():
-    """The full runs, oldest first: (time, {group: (passed, graded)})."""
+def full_runs(skipped=None):
+    """The full runs, oldest first: (time, {group: (passed, graded)}). A run on a shared graphics card or of a binary that was not
+    the checked-out commit (stale) does not count; when `skipped` is a list, (time, why) is appended to it for each such run."""
     runs = []
     for path in sorted(glob.glob(os.path.join(REPORTS, "*.json"))):
         if os.path.basename(path) == "ladder.json":
@@ -47,6 +48,11 @@ def full_runs():
         except (OSError, ValueError):
             continue
         if not isinstance(d, dict) or d.get("only") or not d.get("results"):
+            continue
+        why = ("graphics card shared: " + d["card_shared"]) if d.get("card_shared") else ("stale build" if d.get("stale") else "")
+        if why:
+            if skipped is not None:
+                skipped.append((d.get("time", os.path.basename(path)), why))
             continue
         groups = {}
         for r in d["results"]:
@@ -104,10 +110,13 @@ def applied_tier():
 
 
 def refresh(quiet=False):
-    runs = full_runs()
+    skipped = []
+    runs = full_runs(skipped)
     tiers = judge(runs)
     earned = max(t["n"] for t in tiers if t["earned"])
+    longest = max(t["runs"] for t in TIERS)
     state = {"computed_at": time.strftime("%Y-%m-%dT%H:%M:%S"), "full_runs_on_file": len(runs), "earned": earned, "applied": applied_tier(),
+             "rests_on": [when for when, _ in runs[-longest:]], "skipped": [{"time": w, "why": y} for w, y in skipped],
              "tiers": [{"n": t["n"], "name": t["name"], "earned": t["earned"], "missing": t["missing"]} for t in tiers]}
     try:
         os.makedirs(REPORTS, exist_ok=True)
@@ -122,6 +131,9 @@ def refresh(quiet=False):
 
 def show(state, tiers):
     print("Access ladder (%d full run(s) on file): earned tier %d, applied tier %d" % (state["full_runs_on_file"], state["earned"], state["applied"]))
+    print("The streak rests on the runs of: %s (newest last)" % (", ".join(state["rests_on"]) or "none"))
+    if state["skipped"]:
+        print("Not counted (%d): %s" % (len(state["skipped"]), "; ".join("%s, %s" % (s["time"], s["why"]) for s in state["skipped"][-5:])))
     for t in tiers:
         mark = "EARNED " if t["earned"] else "       "
         print("%s%d  %-28s %s" % (mark, t["n"], t["name"], t["gives"]))
