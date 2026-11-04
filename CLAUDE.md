@@ -219,6 +219,22 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-04 14:40 — Day session before night 3: the night 1-2 fixes (Matt's request), measured
+- Matt's answers (2026-11-04): forge-private-dirs y, length-loop-fix y, eval-stream y (keep final-answer scoring),
+  limbo-night y, night2-advance y (state file set to 3); cwd-out-of-system open (he asked for more information).
+- Commits: `a0a7652` forge refuses agents that read keys/private folders; `5382f03` crypto_hash hashes the empty string;
+  `f88bf39` crypto tools read data given as path as text; `542161f` nudges match whole tool names, not advice/offers/paths,
+  never repeat, a wrong nudge keeps the earlier answer; quote check skips non-claims; `5536ceb` no "carry on" after a
+  thinking-only length cut (the tt-code-test 600 s loop); `d8d2d32` evals: guard_stops noted, hostname/Wi-Fi/public
+  addresses blanked in reports, two rules widened; `bbcc319` limbo cases through claude-sudo with the measured binary;
+  `74d750c` JWT rule. Plan Day 3 updated (`docs/TRAINING_PLAN_2026-10-28.md`): steps 1-2 done, night 3 does 3-4 and gates.
+- Numbers (plan section 6): groups crypto/comprehension/system/code/limbo 31/37 (same groups in night 2 run B: 24/33,
+  limbo ungraded); 10 cases x3: 27/30, tt-code-test 1/3 without timeouts.
+- Correction: `d8d2d32`'s message cites "f0d0ad4-era" for the hand-blanked night 2 report; that id is wrong. The
+  blanking commit in Labyrinth_OS is the one titled "Sarina evals: blank the network name and provider DNS address".
+- Also new: `docs/VOICE_AND_TRUST_PLAN.md` (owner approval, voice recognition, storage, migration; step 1 = `a0a7652`).
+  Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-04 11:55 — Night 2 wrap-up: run A 107/112 (fd99864), run B 102/112 (2b21f4d); night 2 not done, repeats
 - Night 2 commits: `43cff03` per-session text out of the system prompt, `89a83ff` per-question tools last, `cd69709`
   non-streaming timeout + drop_withdrawn (streamed typed evals opt-in, SARINA_EVAL_STREAM=1), `49c9a06` approximate reasoning
