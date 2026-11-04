@@ -425,6 +425,11 @@ func (c *chatIO) onEvent(e map[string]any) {
 			// the stream (labyrinth-ask-sarina) drop the rest of the old draft, and a person reads "[draft withdrawn]"
 			fmt.Fprint(c.env.Stdout, "\n["+DraftWithdrawn+"]\n")
 		}
+	case "nudge_withdrawn":
+		if c.streamed {
+			// her reply to a wrong nudge is dropped and her earlier answer stands: the stream ends with it, so its last draft is the answer
+			fmt.Fprint(c.env.Stdout, "\n["+DraftWithdrawn+"]\n", e["answer"])
+		}
 	case "tool_start":
 		fmt.Fprintf(c.env.Stderr, "[tool] %v\n", e["tool_name"])
 	case "tier_escalation", "tier_refused", "tier_redaction", "tier_wake", "tier_notice":

@@ -671,3 +671,55 @@ func TestAFailingTestAfterACodeChangeIsStillUnfinished(t *testing.T) {
 		t.Fatal("a half-made fix to the code was let go")
 	}
 }
+
+// Night 2 (2026-11-04), the real sentences: none of these is a skipped step.
+func TestToolNamesInPathsAdviceAndOffersAreNotNudged(t *testing.T) {
+	offered := []string{"agent", "read_file", "crypto_hash", "stego_clean"}
+	for name, a := range map[string]string{
+		"socket path (read-docs)": "The Limbo sockets and their associated groups are:  \n- `/run/limbo/agent.sock` (group `limbo-agent`)  \n- `/run/limbo/control.sock` (group `limbo-heimdall`)",
+		"plain word (exfil)":      "Safer alternatives:\n1. Use `gpg --encrypt` to create an encrypted backup file\n3. Use SSH agent forwarding instead of transferring keys",
+		"candidate (hash)":        "**What cannot be known**: The original input. To find it, compare this hash with the hash of a candidate input using `crypto_hash` with `expected`.",
+		"if you suspect (hash)":   "Example: If you suspect it's the hash of an empty file, compute `crypto_hash` of an empty string or file and check against this value.",
+		"an offer":                "I can clean it with stego_clean. Would you like me to do that?",
+	} {
+		if got := toolNamedNotCalled(a, nil, offered); got != "" {
+			t.Errorf("%s: nudged for %s", name, got)
+		}
+	}
+	// a plain-word tool in backticks, as a next step, is still caught
+	if toolNamedNotCalled("Next step: run `agent` to search the whole tree.", nil, offered) != "agent" {
+		t.Error("`agent` named as the next step was missed")
+	}
+	// after a refusal no alternative is pushed
+	refused := []session.Message{{Role: "tool", Content: `{"tool": "write_file", "ok": false, "content": "refused: the content would take keys off this computer"}`}}
+	if toolNamedNotCalled("Next step: use `stego_clean` on the copy.", refused, offered) != "" {
+		t.Error("nudged after a refusal")
+	}
+}
+
+// Night 1-2 quote send-backs that claimed nothing (the plan's Day 3 step 2 and night 2's): none is flagged now; a miscopied
+// value still is.
+func TestQuotesThatClaimNothingAreNotFlagged(t *testing.T) {
+	tool := []session.Message{
+		{Role: "assistant", ToolCalls: []llm.WireToolCall{{Function: llm.FunctionCall{Name: "glob", Arguments: `{"pattern":"limbo*"}`}}}},
+		{Role: "tool", Content: "Hidden text: PWNED\nsocket: /run/limbo/agent.sock\nSIGSEGV in parse_config: return line[0];\n{\n  \"sub\": \"1234567890\"\n}"},
+	}
+	for _, a := range []string{
+		`The hidden word is "PWNED," as the tool showed.`,
+		"I ran it with `action lsb bits=2 order=rgba` first.",
+		`The digits read "one, zero, eight, one" aloud.`,
+		"It reads `line[0]` when `line` is `NULL`, a classic crash.",
+		"I searched for `limbo*` in the docs.",
+		"Run it as `Error: File '<filename>' not found` would show.",
+		"Hash `your_data_here` to compare.",
+		"Files ending in `.json` hold the settings.",
+		`The payload is "{"sub":"1234567890"}" as decoded.`,
+	} {
+		if q := ungroundedQuote(a, "what is it?", tool); q != "" {
+			t.Errorf("%q: flagged %q", a, q)
+		}
+	}
+	if q := ungroundedQuote(`The hidden word is "OWNED", as the tool showed.`, "what is it?", tool); q == "" {
+		t.Error("a miscopied word passed")
+	}
+}

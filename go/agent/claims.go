@@ -138,11 +138,17 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 			evidence.WriteString(toolEvidence(m.Content))
 			evidence.WriteByte('\n')
 		}
+		// what she typed into a tool herself (a search pattern, a file name) is hers to quote (read-docs, night 2: "limbo*")
+		for _, c := range m.ToolCalls {
+			evidence.WriteString(toolEvidence(c.Function.Arguments))
+			evidence.WriteByte('\n')
+		}
 	}
 	if !used {
 		return ""
 	}
 	ev := strings.ToLower(evidence.String())
+	evTight := strings.Join(strings.Fields(ev), "")
 	p := strings.ToLower(prompt)
 	for _, loc := range quotedRE.FindAllStringSubmatchIndex(answer, -1) {
 		m := []string{answer[loc[0]:loc[1]], "", ""}
@@ -165,8 +171,11 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 		if m[1] != "" && (isCommand(q) || (!strings.ContainsAny(q, " \t") && suggestRE.MatchString(sentenceAt(answer, loc[0])))) {
 			continue
 		}
-		lq := strings.ToLower(strings.Trim(strings.TrimSpace(q), "\"'`"))
-		if lq == "" || strings.Contains(ev, lq) || strings.Contains(p, lq) {
+		lq := strings.ToLower(strings.TrimRight(strings.Trim(strings.TrimSpace(q), "\"'`"), " ,.;:!?"))
+		if lq == "" || strings.Contains(ev, lq) || strings.Contains(p, lq) || strings.Contains(evTight, strings.Join(strings.Fields(lq), "")) {
+			continue
+		}
+		if notAQuote(lq) {
 			continue
 		}
 		// a path, a command or a name the model writes in its own words is not a quote from the evidence: only literal-looking text counts
@@ -177,6 +186,13 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 	}
 	return ""
 }
+
+// notAQuoteRE: text in quotes that claims nothing about the evidence. A tool setting ("action lsb bits=2 order=rgba"), digits spelled
+// out ("one, zero, eight, one"), a language constant ("NULL", crash-on-the-fly night 2), a placeholder ("<filename>",
+// "your_data_here"), a bare file extension (".json").
+var notAQuoteRE = regexp.MustCompile(`(?i)^(\S+=\S*(\s+\S+=\S*)*|.*\s\S+=\S+.*|((zero|one|two|three|four|five|six|seven|eight|nine)(,?\s+|$))+|null|nullptr|none|nil|true|false|undefined|nan|.*<[a-z_ -]+>.*|.*\byour[_ ]\w+.*|\w*_here|\.[a-z0-9]{1,5})$`)
+
+func notAQuote(lq string) bool { return notAQuoteRE.MatchString(lq) }
 
 func ungroundedText(q string) string {
 	return "Check before you finish: your answer quotes \"" + q + "\", but no tool output in this task contains it. Write your whole answer again, complete: keep everything the tools showed, and either leave that quote out, mark it plainly as your own example, or look it up with your tools first. Do not talk about this check."
@@ -1003,8 +1019,25 @@ func unwrapReminder(answer string) string {
 }
 
 var suggestToolRE = func(name string) *regexp.Regexp {
-	return regexp.MustCompile(`(?i)\b(use|run|call|try|with|next step|you can|i can|i will|i'?ll|should)\b[^.\n]{0,40}` + "`?" + regexp.QuoteMeta(name) + "`?\\b")
+	// the name as a whole word: not inside a path, a file name or a group ("/run/limbo/agent.sock", "limbo-agent" named the
+	// agent tool in a right answer, read-docs, night 2 2026-11-04); a name that is also an ordinary word (agent, bash) counts
+	// only in backticks ("use SSH agent forwarding" was advice, code-refuse-exfil, same night)
+	n := regexp.QuoteMeta(name)
+	tok := "`?" + n + "`?"
+	if !strings.Contains(name, "_") {
+		tok = "`" + n + "`"
+	}
+	return regexp.MustCompile(`(?i)\b(use|run|call|try|with|next step|you can|i can|i will|i'?ll|should)\b[^.\n]{0,40}(^|[^\w./-])` + tok + `([^\w./-]|$)`)
 }
+
+// conditionalRE marks a sentence that makes a tool's use depend on something only the user can give or decide: a candidate, a
+// key, a yes ("compare it with crypto_hash if you have a candidate", "would you like me to..."). That is an offer, not a skipped
+// step, and a nudge there made her run the tool on a guess or build what she had only offered (crypto-hash-says,
+// code-refuse-exfil, night 2).
+var conditionalRE = regexp.MustCompile(`(?i)\b(if you (have|want|suspect|like|know|can|give|provide|share)|provide|give me|candidate|guess|would you like|do you want|shall i|should i|let me know|once you)\b`)
+
+// refusedRE is a tool result that refused the task: what follows is an alternative she may offer, never one to build unasked.
+var refusedRE = regexp.MustCompile(`(?i)"?(content"?\s*:\s*"?)?refused:`)
 
 // toolNamedNotCalled is an answer that tells the owner to use one of her own tools ("Next step: use stego_clean") instead of calling
 // it: the tool is hers (eval wm-clean, 2026-10-26: marks found, the cleaning described, nothing cleaned). Returns the tool.
@@ -1014,14 +1047,32 @@ func toolNamedNotCalled(answer string, msgs []session.Message, offered []string)
 		for _, c := range m.ToolCalls {
 			called[c.Function.Name] = true
 		}
+		if m.Role == "tool" && refusedRE.MatchString(m.Content) {
+			return ""
+		}
 	}
 	for _, name := range offered {
 		if called[name] || !strings.Contains(answer, name) {
 			continue
 		}
-		if suggestToolRE(name).MatchString(answer) {
-			return name
+		re := suggestToolRE(name)
+		for _, loc := range re.FindAllStringIndex(answer, -1) {
+			if !conditionalRE.MatchString(sentenceAround(answer, loc[0], loc[1])) {
+				return name
+			}
 		}
 	}
 	return ""
+}
+
+// sentenceAround is the sentence (or line) holding answer[i:j].
+func sentenceAround(answer string, i, j int) string {
+	start := strings.LastIndexAny(answer[:i], ".!?\n")
+	end := strings.IndexAny(answer[j:], ".!?\n")
+	if end < 0 {
+		end = len(answer)
+	} else {
+		end += j
+	}
+	return answer[start+1 : end]
 }

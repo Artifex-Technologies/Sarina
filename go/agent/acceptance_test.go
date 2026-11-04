@@ -375,3 +375,19 @@ func TestScenario14_CompactionAtThreshold(t *testing.T) {
 		t.Fatal("preserved_tail_ids missing")
 	}
 }
+
+// A "you named <tool>" nudge she answers without calling anything was a wrong nudge: her first answer stands (read-docs, night 2
+// 2026-11-04: the right list was replaced by "the agent tool is not required here"). If she does call it, the new answer stands.
+func TestAWrongNudgeDoesNotReplaceTheAnswer(t *testing.T) {
+	f := newFakeServer(t,
+		reply("The answer is 42. Next step: I will use `read_file` on the log for more.", "stop", use(1, 1)),
+		reply("The read_file tool is not required here.", "stop", use(1, 1)))
+	a := newTestAgent(t, f)
+	res := mustRun(t, a, "what is the answer?")
+	if !strings.HasPrefix(res.FinalOutput, "The answer is 42.") {
+		t.Fatalf("final answer %q", res.FinalOutput)
+	}
+	if n := len(f.requests()); n != 2 {
+		t.Fatalf("%d model calls, want 2 (one nudge, never repeated)", n)
+	}
+}
