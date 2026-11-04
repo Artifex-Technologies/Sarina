@@ -609,4 +609,8 @@ four limbo/decompile cases graded through a password-typed evening run only (nev
 | #10 | | | | | | | | | |
 | #11 | | | | | | | | | closing |
 
-Spoken-turn stage medians (Day 2, idle card): whisper __ s, route __ s, prefetch __ s, first model token __ s, first spoken sentence __ s.
+Spoken-turn stage medians (Day 2 = night 2, 2026-11-04 08:13, idle card, build b1c22d2; 10 spoken-style turns through
+`labyrinth-ask-sarina --voice` with `LABYRINTH_VOICE_TIMING=1`, text only, throw-away vault, `LABYRINTH_TALK_LOG=0`, the tarot add-on's
+voice tools and prefetch left out): whisper n/a (no audio: speech to text runs in `labyrinth-sarina-ask`, which now passes it as
+`LABYRINTH_VOICE_WHISPER_S`), route 0.02 s, prefetch 0.11 s, first model token 4.22 s (range 2.96-11.91), first spoken sentence
+4.56 s, done 5.20 s. Six computer questions (thinking on) and four talk turns; the slowest (11.9 s) was the crash question.

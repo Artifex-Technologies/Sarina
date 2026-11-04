@@ -116,6 +116,11 @@ What a spoken turn costs now (measured 2026-10-25): whisper 0.9 s; routing 0–0
 generation 2–7 s (thinking adds ~4 s and is now off for talk turns); voice: first sentence 1.2 s warm, +10 s if the voice service
 had unloaded after 10 min idle; speech now starts after the first sentence. Roughly 4–5 s to the first word on a warm chat turn.
 
+Re-measured 2026-11-04 (night 2 of the six-night plan, idle card, build b1c22d2, 10 turns, `LABYRINTH_VOICE_TIMING=1`): route
+0.02 s, prefetch 0.11 s, first model token 4.22 s, first sentence printed for the voice 4.56 s, done 5.20 s (medians; whisper and
+the voice service are outside that measurement). Item 1 below is done (43cff03, 89a83ff): a second session reuses ~5.6k of ~5.8k
+prompt tokens instead of ~0.48k. The full table lives in `TRAINING_PLAN_2026-10-28.md` section 6.
+
 1. Prompt prefix cache: move the per-session scratchpad lines (and anything else that changes per session) to the end of the
    system prompt (`go/agent/prompt.go`); keep the tool list order stable. Expect 1–2 s off every first turn and every eval case.
    Verify in `journalctl -u ollama` ("cached n_tokens" rises from ~464 to the length of the static prefix).
