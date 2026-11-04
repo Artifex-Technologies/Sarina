@@ -28,7 +28,7 @@ var Helpers = []string{"exiftool", "binwalk", "zsteg", "steghide", "stegseek", "
 const evidenceNote = "\n[Computed, not guessed: say what this shows and no more. A sign is not proof; 'no sign' is not 'nothing hidden' (a payload placed with a key or in JPEG coefficients needs its own tool and password). Name only helpers this report says were run.]"
 
 func init() {
-	tools.RegisterProvider(Tools)
+	tools.RegisterPerPromptProvider(Tools) // SARINA_*=auto offers them per question: after every fixed tool
 	skills.RegisterContext("stego", Prefetch)
 	cli.Register("stego", "look for hidden data in a file: stego inspect|lsb|text|diff FILE [FILE2]; stego embed IN.png OUT.png TEXT (a test image)", command)
 }

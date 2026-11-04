@@ -205,3 +205,31 @@ func TestBuilderPermsStopOfferingDeniedToolsButStillRefuseCalls(t *testing.T) {
 		t.Fatal("no Perms means no filtering")
 	}
 }
+
+// A tool offered for some questions only (SARINA_CRYPTO=auto, SARINA_MATH=auto) goes after every other tool, the Builder's Extra
+// included, so a question that brings it in keeps the cached prompt prefix: the other tools keep their places.
+func TestPerPromptToolsComeLast(t *testing.T) {
+	offered := false
+	RegisterPerPromptProvider(func() []Tool {
+		if !offered {
+			return nil
+		}
+		return []Tool{{Spec: llm.ToolSpec{Name: "zz_per_prompt_probe", Description: "probe"}}}
+	})
+	b := Builder{Extra: []Tool{{Spec: llm.ToolSpec{Name: "extra_probe", Description: "extra"}}}}
+	without := b.Build().Names()
+	offered = true
+	defer func() { offered = false }()
+	with := b.Build().Names()
+	if len(with) != len(without)+1 || with[len(with)-1] != "zz_per_prompt_probe" {
+		t.Fatalf("the per-question tool should be appended last: %v", with)
+	}
+	for i := range without {
+		if with[i] != without[i] {
+			t.Fatalf("tool %d moved from %s to %s when a per-question tool was offered", i, without[i], with[i])
+		}
+	}
+	if without[len(without)-1] != "extra_probe" {
+		t.Fatalf("Extra should come after the fixed built-ins: %v", without)
+	}
+}

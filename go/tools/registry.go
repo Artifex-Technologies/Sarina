@@ -317,6 +317,8 @@ type Provider func() []Tool
 var (
 	providerMu sync.Mutex
 	providers  []Provider
+	// perPrompt are the providers whose tools come and go with the question (SARINA_CRYPTO=auto, SARINA_MATH=auto)
+	perPrompt []Provider
 )
 
 // RegisterProvider appends a tool provider to the default registry.
@@ -326,12 +328,36 @@ func RegisterProvider(p Provider) {
 	providers = append(providers, p)
 }
 
-// Builtins returns the built-in tools followed by every provider's tools.
+// RegisterPerPromptProvider adds a provider whose tools are offered for some questions and not others. Its tools are placed after
+// every other tool (the Builder's Extra included): the model server reuses a cached prompt prefix only up to the first difference,
+// and the tool definitions are part of that prefix, so a tool that appears for one question must not sit in the middle of the list.
+func RegisterPerPromptProvider(p Provider) {
+	providerMu.Lock()
+	defer providerMu.Unlock()
+	perPrompt = append(perPrompt, p)
+}
+
+// Builtins returns the built-in tools followed by every provider's tools, the per-question ones last.
 func Builtins() []Tool {
+	return append(stableBuiltins(), perPromptTools()...)
+}
+
+func stableBuiltins() []Tool {
 	ts := DefaultTools()
 	providerMu.Lock()
 	ps := append([]Provider(nil), providers...)
 	providerMu.Unlock()
+	for _, p := range ps {
+		ts = append(ts, p()...)
+	}
+	return ts
+}
+
+func perPromptTools() []Tool {
+	providerMu.Lock()
+	ps := append([]Provider(nil), perPrompt...)
+	providerMu.Unlock()
+	var ts []Tool
 	for _, p := range ps {
 		ts = append(ts, p()...)
 	}
@@ -365,12 +391,17 @@ type Builder struct {
 func (b Builder) Build() *Registry {
 	reg := NewRegistry()
 	if !b.NoDefaults {
-		for _, t := range Builtins() {
+		for _, t := range stableBuiltins() {
 			reg.Register(t)
 		}
 	}
 	for _, t := range b.Extra {
 		reg.Register(t)
+	}
+	if !b.NoDefaults {
+		for _, t := range perPromptTools() {
+			reg.Register(t)
+		}
 	}
 	reg = reg.Filter(b.Allowlist)
 	if b.Narrow != nil {

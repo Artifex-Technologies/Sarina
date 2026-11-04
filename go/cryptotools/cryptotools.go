@@ -29,7 +29,7 @@ const MaxInput = 64 << 20
 const evidenceNote = "\n[Computed, not guessed. Say what this shows, and only this. A hash cannot be reversed; encrypted data without its key cannot be read; a signature is verified only where this says VERIFIED.]"
 
 func init() {
-	tools.RegisterProvider(Tools)
+	tools.RegisterPerPromptProvider(Tools) // SARINA_*=auto offers them per question: after every fixed tool
 	skills.RegisterContext("crypto", Prefetch)
 	cli.Register("crypto", "identify, decode, hash or crack a string in code: crypto identify|decode|classic|hash|modern ... (sarina crypto for usage)", command)
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	tools.RegisterProvider(Tools)
+	tools.RegisterPerPromptProvider(Tools) // SARINA_*=auto offers them per question: after every fixed tool
 	cli.Register("trachtenberg", "work a multiplication by the Trachtenberg method, step by step: trachtenberg A B [ANSWER-TO-CHECK]", command)
 }
 
