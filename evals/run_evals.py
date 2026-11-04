@@ -1198,14 +1198,44 @@ def card_shared(model):
     return "; ".join(notes)
 
 
+def result_row(case, res, checks):
+    """A case's line in the JSON report (ladder.py reads name, group and passed)."""
+    graded = [c for c in checks if c[1] is not None]
+    return {"name": case["name"], "group": case["group"], "passed": (all(c[1] for c in graded) if graded else None), "took": round(res["took"], 1) if res else None}
+
+
+def case_block(case, res, checks):
+    """A case's section of the markdown report: its checks, then her answer."""
+    graded = [c for c in checks if c[1] is not None]
+    passed = all(c[1] for c in graded) if graded else None
+    lines = ["## %s (%s): %s" % (case["name"], case["group"], "PASS" if passed else ("FAIL" if graded else "skipped")), "", "*%s*" % case.get("note", ""), "", "Prompt: %s" % case["prompt"], ""]
+    for name, r in checks:
+        lines.append("- %s %s" % ({True: "PASS", False: "FAIL", None: "-"}[r], name))
+    if res:
+        lines += ["", "Took %.0f s, exit %s. Heimdall alerts raised during it: %s" % (res["took"], res["rc"], ", ".join(sorted({a.get("detector_id", "?") + "/" + a.get("severity", "?") for a in res["new_alerts"]})) or ("none" if res["alerts_known"] else "unknown (Heimdall not reachable)")),
+                  "", "```", (res["out"] or "").strip()[-3000:], "```"]
+        if res["err"] and res["rc"] != 0:
+            lines += ["", "stderr: `%s`" % res["err"].strip()[-400:]]
+    lines.append("")
+    return lines
+
+
+def append(path, text):
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(text)
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", nargs="*", help="run only these cases")
     ap.add_argument("--list", action="store_true")
-    ap.add_argument("--out", default=os.path.join(GH, "Labyrinth_OS", "docs", "sarina-evals", time.strftime("%Y-%m-%d-%H%M") + ".md"))
+    ap.add_argument("--out", help="the report (default: Labyrinth_OS/docs/sarina-evals/DATE-TIME.md; with --resume, the cut-off run's)")
     ap.add_argument("--timeout", type=int, default=600)
+    ap.add_argument("--resume", metavar="PARTIAL", help="finish a run that was cut off from its <out>.partial.jsonl (the cases in it are not run again)")
     ap.add_argument("--allow-stale", action="store_true", help="measure a binary that is not HEAD (the report and JSON say STALE)")
     a = ap.parse_args(argv[1:])
+    if not a.out:
+        a.out = (re.sub(r"\.partial\.jsonl$", "", a.resume) + ".md") if a.resume else os.path.join(GH, "Labyrinth_OS", "docs", "sarina-evals", time.strftime("%Y-%m-%d-%H%M") + ".md")
     if a.list:
         for c in CASES:
             print("%-22s %-14s %s" % (c["name"], c["group"], c.get("note", "")))
@@ -1231,47 +1261,65 @@ def main(argv):
     shared = card_shared(env.get("OPENAI_MODEL", ""))
     if shared:
         print("warning: the graphics card is shared (%s): times and some results will be worse than on an idle card" % shared, flush=True)
-    rows, lines = [], []
+    # every scored case is appended to <out>.partial.jsonl (its result and its report block) as it ends, so a run that is cut
+    # off loses nothing: --resume finishes it from there, skipping the cases already done
+    partial = re.sub(r"\.jsonl$", "", a.resume) if a.resume else os.path.splitext(a.out)[0] + ".partial"
+    done = {}
+    if a.resume:
+        with open(a.resume, encoding="utf-8") as f:
+            recs = [json.loads(l) for l in f if l.strip()]
+        meta = recs[0] if recs and "meta" in recs[0] else {}
+        if meta.get("meta", {}).get("commit") != build.get("commit"):
+            print("--resume: %s was measured on %s, this binary is %s; not mixed" % (a.resume, str(meta.get("meta", {}).get("commit"))[:12], build.get("commit", "unknown")[:12]), flush=True)
+            return 2
+        done = {r["result"]["name"]: r for r in recs if "result" in r}
+        print("resuming: %d case(s) already done in %s" % (len(done), a.resume), flush=True)
+    else:
+        for ext in (".jsonl", ".md"):
+            try:
+                os.remove(partial + ext)
+            except OSError:
+                pass
+        os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+        append(partial + ".jsonl", json.dumps({"meta": {"commit": build.get("commit"), "started": time.strftime("%Y-%m-%dT%H:%M:%S")}}) + "\n")
+    entries = []
     for case in CASES:
         if a.only and case["name"] not in a.only:
             continue
-        if case.get("as_service") and not SUDO_PASSWORD:
-            rows.append((case, None, [("skipped: set SUDO_PASSWORD to run as the sarina user", None)]))
+        if case["name"] in done:
+            entries.append(done[case["name"]])
             continue
-        print("== %s" % case["name"], flush=True)
-        res = run_case(case, env, a.timeout)
-        checks = score(case, res)
-        rows.append((case, res, checks))
-        print("   %s in %.0fs" % ("PASS" if all(c[1] for c in checks) else "FAIL", res["took"]), flush=True)
-    lines += ["# Sarina evals, %s" % time.strftime("%Y-%m-%d %H:%M"), "",
-              "Build: %s%s. Graphics card: %s." % (build.get("commit", "unknown")[:12] + (" with uncommitted changes" if build.get("modified") else ""), (" (STALE BUILD: %s)" % stale) if stale else "", ("SHARED, " + shared) if shared else "idle"), "",
-              "Model: %s via %s. Cases in the write group run with --allow-write inside throw-away folders under /tmp/sarina-evals; all others are read-only. Each case lists its checks; the full answer is below it." % (env.get("OPENAI_MODEL", "?"), env.get("OPENAI_BASE_URL", "?")), ""]
-    tot = ok = 0
-    for case, res, checks in rows:
-        graded = [c for c in checks if c[1] is not None]
-        passed = all(c[1] for c in graded) if graded else None
-        tot += 1 if graded else 0
-        ok += 1 if passed else 0
-        lines += ["## %s (%s): %s" % (case["name"], case["group"], "PASS" if passed else ("FAIL" if graded else "skipped")), "", "*%s*" % case.get("note", ""), "", "Prompt: %s" % case["prompt"], ""]
-        for name, r in checks:
-            lines.append("- %s %s" % ({True: "PASS", False: "FAIL", None: "-"}[r], name))
-        if res:
-            lines += ["", "Took %.0f s, exit %s. Heimdall alerts raised during it: %s" % (res["took"], res["rc"], ", ".join(sorted({a.get("detector_id", "?") + "/" + a.get("severity", "?") for a in res["new_alerts"]})) or ("none" if res["alerts_known"] else "unknown (Heimdall not reachable)")),
-                      "", "```", (res["out"] or "").strip()[-3000:], "```"]
-            if res["err"] and res["rc"] != 0:
-                lines += ["", "stderr: `%s`" % res["err"].strip()[-400:]]
-        lines.append("")
-    timed = sorted((res["took"], case["name"]) for case, res, _ in rows if res)
+        if case.get("as_service") and not SUDO_PASSWORD:
+            res, checks = None, [("skipped: set SUDO_PASSWORD to run as the sarina user", None)]
+        else:
+            print("== %s" % case["name"], flush=True)
+            res = run_case(case, env, a.timeout)
+            checks = score(case, res)
+            print("   %s in %.0fs" % ("PASS" if all(c[1] for c in checks) else "FAIL", res["took"]), flush=True)
+        entry = {"result": result_row(case, res, checks), "md": case_block(case, res, checks)}
+        entries.append(entry)
+        append(partial + ".jsonl", json.dumps(entry) + "\n")
+        append(partial + ".md", "\n".join(entry["md"]) + "\n")
+    lines = ["# Sarina evals, %s" % time.strftime("%Y-%m-%d %H:%M"), "",
+             "Build: %s%s. Graphics card: %s." % (build.get("commit", "unknown")[:12] + (" with uncommitted changes" if build.get("modified") else ""), (" (STALE BUILD: %s)" % stale) if stale else "", ("SHARED, " + shared) if shared else "idle"), "",
+             "Model: %s via %s. Cases in the write group run with --allow-write inside throw-away folders under /tmp/sarina-evals; all others are read-only. Each case lists its checks; the full answer is below it." % (env.get("OPENAI_MODEL", "?"), env.get("OPENAI_BASE_URL", "?")), ""]
+    results = [e["result"] for e in entries]
+    tot = sum(1 for r in results if r["passed"] is not None)
+    ok = sum(1 for r in results if r["passed"])
+    for e in entries:
+        lines += e["md"]
+    timed = sorted((r["took"], r["name"]) for r in results if r["took"] is not None)
     slow = ", ".join("%s %.0f s" % (n, t) for t, n in reversed(timed[-5:]))
     lines.insert(3, "**%d of %d cases passed.** Slowest: %s." % (ok, tot, slow or "-"))
     # the same results for programs (the achievements ledger reads this, not the prose)
-    results = []
-    for case, res, checks in rows:
-        graded = [c for c in checks if c[1] is not None]
-        results.append({"name": case["name"], "group": case["group"], "passed": (all(c[1] for c in graded) if graded else None), "took": round(res["took"], 1) if res else None})
     write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only), "build": build, "stale": bool(stale), "card_shared": shared, "results": results}, indent=1) + "\n")
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     write(a.out, "\n".join(lines) + "\n")
+    for ext in (".jsonl", ".md"):  # the report is whole: the partial files are no longer needed
+        try:
+            os.remove(partial + ext)
+        except OSError:
+            pass
     print("\n%d of %d passed; report: %s" % (ok, tot, a.out))
     if slow:
         print("slowest: " + slow)
