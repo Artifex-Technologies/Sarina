@@ -352,6 +352,44 @@ If cut off, resume at: step 4 if steps 1-3 are committed; else the first uncommi
 
 Goal: fewer extra generations with no true positive lost.
 
+**Done by the day session of 2026-11-04 (Matt asked for the night 1-2 fixes before night 3; do not redo, measure them).**
+Each change was read from the night 1-2 sessions in `/var/lib/sarina/sessions` and tested with the real sentences:
+- Step 1 done, extended (`542161f`):
+  - `toolNamedNotCalled` matches whole tool names (not in `/run/limbo/agent.sock` or `limbo-agent`); a tool name that is also an
+    ordinary word (`agent`, `bash`) counts only in backticks.
+  - It skips a sentence that waits on the user (a candidate, "if you suspect", "would you like me to"), and never nudges after
+    a tool refused the task.
+  - A nudge is never sent twice. If she answers a nudge without calling anything, her earlier answer stands (read-docs lost
+    its list that way).
+- Step 2 done (`542161f`): `ungroundedQuote` trims punctuation inside the quote; skips `k=v` tool settings, spelled digits,
+  `NULL`/None/true, placeholders and bare extensions; counts her own tool arguments; compares JSON without whitespace.
+- Not in the plan, found in the sessions:
+  - `5382f03`: crypto_hash refused the empty string, the one input that answers crypto-hash-says.
+  - `f88bf39`: a token given as `path` is read as the text (crypto-jwt-not-verified: the call failed and she decoded it in
+    her head).
+  - `5536ceb`: a thinking-only reply cut at the length limit is no longer told to "carry on". That looped until the 600 s
+    timeout in tt-code-test; Matt answered length-loop-fix = y.
+  - `a0a7652`: the forge refuses agents that read keys or private folders (forge-private-dirs = y).
+- Eval runner:
+  - `d8d2d32`: a NOTE when a guard, not her judgement, stopped her (`guard_stops`, not graded); hostname, Wi-Fi name and
+    public addresses blanked in reports; find-function accepts `protected()`; sys-bad-program-name accepts "designed for
+    programs, not system files".
+  - `bbcc319`: the limbo cases now run at night through claude-sudo (Matt: limbo-night = y), with the measured binary instead
+    of `/usr/bin/sarina`. Run A and B are therefore 112 graded cases from night 3 on, not 108.
+- Day-session group run (crypto, comprehension, system, code, limbo, once): see section 6.
+
+**Night 3 therefore does:**
+1. Read run A as usual, and check that the changes above held. Compare `check_texts` with night 2's run B
+   (`Labyrinth_OS/docs/sarina-evals/2026-11-04-1041.json`): the "named agent" and "quotes NULL/payload" send-backs should
+   be gone, and the true positives (wm-clean's `stego_clean`, code-refuse-exfil's exfil-in-answer) should still fire.
+2. Steps 3 and 4 below (unreadDefinition as a nudge, deniedReadable), which are not done.
+3. Then the step 5 gates on run B.
+
+Known and left for later:
+- tt-code-test also fails when she edits the owner's rule11.py when asked only to test it (Day 4 verify-hook work).
+- A Chinese word ("而非") once slipped into an English answer (sys-bad-program-name, run B); the voice would read it aloud.
+  Not fixed; a candidate check.
+
 Inputs: Day 1-2's send-back tables. Known from the 2026-10-26 run (verify against the new table before acting): `toolNamedNotCalled`
 nudged 9 times (2 of the 5 fails: it matched "agent" inside "limbo-agent"/"agent.sock" in a correct read-docs answer, and treated
 "compare it with crypto_hash" advice as a skipped step; the same nudge fired twice); `ungroundedQuote` 6 (3 false: a comma captured
