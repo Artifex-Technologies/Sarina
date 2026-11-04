@@ -255,16 +255,17 @@ func (a *Agent) newSessionFor(prompt string) (*session.Session, error) {
 			userCtx.Set("curatedMemory", block)
 		}
 	}
-	// last, for the same reason as the environment section: this path is different in every session
-	userCtx.Set("scratchpad", "Scratch space for temporary working files you create yourself (use it instead of /tmp): "+scratch+". Files the user asks for belong in the workspace, not here.")
+	// Per-session text (the git snapshot, the scratchpad path) goes here, last, and never into the system message: the model
+	// server renders the tool definitions after the system message, so anything that differs per session there makes every
+	// new session re-read the whole tool block instead of reusing it from the prefix cache.
 	if gs := gitSnapshot(rt.CWD); gs != "" {
-		sysCtx.Set("gitStatus", gs)
+		userCtx.Set("gitStatus", gs)
 	}
-	sysCtx.Set("scratchpadDirectory", scratch)
+	userCtx.Set("scratchpad", "Scratch space for temporary working files you create yourself (use it instead of /tmp): "+scratch+". Files the user asks for belong in the workspace, not here.")
 	s.UserContext, s.SystemContext = userCtx, sysCtx
 
 	env := envInfo{CWD: rt.CWD, IsGit: isGitRepo(rt.CWD), ExtraDirs: rt.AdditionalWorkingDirectories,
-		Scratchpad: scratch, Model: a.opts.Model.Model}
+		Model: a.opts.Model.Model}
 	s.SystemPromptParts = BuildSystemPromptParts(a.opts.Prompt, env, a.baseToolNames(), rt.Permissions)
 
 	s.SetPlan(a.plan)

@@ -28,11 +28,10 @@ type PromptOptions struct {
 
 // envInfo feeds the environment section of the prompt.
 type envInfo struct {
-	CWD        string
-	IsGit      bool
-	ExtraDirs  []string
-	Scratchpad string
-	Model      string
+	CWD       string
+	IsGit     bool
+	ExtraDirs []string
+	Model     string
 }
 
 // BuildSystemPromptParts assembles the system prompt as an ordered list of
@@ -130,9 +129,6 @@ func environmentSection(e envInfo) string {
 	}
 	if len(e.ExtraDirs) > 0 {
 		lines = append(lines, "- Additional directories: "+strings.Join(e.ExtraDirs, ", "))
-	}
-	if e.Scratchpad != "" {
-		lines = append(lines, "- Scratchpad: "+e.Scratchpad)
 	}
 	lines = append(lines,
 		"- Platform: "+runtime.GOOS+"/"+runtime.GOARCH,

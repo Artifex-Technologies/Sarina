@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -555,24 +556,77 @@ func TestPromptOverrides(t *testing.T) {
 }
 
 // The prompt's static text must come before anything that differs between sessions: the model server reuses a cached prefix only
-// up to the first difference, and the working directory and scratchpad path differ every time.
+// up to the first difference, and the working directory differs between cases.
 func TestPerSessionPromptPartsComeLast(t *testing.T) {
-	env := envInfo{CWD: "/tmp/work", Scratchpad: "/tmp/scratch/abc123", Model: "m"}
+	env := envInfo{CWD: "/tmp/work", Model: "m"}
 	parts := BuildSystemPromptParts(PromptOptions{Append: "tail"}, env, []string{"read_file"}, perms())
 	if len(parts) < 3 {
 		t.Fatalf("want the default parts, the appendix and the environment: %d", len(parts))
 	}
 	last := parts[len(parts)-1]
-	if !strings.Contains(last, "/tmp/scratch/abc123") || !strings.Contains(last, "/tmp/work") {
+	if !strings.Contains(last, "/tmp/work") {
 		t.Fatalf("the environment section is not last: %q", last)
 	}
+	if strings.Contains(last, "Scratchpad") {
+		t.Fatalf("the scratchpad path is per session and belongs in the user context: %q", last)
+	}
 	for _, p := range parts[:len(parts)-1] {
-		if strings.Contains(p, "/tmp/scratch/abc123") || strings.Contains(p, "/tmp/work") {
+		if strings.Contains(p, "/tmp/work") {
 			t.Fatalf("a per-session path appears before the last part: %q", p)
 		}
 	}
 	if parts[len(parts)-2] != "tail" {
 		t.Fatalf("the appendix should sit before the environment: %q", parts[len(parts)-2])
+	}
+}
+
+// Two sessions in the same folder must send the same system message and the same tools in the same order, so the server reuses
+// the whole static prefix (system message plus the tool block it renders after it). The session id, the scratchpad path and the
+// git snapshot live in the user context.
+func TestSystemMessageHasNoPerSessionText(t *testing.T) {
+	f := newFakeServer(t, reply("ok", "stop", use(1, 1)))
+	a := newTestAgent(t, f)
+	cwd := a.opts.Runtime.CWD
+	if _, err := exec.LookPath("git"); err == nil {
+		cmd := exec.Command("git", "init", "-q", cwd)
+		if cmd.Run() == nil {
+			os.WriteFile(filepath.Join(cwd, "tracked.txt"), []byte("x\n"), 0o644)
+		}
+	}
+	s1, err := a.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	specs1 := a.registry.Specs()
+	s2, err := a.newSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	specs2 := a.registry.Specs()
+	sys1, sys2 := s1.Messages[0], s2.Messages[0]
+	if sys1.Role != "system" || sys1.Content != sys2.Content {
+		t.Fatalf("system messages differ between sessions:\n%q\n%q", sys1.Content, sys2.Content)
+	}
+	for _, s := range []*session.Session{s1, s2} {
+		for _, bad := range []string{s.ID, s.ScratchpadDirectory, "gitStatus", "scratchpadDirectory", "tracked.txt"} {
+			if strings.Contains(sys1.Content, bad) {
+				t.Fatalf("system message carries per-session text %q", bad)
+			}
+		}
+		if len(s.Messages) < 2 || !strings.Contains(s.Messages[1].Content, s.ScratchpadDirectory) {
+			t.Fatalf("the scratchpad path should be in the user context: %+v", s.Messages[1:])
+		}
+	}
+	if isGitRepo(cwd) && !strings.Contains(s1.Messages[1].Content, "# gitStatus") {
+		t.Fatalf("the git snapshot should be in the user context: %q", s1.Messages[1].Content)
+	}
+	if len(specs1) == 0 || len(specs1) != len(specs2) {
+		t.Fatalf("tool lists differ: %d vs %d", len(specs1), len(specs2))
+	}
+	for i := range specs1 {
+		if specs1[i].Name != specs2[i].Name {
+			t.Fatalf("tool order is not stable at %d: %s vs %s", i, specs1[i].Name, specs2[i].Name)
+		}
 	}
 }
 
