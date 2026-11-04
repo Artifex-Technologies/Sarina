@@ -450,6 +450,25 @@ func TestConnectionFailureAndTimeout(t *testing.T) {
 	}
 }
 
+// A non-streamed reply arrives all at once: the per-call wait grows by a second per 40 max_tokens, so a long healthy reply is not
+// cut off and generated twice. A streamed call keeps the flat timeout (its timer restarts on every chunk).
+func TestNonStreamingTimeoutFollowsMaxTokens(t *testing.T) {
+	slow := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		io.WriteString(w, `{"choices":[{"message":{"content":"done"},"finish_reason":"stop"}]}`)
+	})
+	c := newTestClient(slow.URL)
+	c.Config.TimeoutSeconds = 0.05
+	if _, err := c.Complete(context.Background(), Request{}, nil); err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("no max_tokens: the flat timeout should apply: %v", err)
+	}
+	// 8 tokens / 40 = 0.2 s on top of 0.05 s
+	turn, err := c.Complete(context.Background(), Request{MaxTokens: 8}, nil)
+	if err != nil || turn.Content != "done" {
+		t.Fatalf("max_tokens 8 should wait 0.25 s: %v %+v", err, turn)
+	}
+}
+
 func TestContextCancellationReturnsCtxErr(t *testing.T) {
 	slow := serve(t, func(w http.ResponseWriter, r *http.Request) { time.Sleep(300 * time.Millisecond) })
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)

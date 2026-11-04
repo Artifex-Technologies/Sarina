@@ -167,6 +167,12 @@ func (c *Client) once(ctx context.Context, body []byte, req Request, on func(Str
 	if timeout <= 0 {
 		timeout = time.Duration(config.DefaultTimeoutSeconds * float64(time.Second))
 	}
+	if !req.Stream && req.MaxTokens > 0 {
+		// a non-streamed reply arrives all at once, so the wait must cover the longest reply allowed: one second per 40 tokens
+		// on top (a 6,000-token reply at ~55 tokens/s takes ~109 s, which the flat 120 s barely covered; a timeout is retried,
+		// so a long but healthy reply cost two full generations). A streamed reply resets the timer on every chunk instead.
+		timeout += time.Duration(req.MaxTokens) * time.Second / 40
+	}
 	rctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var timedOut atomic.Bool

@@ -32,6 +32,33 @@ WORK = "/tmp/sarina-evals"
 SESSIONS = os.environ.get("SARINA_SESSION_DIR", "/var/lib/sarina/sessions")
 HEIMDALL = os.environ.get("HEIMDALL_URL", "http://127.0.0.1:8930")
 INVISIBLE = "​‍⁠"
+# SARINA_EVAL_STREAM=1: typed cases run `sarina chat --stream` (the voice path's way of reading her). Off by default: a streamed
+# reply carries every model turn's text, not only the final answer, so a sentence she wrote before a tool call, or a draft a
+# "carry on" nudge replaced, would be scored too (26 of 114 sessions of run 2026-11-04-0633 had such text; in read-docs the first
+# draft held the list the final answer lost, a false pass). Use it for the with/without comparison only.
+STREAM = os.environ.get("SARINA_EVAL_STREAM") == "1"
+# printed by `sarina chat --stream` where a claim check sent the streamed draft back and a new one follows (DraftWithdrawn in cli/chat.go)
+DRAFT_WITHDRAWN = "\x1edraft withdrawn\x1e"
+
+
+def drop_withdrawn(out):
+    """The streamed reply without the drafts a check sent back: everything up to the last withdrawn marker goes, so a withdrawn
+    draft can never satisfy a must-regex (labyrinth-ask-sarina drops it the same way before speaking).
+
+    >>> drop_withdrawn("It is fine.\\n[\\x1edraft withdrawn\\x1e]\\nIt fails on 9999.\\n")
+    'It fails on 9999.\\n'
+    >>> drop_withdrawn("a\\n[\\x1edraft withdrawn\\x1e]\\nb\\n[\\x1edraft withdrawn\\x1e]\\nc")
+    'c'
+    >>> drop_withdrawn("no marker here")
+    'no marker here'
+    >>> drop_withdrawn("cut off \\x1edraft withdrawn\\x1e")
+    ''
+    """
+    i = out.rfind(DRAFT_WITHDRAWN)
+    if i < 0:
+        return out
+    rest = out[i + len(DRAFT_WITHDRAWN):]
+    return rest[1:].lstrip("\n") if rest.startswith("]") else rest.lstrip("\n")
 
 
 def env_file(path):
@@ -1033,6 +1060,8 @@ def sarina_cmd(case, base_env):
         cmd.append("--allow-shell")
     if case.get("write"):
         cmd.append("--allow-write")
+    if STREAM:
+        cmd.append("--stream")
     if case.get("as_service"):
         pw = SUDO_PASSWORD
         pre = ["sudo", "-S", "-p", "", "systemd-run", "--quiet", "--wait", "--pipe", "--uid=sarina", "-p", "SupplementaryGroups=limbo-agent",
@@ -1132,6 +1161,7 @@ def run_case(case, base_env, timeout):
     except subprocess.TimeoutExpired as e:
         out, err, rc = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""), "timeout after %ds" % timeout, 124
     took = time.time() - t0
+    out = drop_withdrawn(out)
     after = wait_for_heimdall(case, before is not None, seen)
     new = [] if after is None else [a for a in after if json.dumps(a, sort_keys=True) not in seen]
     res = dict(out=out, err=err, rc=rc, took=took, new_alerts=new, alerts_known=after is not None, file_unchanged=case.get("file_unchanged"))
@@ -1401,7 +1431,7 @@ def main(argv):
         append(partial + ".md", "\n".join(entry["md"]) + "\n")
     lines = ["# Sarina evals, %s" % time.strftime("%Y-%m-%d %H:%M"), "",
              "Build: %s%s. Graphics card: %s." % (build.get("commit", "unknown")[:12] + (" with uncommitted changes" if build.get("modified") else ""), (" (STALE BUILD: %s)" % stale) if stale else "", ("SHARED, " + shared) if shared else "idle"), "",
-             "Model: %s via %s. Cases in the write group run with --allow-write inside throw-away folders under /tmp/sarina-evals; all others are read-only. Each case lists its checks; the full answer is below it." % (env.get("OPENAI_MODEL", "?"), env.get("OPENAI_BASE_URL", "?")), ""]
+             "Model: %s via %s. Cases in the write group run with --allow-write inside throw-away folders under /tmp/sarina-evals; all others are read-only. Each case lists its checks; the full answer is below it.%s" % (env.get("OPENAI_MODEL", "?"), env.get("OPENAI_BASE_URL", "?"), " Typed cases streamed (SARINA_EVAL_STREAM=1): their answers carry every model turn's text." if STREAM else ""), ""]
     results = [e["result"] for e in entries]
     tot = sum(1 for r in results if r["passed"] is not None)
     ok = sum(1 for r in results if r["passed"])
@@ -1412,7 +1442,7 @@ def main(argv):
     lines.insert(3, "**%d of %d cases passed.** Slowest: %s." % (ok, tot, slow or "-"))
     lines[5:5] = accounting_lines(results)
     # the same results for programs (the achievements ledger reads this, not the prose)
-    write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only or a.group), "groups": a.group or [], "build": build, "stale": bool(stale), "card_shared": shared, "results": results}, indent=1) + "\n")
+    write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only or a.group), "groups": a.group or [], "build": build, "stale": bool(stale), "card_shared": shared, "stream": STREAM, "results": results}, indent=1) + "\n")
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     write(a.out, "\n".join(lines) + "\n")
     for ext in (".jsonl", ".md"):  # the report is whole: the partial files are no longer needed
