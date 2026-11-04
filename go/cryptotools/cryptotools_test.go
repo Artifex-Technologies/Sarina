@@ -19,6 +19,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Artifex-Technologies/Sarina/go/tools"
 )
 
 const prose = "Attack at dawn. The enemy camp lies to the north of the river and we must move before the first light of the morning or all is lost. " +
@@ -397,5 +399,25 @@ func TestVigenereIsReadInThePrefetch(t *testing.T) {
 	got := strings.ToLower(Prefetch("This is a Vigenere cipher and I lost the key: hji gbzf ms oitmeq iphee hji oyr qek gfgi bl hji rvjgv aar yi mhgv qois kx brtqve gvg jiegv pitvv sf gvg qoebkrg bf cpl vg nssg hq xhr spiml"))
 	if !strings.Contains(got, "key ocean") || !strings.Contains(got, "old oak tree") {
 		t.Fatalf("the readable key does not lead:\n%s", got)
+	}
+}
+
+// The empty string is a real input for a hash (eval crypto-hash-says, 2026-11-04: the tool refused it, so the one check that
+// answers "what does e3b0c442... say" failed); for every other tool, no text and no path is still an error.
+func TestHashToolTakesTheEmptyString(t *testing.T) {
+	t.Setenv("SARINA_CRYPTO", "on")
+	var hash tools.Tool
+	for _, tl := range Tools() {
+		if tl.Spec.Name == "crypto_hash" {
+			hash = tl
+		}
+	}
+	out, _, err := hash.Handler(context.Background(), map[string]any{"text": "", "algo": "sha256",
+		"expected": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}, &tools.Context{Root: t.TempDir()})
+	if err != nil || !strings.Contains(strings.ToLower(out), "match") {
+		t.Fatalf("empty string: %v\n%s", err, out)
+	}
+	if _, _, err := hash.Handler(context.Background(), map[string]any{"algo": "sha256"}, &tools.Context{Root: t.TempDir()}); err == nil {
+		t.Fatal("neither text nor path given: want an error")
 	}
 }

@@ -163,6 +163,11 @@ func Tools() []tools.Tool {
 				}},
 			},
 			Handler: func(ctx context.Context, a map[string]any, tc *tools.Context) (string, map[string]any, error) {
+				// an empty string given on purpose is a real input here: its digest is the best-known one there is (eval
+				// crypto-hash-says, 2026-11-04: she checked e3b0c442... against "" and the tool refused, "give text or a path")
+				if t, ok := a["text"].(string); ok && t == "" && str(a, "path") == "" {
+					return HashReport(nil, "text (empty)", str(a, "algo"), str(a, "key"), str(a, "expected")) + evidenceNote, map[string]any{"action": "crypto_hash"}, nil
+				}
 				b, src, err := input(a, tc)
 				if err != nil {
 					return "", nil, err
