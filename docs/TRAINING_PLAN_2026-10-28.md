@@ -599,8 +599,8 @@ four limbo/decompile cases graded through a password-typed evening run only (nev
 | baseline | 2026-10-26 18:54 | d45bf38 | 107/112 | 19.6 | 50 | ~44 (hand count) | ~2.3k | 17 per 3 days | 7 s sleep; unsandboxed tests |
 | #1 | 2026-11-03 22:30 (night 1 run A) | b351b92 | 103/112 | 22.3 | 55 | ~30 (34 send-backs, counted from session files) | n/a (old runner; total 863,651) | 2 on 11-03 | before night 1's commits; JSON has no per-case calls |
 | #2 | 2026-11-04 00:06 (night 1 run B) | 120a8b9 | 105/112 | 21.2 | 53 | 29 (claim_check 21, continue 8, empty_reply 3) | ~4.3k | 0 on 11-04 by 00:59 | +7 fixed, 5 new FAILs, none traced to tonight's code; ladder earned 1 -> 0 (honesty 80%) |
-| #3 | | | | | | | | | |
-| #4 | | | | | | | | | |
+| #3 | 2026-11-04 06:33 (night 2 run A) | fd99864 | 107/112 | 26.4 | 63 | 24 (claim_check 16, continue 8, empty_reply 3) | ~3.6k | 5 on 11-04 by 11:47 | before night 2's commits; +5 fixed, 3 new FAILs vs #2 (model variance: fd99864 touched only night-run.sh); tt-code-test 600 s timeout |
+| #4 | 2026-11-04 10:41 (night 2 run B) | 2b21f4d | 102/112 | 27.8 | 65 | 35 (claim_check 20, continue 12, empty_reply 7) | ~6.7k | 5 on 11-04 by 11:47 | cached tokens up (prefix cache); 7 new FAILs, 2 fixed vs #3, none traced to the night's code (5 follow send-backs: claim checks, continues); Done when not met (pass set changed, mean s up) |
 | #5 | | | | | | | | | |
 | #6 | | | | | | | | | streak 1? |
 | #7 | | | | | | | | | streak 2? |
