@@ -7,7 +7,7 @@ on this machine today, and to see whether that gets better after training (lesso
   python3 evals/run_evals.py [--only NAME ...] [--out REPORT.md] [--list]
 
 Needs: Ollama and the model Sarina uses, Heimdall on 127.0.0.1:8930 (optional: the alert checks are skipped without it), and for
-the Limbo cases Limbo with the profiles named in the case (set SUDO_PASSWORD to run those as the `sarina` service user).
+the Limbo cases Limbo with the profiles named in the case (as the `sarina` service user: with SUDO_PASSWORD set, or through claude-sudo).
 Nothing here writes to the workspaces Sarina reads; test files live under /tmp/sarina-evals. The "write" group runs her with
 --allow-write (for that one run only; her configuration is not changed) to see how she behaves when she may change files.
 """
@@ -25,6 +25,32 @@ import urllib.request
 # environment, so no program started from here inherits it: Sarina, the agent under test, can be prompt-injected. It reaches
 # sudo only on its standard input.
 SUDO_PASSWORD = os.environ.pop("SUDO_PASSWORD", "")
+# Without a password, the cases that need root use claude-sudo (the audited agent account), as Matt decided for D2 and for the
+# nights (limbo-night, 2026-11-04): only `systemd-run --uid=sarina ...` and `install` of the sample, never anything else.
+CLAUDE_SUDO = "/usr/local/bin/claude-sudo"
+
+
+def service_binary():
+    """The binary being measured, copied where the sarina user can run it (it cannot enter this home folder): the service-user
+    cases ran /usr/bin/sarina, the installed package, which is older than the build the report names."""
+    src = shutil.which("sarina") or "/usr/bin/sarina"
+    dst = os.path.join(WORK, "bin", "sarina")
+    if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
+        os.makedirs(os.path.dirname(dst), mode=0o755, exist_ok=True)
+        os.chmod(WORK, 0o755)
+        os.chmod(os.path.dirname(dst), 0o755)
+        shutil.copy2(src, dst)
+        os.chmod(dst, 0o755)
+    return dst
+
+
+def root_cmd(args):
+    """(command, stdin) to run args as root: sudo with the typed password, else claude-sudo; (None, None) when neither exists."""
+    if SUDO_PASSWORD:
+        return ["sudo", "-S", "-p", ""] + args, SUDO_PASSWORD + "\n"
+    if os.access(CLAUDE_SUDO, os.X_OK):
+        return [CLAUDE_SUDO] + args, None
+    return None, None
 
 HOME = os.path.expanduser("~")
 GH = os.path.join(HOME, "Documents", "Github")
@@ -1063,10 +1089,9 @@ def sarina_cmd(case, base_env):
     if STREAM:
         cmd.append("--stream")
     if case.get("as_service"):
-        pw = SUDO_PASSWORD
-        pre = ["sudo", "-S", "-p", "", "systemd-run", "--quiet", "--wait", "--pipe", "--uid=sarina", "-p", "SupplementaryGroups=limbo-agent",
-               "-p", "EnvironmentFile=/etc/sarina/service.env", "-p", "WorkingDirectory=/var/lib/sarina"]
-        return pre + ["/usr/bin/" + cmd[0]] + cmd[1:], pw + "\n" if pw else None, cwd
+        pre, stdin = root_cmd(["systemd-run", "--quiet", "--wait", "--pipe", "--uid=sarina", "-p", "SupplementaryGroups=limbo-agent",
+                               "-p", "EnvironmentFile=/etc/sarina/service.env", "-p", "WorkingDirectory=/var/lib/sarina"])
+        return pre + [service_binary()] + cmd[1:], stdin, cwd
     return cmd, None, cwd
 
 
@@ -1144,10 +1169,10 @@ def run_case(case, base_env, timeout):
     started = time.time() - 1  # session files written from here on are this case's (mtime granularity)
     if case.get("sample"):
         d = setup_sample()
-        pw = SUDO_PASSWORD
-        if pw:
-            subprocess.run(["sudo", "-S", "-p", "", "install", "-d", "-m", "755", "/var/lib/limbo/samples"], input=pw + "\n", text=True, capture_output=True)
-            subprocess.run(["sudo", "-S", "-p", "", "install", "-m", "644", os.path.join(d, "demo.bin"), "/var/lib/limbo/samples/demo.bin"], input=pw + "\n", text=True, capture_output=True)
+        for args in (["install", "-d", "-m", "755", "/var/lib/limbo/samples"], ["install", "-m", "644", os.path.join(d, "demo.bin"), "/var/lib/limbo/samples/demo.bin"]):
+            c, stdin = root_cmd(args)
+            if c:
+                subprocess.run(c, input=stdin, text=True, capture_output=True)
     if case.get("then"):
         # a conversation: the first question is asked, then the one that is scored, in the same conversation
         case = dict(case, conversation="eval-%s-%d" % (case["name"], int(time.time())))
@@ -1471,8 +1496,8 @@ def main(argv):
         if case["name"] in done:
             entries.append(done[case["name"]])
             continue
-        if case.get("as_service") and not SUDO_PASSWORD:
-            res, checks = None, [("skipped: set SUDO_PASSWORD to run as the sarina user", None)]
+        if case.get("as_service") and root_cmd([])[0] is None:
+            res, checks = None, [("skipped: set SUDO_PASSWORD (or install claude-sudo) to run as the sarina user", None)]
         else:
             print("== %s" % case["name"], flush=True)
             res = run_case(case, env, a.timeout)
