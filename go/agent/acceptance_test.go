@@ -391,3 +391,31 @@ func TestAWrongNudgeDoesNotReplaceTheAnswer(t *testing.T) {
 		t.Fatalf("%d model calls, want 2 (one nudge, never repeated)", n)
 	}
 }
+
+// A reply that is all hidden reasoning and hits the length limit is never told to "carry on from where it stopped" (tt-code-test,
+// night 2: that looped until the case timed out); she is asked to act with thinking off, twice at most, then the task ends.
+func TestAThinkingOnlyCutDoesNotLoop(t *testing.T) {
+	f := newFakeServer(t, reply("", "length", use(1, 1)), reply("", "length", use(1, 1)), reply("", "length", use(1, 1)),
+		reply("", "length", use(1, 1)), reply("", "length", use(1, 1)))
+	a := newTestAgent(t, f)
+	res := mustRun(t, a, "test rule11.py")
+	if n := len(f.requests()); n != 3 {
+		t.Fatalf("%d model calls, want 3 (two retries, then stop)", n)
+	}
+	if !strings.Contains(res.FinalOutput, "length limit") {
+		t.Fatalf("final %q", res.FinalOutput)
+	}
+	last := reqMessages(f.requests()[2])
+	if c, _ := last[len(last)-1]["content"].(string); !strings.Contains(c, "/no_think") {
+		t.Fatalf("the retry does not turn thinking off: %q", c)
+	}
+}
+
+// After a visible part was cut, carrying on is still right.
+func TestACutAnswerWithTextStillCarriesOn(t *testing.T) {
+	f := newFakeServer(t, reply("The first half", "length", use(1, 1)), reply(" and the rest.", "stop", use(1, 1)))
+	a := newTestAgent(t, f)
+	if res := mustRun(t, a, "explain"); res.FinalOutput != "The first half and the rest." {
+		t.Fatalf("final %q", res.FinalOutput)
+	}
+}

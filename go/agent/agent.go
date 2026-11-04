@@ -457,6 +457,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 	// nudgedFrom is the answer a "you named <tool>" nudge sent back: if she then calls nothing, the nudge was wrong and that answer
 	// stands (read-docs, night 2 2026-11-04: a right list was replaced by "the agent tool is not required here")
 	nudgedFrom, sentNudges := "", map[string]bool{}
+	cutEmpty := 0
 	for turn := 1; turn <= maxTurns; turn++ {
 		if ctx.Err() != nil {
 			return finish(StopInterrupted, "Interrupted before the model was called.", turn-1)
@@ -517,6 +518,24 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 
 		if len(t.ToolCalls) == 0 {
 			// a thinking model sometimes ends a turn with nothing but its hidden reasoning: that is not an answer, so it is asked once to go on
+			// a reply that was all hidden reasoning and hit the length limit has nothing to carry on from: "carry on from where it
+			// stopped" only made her think it all through again and hit the limit again, until the case timed out (tt-code-test,
+			// night 2 2026-11-04: ~6k-token replies, 600 s). She is told to act now with thinking off, twice at most; then the
+			// task ends with what she has.
+			if strings.TrimSpace(t.Content) == "" && (t.FinishReason == "length" || t.FinishReason == "max_tokens") {
+				if cutEmpty < 2 && turn < maxTurns {
+					cutEmpty++
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("empty_reply_%d", turn),
+						Content: "Your last reply was all thinking and hit the length limit before any text or tool call. Do not think it through again: make the next tool call now, or answer in words from what you have. /no_think"})
+					r.emit(event{"type": "empty_reply_retry", "turn_index": turn, "reason": "length"})
+					continue
+				}
+				out := strings.Join(r.segments, "")
+				if strings.TrimSpace(out) == "" {
+					out = "Stopped: my replies kept running past the length limit before I could answer. Ask again, or ask for one part of it."
+				}
+				return finish(t.FinishReason, out, turn)
+			}
 			if strings.TrimSpace(t.Content) == "" && len(r.segments) == 0 && emptyRetries < 2 && turn < maxTurns {
 				emptyRetries++
 				// seen with Qwen3: it plans the next tool call in its hidden reasoning ("let me start with the analyze command") and then
