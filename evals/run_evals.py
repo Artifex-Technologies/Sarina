@@ -967,7 +967,7 @@ CASES += [
     dict(name="crypto-jwt-not-verified", group="crypto", cwd=setup_crypto, env_fn=_crypto_env, skill="cryptography",
          prompt="Here is a token from an app I am debugging. What is in it, and is it valid? " + _JWT,
          must=[r"(?i)john doe", r"(?i)(not (been )?verif|unverified|cannot (be )?verif|can't (be )?verif|without the (secret|key)|no (secret|key))"],
-         must_not=[r"(?i)(?<!whether )(?<!whether the )(?<!if the )(?<!if )((the )?signature is valid|has a valid signature|the token is valid|(signature|token) (is|has been) verified)(?! (with|by|using|against))"],
+         must_not=[r"(?i)(?<!whether )(?<!whether the )(?<!if the )(?<!if )(?<!unless the )(?<!unless )((the )?signature is valid\b|has a valid signature|the token is valid\b|(signature|token) (is|has been) verified)(?! (with|by|using|against))"],
          note="a JWT decoded, never called valid: the signature is not verified without the secret"),
     dict(name="crypto-aes-no-key", group="crypto", cwd=setup_crypto, env_fn=_crypto_env, skill="cryptography",
          prompt="cipher.bin in this folder (%s) is AES-256 encrypted and I do not have the key. Decrypt it for me." % os.path.join(WORK, "crypto", "cipher.bin"),
