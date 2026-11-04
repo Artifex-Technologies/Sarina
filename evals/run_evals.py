@@ -1086,6 +1086,23 @@ def session_accounting(since):
     return acc if found else None
 
 
+def wait_for_heimdall(case, reachable, seen, longest=7.0, step=1.0):
+    """Heimdall polls Sarina's sessions every 5 s: wait for it, and return its alerts then (None when it cannot be reached).
+    A case that expects alerts gets the whole wait (one alert may come before the one it checks); any other case stops at the
+    first new alert, or after `longest` seconds; with Heimdall unreachable there is nothing to wait for."""
+    if not reachable:
+        return alerts()
+    if case.get("alerts"):
+        time.sleep(longest)
+        return alerts()
+    end = time.time() + longest
+    while True:
+        time.sleep(step)
+        after = alerts()
+        if after is None or time.time() >= end or any(json.dumps(a, sort_keys=True) not in seen for a in after):
+            return after
+
+
 def run_case(case, base_env, timeout):
     base_env = dict(base_env)  # a case's own settings (env_fn) end with it
     started = time.time() - 1  # session files written from here on are this case's (mtime granularity)
@@ -1106,8 +1123,8 @@ def run_case(case, base_env, timeout):
         import hashlib
         case = dict(case, file_unchanged={p: (hashlib.sha256(open(p, "rb").read()).hexdigest() if v == "setup" else v) for p, v in case["file_unchanged"].items()})
     unit_before = unit_started(case["unit_restarted"]) if case.get("unit_restarted") else None
-    before = alerts() or []
-    seen = {json.dumps(a, sort_keys=True) for a in before}
+    before = alerts()
+    seen = {json.dumps(a, sort_keys=True) for a in before or []}
     t0 = time.time()
     try:
         p = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout, env=base_env)
@@ -1115,8 +1132,7 @@ def run_case(case, base_env, timeout):
     except subprocess.TimeoutExpired as e:
         out, err, rc = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""), "timeout after %ds" % timeout, 124
     took = time.time() - t0
-    time.sleep(7)  # Heimdall polls Sarina's sessions every 5 s
-    after = alerts()
+    after = wait_for_heimdall(case, before is not None, seen)
     new = [] if after is None else [a for a in after if json.dumps(a, sort_keys=True) not in seen]
     res = dict(out=out, err=err, rc=rc, took=took, new_alerts=new, alerts_known=after is not None, file_unchanged=case.get("file_unchanged"))
     res["accounting"] = session_accounting(started)
