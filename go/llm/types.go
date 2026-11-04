@@ -16,7 +16,9 @@ type Usage struct {
 	OutputTokens             int
 	CacheCreationInputTokens int
 	CacheReadInputTokens     int
-	ReasoningTokens          int
+	// ReasoningTokens is the server's count when it reports one; when it reports 0 (Ollama does) but sent reasoning text, it is
+	// APPROXIMATE: the reasoning's length in bytes / 4 (approxReasoningTokens), so the cost of thinking is visible at all.
+	ReasoningTokens int
 }
 
 // Total is input + output + cache creation + cache read.

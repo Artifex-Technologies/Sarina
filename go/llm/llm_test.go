@@ -328,6 +328,32 @@ func TestStreamParsing(t *testing.T) {
 	}
 }
 
+// Ollama reports reasoning_tokens 0 for qwen3's thinking: the count becomes len(reasoning)/4 (approximate), in both reply shapes;
+// a count the server does report is kept.
+func TestReasoningTokensApproximatedWhenNotReported(t *testing.T) {
+	think := strings.Repeat("abcd", 50) // 200 bytes -> 50
+	t1, err := parseResponse([]byte(`{"choices":[{"message":{"content":"x","reasoning_content":"` + think + `"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":60}}`))
+	if err != nil || t1.Usage.ReasoningTokens != 50 || !t1.UsageReported {
+		t.Fatalf("non-streamed: %+v %v", t1.Usage, err)
+	}
+	t2, err := parseResponse([]byte(`{"choices":[{"message":{"content":"x","reasoning_content":"` + think + `"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":60,"completion_tokens_details":{"reasoning_tokens":7}}}`))
+	if err != nil || t2.Usage.ReasoningTokens != 7 {
+		t.Fatalf("a reported count must be kept: %+v %v", t2.Usage, err)
+	}
+	t3, err := parseResponse([]byte(`{"choices":[{"message":{"content":"x"},"finish_reason":"stop"}]}`))
+	if err != nil || t3.Usage.ReasoningTokens != 0 || t3.UsageReported {
+		t.Fatalf("no reasoning, no usage: %+v %v", t3.Usage, err)
+	}
+	turn, _, err := completeStream(t, strings.Join([]string{
+		`data: {"choices":[{"delta":{"reasoning":"` + think[:100] + `"}}]}`, "",
+		`data: {"choices":[{"delta":{"reasoning":"` + think[100:] + `"}}]}`, "",
+		`data: {"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":60}}`, "",
+		"data: [DONE]", ""}, "\n"))
+	if err != nil || turn.Usage.ReasoningTokens != 50 {
+		t.Fatalf("streamed: %+v %v", turn.Usage, err)
+	}
+}
+
 func TestStreamTrailingEventWithoutBlankLine(t *testing.T) {
 	turn, _, err := completeStream(t, `data: {"choices":[{"delta":{"content":"tail"},"finish_reason":"stop"}]}`)
 	if err != nil || turn.Content != "tail" {

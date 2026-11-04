@@ -886,7 +886,7 @@ func (a *Agent) callModel(ctx context.Context, r *run, turn, preserve int) (*llm
 		for _, c := range t.ToolCalls {
 			out += CountTokens(c.Name) + CountTokens(c.ArgumentsJSON())
 		}
-		t.Usage = llm.Usage{InputTokens: in, OutputTokens: out}
+		t.Usage = llm.Usage{InputTokens: in, OutputTokens: out, ReasoningTokens: t.Usage.ReasoningTokens}
 	}
 	msg := session.Message{Role: "assistant", Content: t.Content, State: session.StateFinal,
 		StopReason: t.FinishReason, Usage: t.Usage}

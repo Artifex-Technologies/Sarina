@@ -1085,7 +1085,7 @@ def session_accounting(since):
     """What her session file(s) written since `since` say about the case (a conversation case has two turns): model calls, the
     send-backs by kind (a claim check, a carry-on nudge, an empty-reply or repeat retry: each one is an extra generation), the
     first line of each send-back's text, and the tokens. None when no session file was written (Sarina did not start)."""
-    acc = {"model_calls": 0, "send_backs": {}, "check_texts": [], "tokens": {"in": 0, "cached": 0, "out": 0}}
+    acc = {"model_calls": 0, "send_backs": {}, "check_texts": [], "tokens": {"in": 0, "cached": 0, "out": 0, "reasoning": 0}}
     found = False
     try:
         names = [e for e in os.scandir(SESSIONS) if e.name.endswith(".json") and e.stat().st_mtime >= since]
@@ -1104,6 +1104,7 @@ def session_accounting(since):
         acc["tokens"]["in"] += int(u.get("input_tokens") or 0)
         acc["tokens"]["cached"] += int(u.get("cache_read_input_tokens") or 0)
         acc["tokens"]["out"] += int(u.get("output_tokens") or 0)
+        acc["tokens"]["reasoning"] += int(u.get("reasoning_tokens") or 0)  # approximate (bytes / 4) when Ollama reports none
         for m in d.get("messages") or []:
             mid = str(m.get("message_id") or "") if isinstance(m, dict) else ""
             for prefix in SEND_BACKS:

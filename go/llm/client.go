@@ -154,6 +154,14 @@ func (c *Client) completeWith(ctx context.Context, model string, req Request, on
 	return nil, retryable || missing || timedOut, lastErr
 }
 
+// approxReasoningTokens fills Usage.ReasoningTokens with len(reasoning)/4 when the server sent reasoning text but counted none
+// (Ollama's OpenAI endpoint reports reasoning_tokens 0 for qwen3's thinking). UsageReported keeps saying what the server sent.
+func approxReasoningTokens(t *Turn) {
+	if t.Usage.ReasoningTokens == 0 && t.Reasoning != "" {
+		t.Usage.ReasoningTokens = max(1, len(t.Reasoning)/4)
+	}
+}
+
 func toolNames(specs []ToolSpec) []string {
 	names := make([]string, 0, len(specs))
 	for _, s := range specs {
@@ -315,6 +323,7 @@ func parseResponse(b []byte) (*Turn, error) {
 	}
 	t.Usage = UsageFromProvider(obj["usage"])
 	t.UsageReported = !t.Usage.IsZero()
+	approxReasoningTokens(t)
 
 	if list, ok := msg["tool_calls"].([]any); ok {
 		for _, item := range list {
@@ -471,6 +480,7 @@ func readStream(r io.Reader, touch func(), on func(StreamEvent)) (*Turn, error) 
 		FinishReason: acc.finish, HasFinishReason: acc.hasFinish,
 		Usage: acc.usage, UsageReported: !acc.usage.IsZero(),
 	}
+	approxReasoningTokens(t)
 	for _, s := range acc.slots {
 		if s.name == "" {
 			return nil, &BackendError{Message: "tool call missing function name"}
