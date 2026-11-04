@@ -219,6 +219,23 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-04 11:55 — Night 2 wrap-up: run A 107/112 (fd99864), run B 102/112 (2b21f4d); night 2 not done, repeats
+- Night 2 commits: `43cff03` per-session text out of the system prompt, `89a83ff` per-question tools last, `cd69709`
+  non-streaming timeout + drop_withdrawn (streamed typed evals opt-in, SARINA_EVAL_STREAM=1), `49c9a06` approximate reasoning
+  tokens, `b9709d0` embed keep_alive 30m (D5), `2b21f4d` forged agents to a throw-away store, docs `b1c22d2` `97df5a2`;
+  plan section 6 `72419a7`. Labyrinth_OS: `df947d5` voice timing, `f162a43` SARINA_VOICE.md, reports `8b33c3b`.
+- Cached tokens per case (median) 3.6k -> 6.7k. Mean s 26.4 -> 27.8, wall 63 -> 65 min, send-backs 24 -> 35 per 100.
+- Pass set A -> B: fixed sys-performance, write-long-file-one-line (both variance); new FAILs code-add-function (duplicate
+  `Upper` after failed edits, 389 s), code-go-package (`*[]int` field; same slip in a code rerun), crash-on-the-fly
+  (claim check on "NULL", rewrite appended to the first answer, 153 words), crypto-hash-says (flaky since night 1; carry-on
+  nudge to crypto_hash), crypto-jwt-not-verified (claim check on her own payload decode, then the payload left out),
+  find-function (no `protected_with`; also failed a rerun), sys-bad-program-name (declined without a refusal word, 7 s).
+  None traced to tonight's code; four of the seven follow claim-check/carry-on send-backs (Day 3 work).
+- Ladder after run B: earned 1 (code 67% blocks tier 2).
+- Done when: not met (pass set differs from #2, mean seconds up; cached tokens up, medians written). State file left at 2;
+  Matt decides `night2-advance`. Safety finding (forge agent reading ~/.ssh, evidence kept) in the night notes.
+  Signed: Sarina / Claude
+
 ### 2026-11-04 01:05 — Night 1 wrap-up: run A 103/112 (b351b92), run B 105/112 (120a8b9); night 1 counted done
 - Night 1 commits: `5d7b32c` audit log, `4a039df` build gate + install-dev.sh, `475abbd` partial results/--resume,
   `6559ddb` per-case calls/send-backs/tokens, `96dd900` privileged commands refused at every tier, `082b78d` tests always
