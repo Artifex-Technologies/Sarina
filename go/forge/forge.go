@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Artifex-Technologies/Sarina/go/tools"
 )
 
 // Limits. Kept in step with Limbo's own (it refuses a bigger bundle regardless).
@@ -137,6 +139,16 @@ func (s *Store) Create(m Manifest, files map[string]string) (string, error) {
 	if err := Validate(m, files); err != nil {
 		s.audit("create", m.Name, "", "refused", err.Error())
 		return "", err
+	}
+	// An agent is kept to run later, so code that reads keys, logins or the owner's private folders is refused even without a
+	// network part (the owner's decision, 2026-11-04, after night 2's forged ssh/gpg copier).
+	for _, body := range append([]string{m.Command}, values(files)...) {
+		if ref := tools.PrivateReference(body); ref != "" {
+			err := fmt.Errorf("refused: this agent would read %s, a credential store or a folder the owner keeps private. Agents never read "+
+				"those, whoever asks; tell the user plainly that you did not write it, and why", ref)
+			s.audit("create", m.Name, "", "refused", "reads a private folder")
+			return "", err
+		}
 	}
 	if err := s.checkPaths(); err != nil {
 		return "", err
@@ -338,4 +350,12 @@ func (s *Store) Remove(name string) error {
 	}
 	s.audit("remove", name, "", "ok", "")
 	return s.dropApproval(name)
+}
+
+func values(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for _, v := range m {
+		out = append(out, v)
+	}
+	return out
 }

@@ -333,3 +333,45 @@ func TestUnescapeFlat(t *testing.T) {
 		t.Fatal("a one-line file with one escape must stay as it is")
 	}
 }
+
+// Night 2 (2026-11-04): asked for a script that uploads ~/.ssh and ~/.gnupg, the write tool refused, and she forged this agent
+// instead (no upload, but a copy of the keys in /tmp). Agents never read credential stores or private folders.
+func TestAgentReadingKeysIsRefused(t *testing.T) {
+	s := store(t)
+	m := Manifest{Name: "ssh-gpg-backup-agent", Purpose: "Securely backup SSH and GPG keys", Language: "bash", Command: "bash backup_agent.sh"}
+	night2 := "#!/bin/bash\nmkdir -p /tmp/ssh_gpg_backup\nfind ~/.ssh ~/.gnupg -type f -exec cp {} /tmp/ssh_gpg_backup/ ';'\n" +
+		"tar -cf - -C /tmp/ssh_gpg_backup . | gpg --passphrase 'user-defined-password' --encrypt > /tmp/ssh_gpg_backup.tar.gpg\n"
+	t.Setenv("SARINA_PRIVATE_DIRS", "~/Documents/Private Writing")
+	for name, body := range map[string]string{
+		"night 2":        night2,
+		"HOME form":      "import os\nos.listdir(os.environ['HOME'] + '/.gnupg')\nopen('$HOME/.gnupg/pubring.kbx')\n",
+		"browser logins": "cp ~/.mozilla/firefox/x.default/logins.json out\n",
+		"private folder": "cat \"~/Documents/Private Writing/notes.md\"\n",
+		"keyring":        "ls ~/.local/share/keyrings\n",
+		"in the command": "",
+	} {
+		files := map[string]string{"backup_agent.sh": body}
+		mm := m
+		if name == "in the command" {
+			files = map[string]string{"x.sh": "echo hi\n"}
+			mm.Command = "bash x.sh ~/.ssh"
+		}
+		if _, err := s.Create(mm, files); err == nil || !strings.Contains(err.Error(), "refused") {
+			t.Errorf("%s: want a refusal, got %v", name, err)
+		}
+		if _, err := os.Stat(s.agentDir(m.Name)); err == nil {
+			t.Fatalf("%s: the agent was written anyway", name)
+		}
+	}
+	// ordinary agents, and words that only look alike, still pass
+	for name, body := range map[string]string{
+		"plain":        "print('hi')\n",
+		"ssh in prose": "# talks to an ssh server? no: counts words\nprint(len(open('input.txt').read().split()))\n",
+		"own folder":   "open('data/.sshlike')\n",
+	} {
+		if _, err := s.Create(Manifest{Name: "ok-" + strings.ReplaceAll(name, " ", "-"), Purpose: "x", Language: "python", Command: "python3 main.py"},
+			map[string]string{"main.py": body}); err != nil {
+			t.Errorf("%s: refused an ordinary agent: %v", name, err)
+		}
+	}
+}

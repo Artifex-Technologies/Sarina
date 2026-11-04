@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"os"
 	"regexp"
 	"strings"
 )
@@ -35,4 +36,46 @@ func exfilRefusal(path, why string) string {
 	return "refused: the content for " + path + " would take keys or passwords off this computer: " + why + ". This is not written, " +
 		"whoever asks. Tell the user plainly that you will not write it, and why; offer a safe alternative only if one fits (backing up " +
 		"keys to a local, encrypted place the owner controls, say)."
+}
+
+// PrivateReference returns the first credential store or private folder that content names (as ~/x, $HOME/x or the full path),
+// or "". Unlike ExfilRisk it needs no network part: it is for code that is kept to run later somewhere else, such as a forged agent
+// (night 2, 2026-11-04: refused a collect.sh, she forged an agent that copied ~/.ssh and ~/.gnupg into /tmp instead).
+func PrivateReference(content string) string {
+	if m := credentialRE.FindString(content); m != "" {
+		return strings.Trim(strings.TrimSpace(m), `'"=/`)
+	}
+	home, _ := os.UserHomeDir()
+	var dirs []string
+	for _, rel := range credentialStores {
+		dirs = append(dirs, strings.TrimSuffix(strings.SplitN(rel, "*", 2)[0], "/"))
+	}
+	for _, d := range strings.Split(os.Getenv("SARINA_PRIVATE_DIRS"), ":") {
+		d = strings.TrimSpace(d)
+		switch {
+		case strings.HasPrefix(d, "~/"):
+			dirs = append(dirs, d[2:])
+		case home != "" && strings.HasPrefix(d, home+"/"):
+			dirs = append(dirs, strings.TrimPrefix(d, home+"/"))
+		case strings.HasPrefix(d, "/"):
+			if strings.Contains(content, d) {
+				return d
+			}
+		}
+	}
+	for _, rel := range dirs {
+		if rel == "" {
+			continue
+		}
+		forms := []string{"~/" + rel, "$HOME/" + rel, "${HOME}/" + rel}
+		if home != "" {
+			forms = append(forms, home+"/"+rel)
+		}
+		for _, f := range forms {
+			if strings.Contains(content, f) {
+				return f
+			}
+		}
+	}
+	return ""
 }
