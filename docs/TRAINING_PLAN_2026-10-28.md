@@ -1,4 +1,4 @@
-# Sarina, six days: 2026-10-28 (Wed) to 2026-11-02 (Mon)
+# Sarina, six days: 2026-10-28 (Wed) to 2026-11-02 (Mon); run as six nights from Tue 2026-11-03 (section 0.0)
 
 Written 2026-10-28 morning for Matt (he/him) and for the Claude Code session that runs each day. It replaces
 `TRAINING_PLAN.md` (2026-10-26) as the plan to follow; that file stays as the record of what the previous round found.
@@ -18,6 +18,56 @@ experiment with a before/after number and three reruns; let access grow only thr
 ---
 
 ## 0. Read me first (the executing session)
+
+### 0.0 Overnight mode (Matt's choice, 2026-11-03): read this first; it overrides the day times below
+
+The plan runs as six **nights**, unattended, and Matt checks in each morning. Night N does the plan's "Day N".
+
+| Night | Starts | Morning check-in | Plan section |
+| --- | --- | --- | --- |
+| 1 | Tue 2026-11-03, 22:30 | Wed 11-04 | Day 1 |
+| 2 | Wed 11-04 | Thu 11-05 | Day 2 |
+| 3 | Thu 11-05 | Fri 11-06 | Day 3 |
+| 4 | Fri 11-06 | Sat 11-07 | Day 4 |
+| 5 | Sat 11-07 | Sun 11-08 | Day 5 |
+| 6 | Sun 11-08 | Mon 11-09 | Day 6 |
+
+A night that does not finish is repeated the next night (the state file `~/.local/state/sarina-night/night` moves on only when
+the night's "Done when" holds), so the dates shift; the order never does.
+
+How a night runs (`evals/night/night-run.sh`, started by the user timer `sarina-night.timer` at 22:30):
+1. It waits up to an hour for an idle graphics card (no game, nothing but `nomic-embed-text` in Ollama), else skips the night.
+2. It builds HEAD into `~/.local/bin` and does **full run A** itself (the night's before-number). No model session waits on it.
+3. A headless Claude session (`evals/night/prompt-work.md`) does the night's numbered steps, **except the "GPU window" / full-run
+   steps**, which the script does. Group reruns (`--group`, `--only`, 3x) are the session's; each command under 9 minutes.
+4. The script rebuilds and does **full run B** (the after-number), only on a fully committed tree.
+5. A short wrap-up session (`evals/night/prompt-wrap.md`) compares A and B by pass set, commits both reports, fills section 6,
+   writes the Coordination Log and TEAM_BOARD entries, and the **morning report `~/Desktop/sarina-morning.md`**.
+6. Everything stops by **04:20** (Sarina's reflect timer uses the model at ~04:45).
+
+What changes against the day text below:
+- "GPU window A/B" means run A/B of that night; times like "after 10:30" do not apply. Comparisons a step asks for "against
+  run #k" are made against that night's run A; run B carries all of the night's changes together, so a flipped case is read and
+  attributed in the wrap-up.
+- "For Matt tonight" becomes **"For Matt this morning"**, written into the morning report. Nothing on those lists is done at night.
+- Nobody can answer a question at night: anything that needs Matt is written down, never guessed and never worked around.
+- Root at night: Matt restored Claude's broad sudo rules (`restore-claude-access.sh`, his decision 2026-11-03). The nights still
+  use none of it except `claude-sudo labyrinth-agent pkg-install` of the ecosystem's own packages where a step says to install
+  one. No sudoers, Heimdall, firewall or ladder change, ever, at night.
+- Model: the sessions run `claude -p --model opus --permission-mode auto`. A safety-check refusal is reported, not retried.
+
+Already done since this plan was written (do not redo; the Day 1 evening list is mostly settled):
+- 2026-11-02, by Matt: `ollama` restarted (now 0.40.13); `labyrinth-agent` + `labyrinth-agent-window` installed and
+  `labyrinth-agent-setup` run; the repo copy of `labyrinth-ask-sarina` installed to `/usr/local/bin`; `snap-pac` installed; the
+  PKGBUILD bumps committed in Labyrinth_OS and Yggdrasil. Then (2026-11-03) the broad rules restored on top, see above.
+- Decisions answered (`~/Desktop/answers-for-claude.txt`): D4 keep-alive **no** (no `OLLAMA_KEEP_ALIVE` drop-in: skip that
+  item and its success criterion; reloads stay as they are), D5 embedding model kept loaded 30 min **yes** (Night 2 may change
+  `go/embed/embed.go` keep_alive 2m -> 30m), D6 tier 2 **yes** (Matt applies it once the sandbox default is in), D8 tier 3
+  **yes when earned**, D9 crypto **auto**. Still open: D2 (limbo password; the four limbo cases stay ungraded at night), D7, D10-D19.
+- With the broad rules back, the root path through `claude-sudo` is open again for any shell-enabled Sarina session: Day 1
+  step 5 (privileged wrappers refused in her bash tool) is now the **only** guard and must be in the measured build before
+  Matt is ever told tier 3 may be applied.
+- 2026-11-03: Hyprland 0.57.1, the minimize plugin ported and a crash-log keeper added (Yggdrasil 73f29db): not Sarina work.
 
 ### 0.1 Who runs this and on what budget
 
