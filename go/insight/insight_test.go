@@ -67,7 +67,7 @@ func TestOnlyGroundedObservationsAreKeptAndRepeatsAreRefined(t *testing.T) {
 	if len(n2.Observations) != 2 || n2.Observations[0].Seen != 2 || len(n2.Observations[0].Evidence) != 2 {
 		t.Fatalf("round trip: %+v", n2)
 	}
-	if _, r, _ := n2.Merge([]Proposal{{"Zlothra has a cat named Pixel", "Pixel woke me up at five again"}}, lines, noGate{}); r != 0 {
+	if _, r, _ := n2.Merge([]Proposal{{Observation: "Zlothra has a cat named Pixel", Quote: "Pixel woke me up at five again"}}, lines, noGate{}); r != 0 {
 		t.Error("the same quote counted twice")
 	}
 
@@ -75,7 +75,7 @@ func TestOnlyGroundedObservationsAreKeptAndRepeatsAreRefined(t *testing.T) {
 	edited := strings.Replace(n.Render(), "## Forgotten\n", "## Forgotten\n\n- Zlothra wants to start drawing\n", 1)
 	edited = strings.Replace(edited, "- Zlothra wants to start drawing — seen", "- (moved) x — seen", 1)
 	n3 := ParseNote(edited)
-	if a, _, d := n3.Merge([]Proposal{{"Zlothra wants to start drawing", "thinking about picking up drawing"}}, lines, noGate{}); a != 0 || len(d) != 1 || !strings.Contains(d[0], "forget") {
+	if a, _, d := n3.Merge([]Proposal{{Observation: "Zlothra wants to start drawing", Quote: "thinking about picking up drawing"}}, lines, noGate{}); a != 0 || len(d) != 1 || !strings.Contains(d[0], "forget") {
 		t.Errorf("forgotten came back: %d %v", a, d)
 	}
 }
@@ -220,5 +220,26 @@ func TestTheOwnersNameAndPronouns(t *testing.T) {
 	t.Setenv("SARINA_OWNER_PRONOUNS", "")
 	if o := OwnerFromEnv(); o.Name != "the owner" || o.Subject != "they" {
 		t.Fatalf("default: %+v", o)
+	}
+}
+
+// Observations are sorted under kinds (Companion-AI's idea), as ### headings the voice script's reader skips; an untagged
+// observation stays readable under Other, and a later proposal can give it its kind.
+func TestObservationsKeepTheirKind(t *testing.T) {
+	t.Setenv("SARINA_OWNER_NAME", "Matt")
+	n := ParseNote("# About Matt\n\n## Observations\n\n- Matt works ten-hour shifts — seen 1×, last 2026-11-04.\n\n## Forgotten\n")
+	lines := []Line{{When: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), Said: "I'm about to head to my 10hr shift, so start it now"},
+		{When: time.Date(2026, 11, 4, 9, 1, 0, 0, time.UTC), Said: "I really like pulling tarot cards in the evening"}}
+	n.Merge([]Proposal{{Observation: "Matt likes pulling tarot cards in the evening", Quote: "really like pulling tarot cards", Kind: "like"},
+		{Observation: "Matt works ten-hour shifts", Quote: "head to my 10hr shift", Kind: "habit"}}, lines, noGate{})
+	out := n.Render()
+	if !strings.Contains(out, "### Likes\n\n- Matt likes pulling tarot cards") || !strings.Contains(out, "### Habits and routines\n\n- Matt works ten-hour shifts") {
+		t.Fatalf("render:\n%s", out)
+	}
+	n2 := ParseNote(out)
+	for _, o := range n2.Observations {
+		if o.Kind == "" {
+			t.Errorf("kind lost on the round trip: %+v", o)
+		}
 	}
 }

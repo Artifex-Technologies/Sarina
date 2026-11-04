@@ -94,6 +94,25 @@ type Observation struct {
 	Seen     int
 	Last     string   // YYYY-MM-DD
 	Evidence []string // their own words, newest first, at most three
+	Kind     string   // one of Kinds (the heading it is listed under); "" = other
+}
+
+// Kinds are the headings the observations are sorted under (an idea from Companion-AI's structured user memory: facts,
+// preferences, habits, moods and goals, so the note reads like what a friend knows, and the right kind can be used at the
+// right moment). Written as ### headings inside ## Observations, which older readers of the note skip.
+var Kinds = []struct{ Key, Heading string }{
+	{"fact", "Facts"}, {"like", "Likes"}, {"dislike", "Dislikes"}, {"habit", "Habits and routines"},
+	{"mood", "Moods and what affects them"}, {"goal", "Goals and projects"}, {"", "Other"},
+}
+
+func kindOf(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	for _, k := range Kinds {
+		if k.Key != "" && (s == k.Key || s == k.Key+"s" || strings.EqualFold(s, k.Heading)) {
+			return k.Key
+		}
+	}
+	return ""
 }
 
 // Note is the parsed note.
@@ -108,11 +127,15 @@ var quoteRx = regexp.MustCompile(`"([^"]*)"`)
 // ParseNote reads the note (an empty one when the text is empty).
 func ParseNote(text string) Note {
 	var n Note
-	section := ""
+	section, kind := "", ""
 	for _, l := range strings.Split(text, "\n") {
 		l = strings.TrimSpace(l)
 		if strings.HasPrefix(l, "## ") {
-			section = strings.ToLower(strings.TrimSpace(l[3:]))
+			section, kind = strings.ToLower(strings.TrimSpace(l[3:])), ""
+			continue
+		}
+		if strings.HasPrefix(l, "### ") {
+			kind = kindOf(l[4:])
 			continue
 		}
 		if !strings.HasPrefix(l, "- ") {
@@ -128,11 +151,11 @@ func ParseNote(text string) Note {
 		case "observations":
 			m := obsRx.FindStringSubmatch(l)
 			if m == nil {
-				n.Observations = append(n.Observations, Observation{Text: strings.TrimSpace(l[2:]), Seen: 1}) // the owner wrote it by hand
+				n.Observations = append(n.Observations, Observation{Text: strings.TrimSpace(l[2:]), Seen: 1, Kind: kind}) // the owner wrote it by hand
 				continue
 			}
 			seen, _ := strconv.Atoi(m[2])
-			o := Observation{Text: m[1], Seen: seen, Last: m[3]}
+			o := Observation{Text: m[1], Seen: seen, Last: m[3], Kind: kind}
 			for _, q := range quoteRx.FindAllStringSubmatch(m[4], 3) {
 				o.Evidence = append(o.Evidence, q[1])
 			}
@@ -155,14 +178,27 @@ func (n Note) Render() string {
 		}
 		return obs[i].Last > obs[j].Last
 	})
-	for _, o := range obs {
-		fmt.Fprintf(&b, "- %s — seen %d×, last %s.", o.Text, o.Seen, o.Last)
-		if len(o.Evidence) > 0 {
-			var q []string
-			for _, e := range o.Evidence {
-				q = append(q, `"`+e+`"`)
+	for _, k := range Kinds {
+		var these []Observation
+		for _, o := range obs {
+			if kindOf(o.Kind) == k.Key {
+				these = append(these, o)
 			}
-			b.WriteString(" Evidence: " + strings.Join(q, "; "))
+		}
+		if len(these) == 0 {
+			continue
+		}
+		b.WriteString("### " + k.Heading + "\n\n")
+		for _, o := range these {
+			fmt.Fprintf(&b, "- %s — seen %d×, last %s.", o.Text, o.Seen, o.Last)
+			if len(o.Evidence) > 0 {
+				var q []string
+				for _, e := range o.Evidence {
+					q = append(q, `"`+e+`"`)
+				}
+				b.WriteString(" Evidence: " + strings.Join(q, "; "))
+			}
+			b.WriteString("\n")
 		}
 		b.WriteString("\n")
 	}
@@ -177,6 +213,7 @@ func (n Note) Render() string {
 type Proposal struct {
 	Observation string `json:"observation"`
 	Quote       string `json:"quote"`
+	Kind        string `json:"kind"`
 }
 
 var objRx = regexp.MustCompile(`\{[^{}]*\}`)
@@ -296,6 +333,9 @@ func (n *Note) Merge(props []Proposal, lines []Line, gate Scanner) (added, refin
 				break // the same words seen again are not new evidence
 			}
 			o.Seen++
+			if o.Kind == "" {
+				o.Kind = kindOf(p.Kind)
+			}
 			if day > o.Last {
 				o.Last = day
 			}
@@ -307,7 +347,7 @@ func (n *Note) Merge(props []Proposal, lines []Line, gate Scanner) (added, refin
 			break
 		}
 		if !found {
-			n.Observations = append(n.Observations, Observation{Text: text, Seen: 1, Last: day, Evidence: []string{quote}})
+			n.Observations = append(n.Observations, Observation{Text: text, Seen: 1, Last: day, Evidence: []string{quote}, Kind: kindOf(p.Kind)})
 			added++
 		}
 	}
@@ -325,9 +365,11 @@ Rules:
 - Only what {name} said about {himself}, not what you said.
 - Each observation is one short sentence in the third person ("{name} has a cat named Pixel").
 - Each needs a quote: {name}'s exact words copied from the lines below, at least three words, that show it.
+- Only what the words plainly show. A question {he} asks you shows what {he} wants to know, not a trait: "Do you know my name?" is not self-awareness. Do not guess at feelings {he} did not state.
+- Each has a kind: fact (name, work, people, pets, where {he} lives), like, dislike, habit (routines, when and how {he} does things), mood (how {he} feels and what changes it), goal (what {he} is working on or wants).
 - Never anything about passwords, keys, account numbers or other secrets.
 - At most 8. If nothing is worth keeping, write nothing.
-Answer only with one JSON object per line: {"observation": "...", "quote": "..."}
+Answer only with one JSON object per line: {"observation": "...", "quote": "...", "kind": "..."}
 
 `
 
