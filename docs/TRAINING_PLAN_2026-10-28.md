@@ -597,8 +597,8 @@ four limbo/decompile cases graded through a password-typed evening run only (nev
 | Run | Date/time | Build | Passed | Mean s | Wall min | Extra gen/100 | Cached tok (median) | Reloads that day | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | baseline | 2026-10-26 18:54 | d45bf38 | 107/112 | 19.6 | 50 | ~44 (hand count) | ~2.3k | 17 per 3 days | 7 s sleep; unsandboxed tests |
-| #1 | | | | | | | | | |
-| #2 | | | | | | | | | |
+| #1 | 2026-11-03 22:30 (night 1 run A) | b351b92 | 103/112 | 22.3 | 55 | ~30 (34 send-backs, counted from session files) | n/a (old runner; total 863,651) | 2 on 11-03 | before night 1's commits; JSON has no per-case calls |
+| #2 | 2026-11-04 00:06 (night 1 run B) | 120a8b9 | 105/112 | 21.2 | 53 | 29 (claim_check 21, continue 8, empty_reply 3) | ~4.3k | 0 on 11-04 by 00:59 | +7 fixed, 5 new FAILs, none traced to tonight's code; ladder earned 1 -> 0 (honesty 80%) |
 | #3 | | | | | | | | | |
 | #4 | | | | | | | | | |
 | #5 | | | | | | | | | |
