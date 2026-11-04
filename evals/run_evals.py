@@ -1049,8 +1049,46 @@ def unit_started(unit):
         return ""
 
 
+SEND_BACKS = ("claim_check_", "continue_", "empty_reply_", "repeat_retry_")
+
+
+def session_accounting(since):
+    """What her session file(s) written since `since` say about the case (a conversation case has two turns): model calls, the
+    send-backs by kind (a claim check, a carry-on nudge, an empty-reply or repeat retry: each one is an extra generation), the
+    first line of each send-back's text, and the tokens. None when no session file was written (Sarina did not start)."""
+    acc = {"model_calls": 0, "send_backs": {}, "check_texts": [], "tokens": {"in": 0, "cached": 0, "out": 0}}
+    found = False
+    try:
+        names = [e for e in os.scandir(SESSIONS) if e.name.endswith(".json") and e.stat().st_mtime >= since]
+    except OSError:
+        return None
+    for e in sorted(names, key=lambda e: e.stat().st_mtime):
+        try:
+            d = json.load(open(e.path, encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(d, dict):
+            continue
+        found = True
+        acc["model_calls"] += int((d.get("budget_state") or {}).get("model_calls") or 0)
+        u = d.get("usage") or {}
+        acc["tokens"]["in"] += int(u.get("input_tokens") or 0)
+        acc["tokens"]["cached"] += int(u.get("cache_read_input_tokens") or 0)
+        acc["tokens"]["out"] += int(u.get("output_tokens") or 0)
+        for m in d.get("messages") or []:
+            mid = str(m.get("message_id") or "") if isinstance(m, dict) else ""
+            for prefix in SEND_BACKS:
+                if mid.startswith(prefix):
+                    kind = prefix.rstrip("_")
+                    acc["send_backs"][kind] = acc["send_backs"].get(kind, 0) + 1
+                    text = m.get("content") if isinstance(m.get("content"), str) else ""
+                    acc["check_texts"].append(text.strip().split("\n")[0][:200])
+    return acc if found else None
+
+
 def run_case(case, base_env, timeout):
     base_env = dict(base_env)  # a case's own settings (env_fn) end with it
+    started = time.time() - 1  # session files written from here on are this case's (mtime granularity)
     if case.get("sample"):
         d = setup_sample()
         pw = SUDO_PASSWORD
@@ -1081,6 +1119,7 @@ def run_case(case, base_env, timeout):
     after = alerts()
     new = [] if after is None else [a for a in after if json.dumps(a, sort_keys=True) not in seen]
     res = dict(out=out, err=err, rc=rc, took=took, new_alerts=new, alerts_known=after is not None, file_unchanged=case.get("file_unchanged"))
+    res["accounting"] = session_accounting(started)
     if unit_before is not None:
         res["unit_restarted"] = unit_started(case["unit_restarted"]) != unit_before
     return res
@@ -1201,7 +1240,48 @@ def card_shared(model):
 def result_row(case, res, checks):
     """A case's line in the JSON report (ladder.py reads name, group and passed)."""
     graded = [c for c in checks if c[1] is not None]
-    return {"name": case["name"], "group": case["group"], "passed": (all(c[1] for c in graded) if graded else None), "took": round(res["took"], 1) if res else None}
+    row = {"name": case["name"], "group": case["group"], "passed": (all(c[1] for c in graded) if graded else None), "took": round(res["took"], 1) if res else None}
+    if res and res.get("accounting"):
+        row.update(res["accounting"])
+    return row
+
+
+def accounting_lines(results):
+    """The report header's tables: pass/total/seconds/send-backs per group, the extra generations per 100 cases, and the five
+    check texts that sent an answer back most often (quoted values folded, so one check counts as one text)."""
+    groups = {}
+    kinds = {}
+    texts = {}
+    counted = 0
+    for r in results:
+        if r["passed"] is None:
+            continue
+        g = groups.setdefault(r["group"], [0, 0, 0.0, 0])
+        g[0] += 1 if r["passed"] else 0
+        g[1] += 1
+        g[2] += r["took"] or 0
+        if "send_backs" in r:
+            counted += 1
+            g[3] += sum(r["send_backs"].values())
+            for k, n in r["send_backs"].items():
+                kinds[k] = kinds.get(k, 0) + n
+            for t in r.get("check_texts") or []:
+                t = re.sub(r'"[^"]*"', '"..."', t)[:140]
+                texts[t] = texts.get(t, 0) + 1
+    out = ["| group | passed | cases | seconds | send-backs |", "| --- | --- | --- | --- | --- |"]
+    for name in sorted(groups):
+        p, n, sec, sb = groups[name]
+        out.append("| %s | %d | %d | %.0f | %d |" % (name, p, n, sec, sb))
+    tp, tn, tsec, tsb = (sum(g[i] for g in groups.values()) for i in range(4))
+    out += ["| **all** | %d | %d | %.0f | %d |" % (tp, tn, tsec, tsb), ""]
+    extra = sum(kinds.values())
+    out.append("Extra generations: %d over %d case(s) with a session file, %.0f per 100 cases (%s)." % (
+        extra, counted, (100.0 * extra / counted) if counted else 0, ", ".join("%s %d" % kv for kv in sorted(kinds.items())) or "none"))
+    if texts:
+        out += ["", "Most-fired send-backs:"]
+        for t, n in sorted(texts.items(), key=lambda kv: (-kv[1], kv[0]))[:5]:
+            out.append("- %dx %s" % (n, t))
+    return out + [""]
 
 
 def case_block(case, res, checks):
@@ -1228,6 +1308,7 @@ def append(path, text):
 def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", nargs="*", help="run only these cases")
+    ap.add_argument("--group", nargs="+", metavar="G", help="run only the cases of these groups (like --only, the ladder does not count it)")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--out", help="the report (default: Labyrinth_OS/docs/sarina-evals/DATE-TIME.md; with --resume, the cut-off run's)")
     ap.add_argument("--timeout", type=int, default=600)
@@ -1286,6 +1367,8 @@ def main(argv):
     for case in CASES:
         if a.only and case["name"] not in a.only:
             continue
+        if a.group and case["group"] not in a.group:
+            continue
         if case["name"] in done:
             entries.append(done[case["name"]])
             continue
@@ -1311,8 +1394,9 @@ def main(argv):
     timed = sorted((r["took"], r["name"]) for r in results if r["took"] is not None)
     slow = ", ".join("%s %.0f s" % (n, t) for t, n in reversed(timed[-5:]))
     lines.insert(3, "**%d of %d cases passed.** Slowest: %s." % (ok, tot, slow or "-"))
+    lines[5:5] = accounting_lines(results)
     # the same results for programs (the achievements ledger reads this, not the prose)
-    write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only), "build": build, "stale": bool(stale), "card_shared": shared, "results": results}, indent=1) + "\n")
+    write(os.path.splitext(a.out)[0] + ".json", json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "model": env.get("OPENAI_MODEL", "?"), "only": bool(a.only or a.group), "groups": a.group or [], "build": build, "stale": bool(stale), "card_shared": shared, "results": results}, indent=1) + "\n")
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     write(a.out, "\n".join(lines) + "\n")
     for ext in (".jsonl", ".md"):  # the report is whole: the partial files are no longer needed
@@ -1323,7 +1407,7 @@ def main(argv):
     print("\n%d of %d passed; report: %s" % (ok, tot, a.out))
     if slow:
         print("slowest: " + slow)
-    if not a.only:
+    if not (a.only or a.group):
         # the access ladder reads the full runs: shown, never applied here (the owner does that at a terminal: evals/ladder.py apply)
         try:
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
