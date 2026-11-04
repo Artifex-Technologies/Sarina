@@ -1,5 +1,5 @@
 // Package embed turns texts into vectors with a small local embedding model through Ollama (nomic-embed-text by default). Used by the
-// vault's recall by meaning and by the search in long skills; the model is loaded only while it is used (keep_alive two minutes).
+// vault's recall by meaning and by the search in long skills; the model stays loaded for KeepAlive after its last use.
 package embed
 
 import (
@@ -18,6 +18,11 @@ type Embedder interface {
 	Embed(texts []string) ([][]float32, error)
 	Name() string
 }
+
+// KeepAlive is how long Ollama keeps the embedding model loaded after a request. Thirty minutes (Matt's decision D5, 2026-11-02;
+// it was two): the model is small (~0.3 GB, partly on the CPU beside qwen3:8b), and reloading it made the first recall of a
+// conversation slower than the rest.
+const KeepAlive = "30m"
 
 type ollamaEmbedder struct {
 	base, model string
@@ -45,7 +50,7 @@ func Default() Embedder {
 func (o ollamaEmbedder) Name() string { return o.model }
 
 func (o ollamaEmbedder) Embed(texts []string) ([][]float32, error) {
-	body, _ := json.Marshal(map[string]any{"model": o.model, "input": texts, "keep_alive": "2m"})
+	body, _ := json.Marshal(map[string]any{"model": o.model, "input": texts, "keep_alive": KeepAlive})
 	c := &http.Client{Timeout: 120 * time.Second}
 	resp, err := c.Post(o.base+"/api/embed", "application/json", bytes.NewReader(body))
 	if err != nil {
