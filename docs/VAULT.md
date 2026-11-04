@@ -19,7 +19,8 @@ for, who writes it, who reads it. Audited 2026-10-25.
 | `Jokes/YYYY-MM.md` | `labyrinth-ask-sarina` when she told a joke | `labyrinth-ask-sarina` (a joke told before is asked for again) | |
 | `Daily/YYYY-MM-DD.md` | `labyrinth-sarina-checkup` (one `- HH:MM check-up:` line per run), `sarina daily-report` (the `## Status` and `## Numbers` sections) | `sarina daily-report --max-age` (a status question reads it when fresh), `sarina trends` | format below |
 | `Security/YYYY-MM-DD.md` | `labyrinth-sarina-checkup` (the security-advisor skill's proposal for Heimdall's new findings) | the owner (one notification names the note) | she never runs the commands in it |
-| `Lessons/`, `Decisions/`, `Projects/`, `Reflections/` | her vault tools while she works (`vault_write`), the lessons import | `vault-search` (keywords, links, recency, meaning), `vault_read` | `Reflections/Lessons index.md` lists every lesson |
+| `Lessons/`, `Decisions/`, `Projects/`, `Reflections/` | her vault tools while she works (`vault_write`), the lessons import, homework | `vault-search` (keywords, links, recency, meaning), `vault_read`; a lesson's `rule:` line when its `status:` is `active`: every session (below) | `Reflections/Lessons index.md` lists every lesson |
+| `Homework/` | Claude or the owner, after walking her through a failed test (by day, with the owner; not at night yet) | the owner, in Obsidian (each homework links the lesson it taught) | `Homework index.md` lists them |
 | `Study/` | Claude for the owner; her learning log | `vault-search` | |
 | `Inbox/` | the owner (any file) | `sarina vault-ingest` (daily, after reflect) → `Sources/` | originals untouched |
 | `Sources/` | `sarina vault-ingest` | `vault-search` | |
@@ -83,3 +84,13 @@ that crashed, the network, a disk) still gets its own report, and the model stil
   small talk older than the limit (greetings, thanks, acknowledgements, "how are things", "what time is it", a status check with
   a status answer). Never removed: a laugh, the owner's name, something they like or want, a decision or plan, people and pets,
   anything said at length. The removal is one commit, so it can be undone.
+
+## Lessons she always sees (2026-11-04)
+
+A lesson note can carry two front-matter keys: `rule:` (one sentence, general, not the answer to one test) and `status:`
+(`proposed`, `active` or `retired`). `sarina lessons list` shows them; `sarina lessons digest` prints the active rules, which
+are installed root-owned at `/usr/local/share/sarina/lessons.md`
+(`sarina lessons --path ~/Documents/Obsidian/Sarina digest > /tmp/l.md && sudo install -m 644 /tmp/l.md /usr/local/share/sarina/lessons.md`).
+Every session puts them in the fixed part of her system prompt (`go/agent/lessons.go`): at most 20 rules. The owner approves a
+proposed lesson by setting `status: active` in Obsidian, then the digest is installed again. Why: on 2026-11-04 she broke a
+lesson she already had (decompile-explain), because lessons were only reached through `vault-search`.
