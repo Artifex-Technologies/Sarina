@@ -385,9 +385,11 @@ owns the call.
 ### 4a. Heimdall reads Sarina's session files — **live (reader-owned)**
 
 Heimdall is a separate Go process with no import dependency on Sarina. It
-polls the agent session files the Go core writes to a workspace's
-`.port_sessions/agent/*.json` (`messages` as objects with a `role`; the API key
-is never written). Heimdall's `agentsource` is the reader; `sarina doctor`'s
+polls the agent session files in `/var/lib/sarina/sessions/*.json`, the shared
+session folder the Sarina service writes (`agent_session_dir` in
+`/etc/heimdall/config.json`; `messages` as objects with a `role`; the API key
+is never written). A workspace's `.port_sessions/agent/` has the same shape but
+is not what the live Heimdall reads. Heimdall's `agentsource` is the reader; `sarina doctor`'s
 `session_contract` check reports files that do not have the shape it expects.
 
 The shape is Sarina's persistence format, kept stable on purpose because
@@ -396,7 +398,7 @@ Coordination Log entry and a matching change on Heimdall's board.
 (The legacy Python `session_store.py` layout, a flat `messages` list directly
 under `.port_sessions/`, is no longer what Heimdall reads.)
 
-Heimdall never writes into `.port_sessions/` and never opens a Sarina
+Heimdall never writes into the session folder and never opens a Sarina
 process's sockets or files other than this one directory.
 
 ### 4b. Sarina consults Heimdall's governance API — **live, opt-in**

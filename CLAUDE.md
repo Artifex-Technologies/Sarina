@@ -181,9 +181,11 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   through the API only, never by opening its SQLite file.
 - **Sarina ↔ Heimdall:** (was Chymaera_Sentry) two contracts, opposite
   directions, full detail in `docs/ECOSYSTEM.md` §4. **Heimdall reads Sarina
-  (§4a):** **live, reader-owned.** It polls the agent session files under
-  `.port_sessions/agent/*.json` (messages as objects with a `role`; the API key is
-  never written); keep that shape stable, `sarina doctor` checks it. **Sarina
+  (§4a):** **live, reader-owned.** It polls the agent session files in
+  `/var/lib/sarina/sessions/*.json` (the shared session folder the service writes;
+  `agent_session_dir` in `/etc/heimdall/config.json`; messages as objects with a
+  `role`; the API key is never written); keep that shape stable, `sarina doctor`
+  checks it. **Sarina
   consults Heimdall (§4b):** **live, opt-in.** `go/heimdall` calls its
   `POST /v1/review` from the shared scan gate in `go/guard`, opt-in via
   `HEIMDALL_REVIEW_URL` (the old `SENTRY_REVIEW_URL` is still honoured), as an
@@ -216,6 +218,23 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-11-03 — The 2026-10-27 audit commits, logged (Night 1 of the plan, step 1)
+- `2476fdb` git_read and the session snapshot never let a repository run programs (filter drivers, includes, ssh, credential
+  helpers refused); the verify step runs project code only isolated (`py_compile -I`, cargo trusted or sandboxed, sandbox hides
+  /run and the home folder, clears the environment).
+- `1323409` Eval runner: the sudo password is read once, removed from the environment and given to sudo on stdin only, so a
+  Sarina under test cannot read it.
+- `5f886ac` Sub-agents get the parent's Approver and Confirm (their commands are asked about too); `sarina resume` refuses a
+  session file owned by another account (`--accept-foreign-session` loads it as history only).
+- `b38d6a1` File tools never read credential stores or browser profiles (a built-in list joined to `SARINA_PRIVATE_DIRS`).
+- `74d2e97` Argus console clients use the token Argus App writes to `$XDG_RUNTIME_DIR/argus/token` when none is given.
+- `9a54aa8` Helpers run as `python -P -m sarina_helpers`; `stego_inspect` hands exiftool and binwalk absolute paths.
+- `071026c` Integration service (8899) refuses a non-loopback Host and cross-site requests (DNS rebinding).
+- `7ad69f0` sarina-service unit hardened (systemd-analyze 8.3 -> 4.4); applied on the owner's PC as a drop-in.
+- Text fixed: §5 above and `docs/ECOSYSTEM.md` §4a say Heimdall reads `/var/lib/sarina/sessions` (its live config), not
+  `.port_sessions/agent`.
+— Signed: Sarina / Claude
 
 ### 2026-10-28 — Six-day plan written (Wed 2026-10-28 to Mon 2026-11-02): `docs/TRAINING_PLAN_2026-10-28.md`
 - **Owner's direction (Matt, 2026-10-27):** Sarina only; as fast as this hardware allows while accurate; cryptography and
