@@ -47,6 +47,9 @@ func BuildSystemPromptParts(opts PromptOptions, env envInfo, toolNames []string,
 	} else {
 		parts = append(parts, defaultParts(toolNames, perms)...)
 	}
+	if l := lessonsPart(); l != "" {
+		parts = append(parts, l)
+	}
 	if strings.TrimSpace(opts.Append) != "" {
 		parts = append(parts, opts.Append)
 	}

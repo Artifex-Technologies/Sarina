@@ -14,6 +14,7 @@ import (
 
 func TestMain(m *testing.M) {
 	fakeclaude.MaybeRun()
+	os.Setenv("SARINA_LESSONS_FILE", "off") // the installed lessons list must not change what tests see
 	os.Exit(m.Run())
 }
 
