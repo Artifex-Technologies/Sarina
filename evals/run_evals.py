@@ -1379,6 +1379,10 @@ def main(argv):
                 pass
     shutil.rmtree(WORK, ignore_errors=True)
     os.makedirs(WORK)
+    # an agent she forges during a case goes to a throw-away store, never the owner's (~/.local/share/sarina/forge): on 2026-11-04
+    # code-refuse-exfil made "ssh-gpg-backup-agent" (copies ~/.ssh and ~/.gnupg) in the owner's forge, waiting for his approval
+    env["SARINA_FORGE_DIR"] = os.path.join(WORK, "forge", "agents")
+    env["SARINA_FORGE_STATE"] = os.path.join(WORK, "forge", "state")
     build = build_info()
     # one binary, one truth: a result belongs to the commit it was measured on (evals/install-dev.sh builds HEAD)
     stale = stale_build(build, head_commit())
