@@ -21,8 +21,8 @@ import (
 // skipped), which the agent's claim check reads: an answer may not say the code builds or the tests pass unless this says so.
 //
 // Nothing here reaches the network (Go runs with GOPROXY=off), and nothing runs for longer than verifyTimeout. A test run executes
-// the model's own code, so tests run only when shell commands are allowed in this session or SARINA_VERIFY_TESTS=on; a build or a
-// syntax check executes nothing of hers and always runs.
+// the model's own code, so tests run in a sandbox whenever bubblewrap exists, and on the project itself only when shell commands are
+// allowed and there is no sandbox (verifyMode); a build or a syntax check executes nothing of hers and always runs.
 
 const verifyTimeout = 90 * time.Second
 
@@ -34,13 +34,7 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 	md := map[string]any{"verify": "skipped"}
 	ext := strings.ToLower(filepath.Ext(path))
 	dir := filepath.Dir(path)
-	tests := tc != nil && (tc.Permissions.AllowShellCommands || os.Getenv("SARINA_VERIFY_TESTS") == "on" || config.AccessTierFromEnv(nil) >= 2)
-	// Without that trust her tests still run, but in a sandbox (bubblewrap): a copy of the project, no network, everything else read-only.
-	// Otherwise she could not know whether tests she wrote pass until she had earned the tier that needs passing code (eval
-	// code-add-function, 2026-10-26: a correct function, a failing test of hers, and she never learned it).
-	trusted := tests
-	sandbox := !tests && os.Getenv("SARINA_SANDBOX_TESTS") != "off" && haveBwrap()
-	tests = tests || sandbox
+	tests, trusted, sandbox := verifyMode(tc, os.Getenv, haveBwrap())
 	var steps [][]string
 	var label string
 	switch ext {
@@ -176,6 +170,22 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 		note += "\n" + o
 	}
 	return note, md
+}
+
+// verifyMode decides three separate facts about a change's tests. Whether they run at all: always in a sandbox (bubblewrap: a
+// copy of the project, no network, everything else read-only) when there is one, so she learns whether tests she wrote pass before
+// she has earned the tier that needs passing code (eval code-add-function, 2026-10-26); without a sandbox only when shell commands
+// are allowed. Whether they run in the sandbox: whenever bwrap exists and SARINA_SANDBOX_TESTS is not "off". Whether they run on
+// the project itself (trusted): only with shell allowed AND no sandbox. SARINA_VERIFY_TESTS=on and tier 2 ask for tests; they never
+// take them out of the sandbox (before 2026-11-03 they did, and the code evals ran her fresh tests unsandboxed on the host).
+func verifyMode(tc *Context, getenv func(string) string, bwrap bool) (tests, trusted, sandbox bool) {
+	if tc == nil {
+		return false, false, false
+	}
+	wanted := tc.Permissions.AllowShellCommands || getenv("SARINA_VERIFY_TESTS") == "on" || config.AccessTierFromEnv(getenv) >= 2
+	sandbox = bwrap && getenv("SARINA_SANDBOX_TESTS") != "off"
+	trusted = wanted && !sandbox && tc.Permissions.AllowShellCommands
+	return trusted || sandbox, trusted, sandbox
 }
 
 // findUp returns the nearest directory at or above dir holding name, or "".

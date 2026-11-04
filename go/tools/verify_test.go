@@ -232,3 +232,65 @@ print("SEEN:" + ",".join(seen))
 }
 
 func strconvQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "\\'") + "'" }
+
+func TestVerifyModeSandboxesWheneverBwrapExists(t *testing.T) {
+	env := func(kv ...string) func(string) string {
+		m := map[string]string{}
+		for i := 0; i+1 < len(kv); i += 2 {
+			m[kv[i]] = kv[i+1]
+		}
+		return func(k string) string { return m[k] }
+	}
+	shell := config.Permissions{AllowShellCommands: true}
+	for _, c := range []struct {
+		name                    string
+		perms                   config.Permissions
+		getenv                  func(string) string
+		bwrap                   bool
+		tests, trusted, sandbox bool
+	}{
+		{"tier 2 -> sandboxed", config.Permissions{}, env("SARINA_ACCESS_TIER", "2"), true, true, false, true},
+		{"SARINA_VERIFY_TESTS=on -> sandboxed", config.Permissions{}, env("SARINA_VERIFY_TESTS", "on"), true, true, false, true},
+		{"shell allowed + bwrap -> sandboxed", shell, env(), true, true, false, true},
+		{"shell allowed + no bwrap -> trusted", shell, env(), false, true, true, false},
+		{"no shell + no bwrap -> tests skipped", config.Permissions{}, env(), false, false, false, false},
+		{"SARINA_VERIFY_TESTS=on + no bwrap, no shell -> skipped, never on the host", config.Permissions{}, env("SARINA_VERIFY_TESTS", "on"), false, false, false, false},
+		{"tier 2 + no bwrap, no shell -> skipped", config.Permissions{}, env("SARINA_ACCESS_TIER", "2"), false, false, false, false},
+		{"no trust + bwrap -> sandboxed (every tier)", config.Permissions{}, env(), true, true, false, true},
+		{"sandbox off + shell -> trusted", shell, env("SARINA_SANDBOX_TESTS", "off"), true, true, true, false},
+		{"sandbox off + SARINA_VERIFY_TESTS=on, no shell -> skipped", config.Permissions{}, env("SARINA_SANDBOX_TESTS", "off", "SARINA_VERIFY_TESTS", "on"), true, false, false, false},
+	} {
+		tests, trusted, sandbox := verifyMode(&Context{Permissions: c.perms}, c.getenv, c.bwrap)
+		if tests != c.tests || trusted != c.trusted || sandbox != c.sandbox {
+			t.Errorf("%s: tests=%v trusted=%v sandbox=%v", c.name, tests, trusted, sandbox)
+		}
+	}
+	if tests, trusted, sandbox := verifyMode(nil, env(), true); tests || trusted || sandbox {
+		t.Error("no context: nothing runs")
+	}
+}
+
+func TestVerifyTestsOnStaysInTheSandbox(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go toolchain")
+	}
+	if !haveBwrap() {
+		t.Skip("no bubblewrap")
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/v\n\ngo 1.21\n"), 0o644)
+	good := filepath.Join(dir, "a.go")
+	os.WriteFile(good, []byte("package v\n\nfunc Add(a, b int) int { return a + b }\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "a_test.go"), []byte("package v\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\nfunc TestAdd(t *testing.T) {\n\tos.WriteFile(\"left-behind\", []byte(\"x\"), 0o644)\n\tif Add(1, 2) != 3 {\n\t\tt.Fatal()\n\t}\n}\n"), 0o644)
+	t.Setenv("SARINA_VERIFY_TESTS", "on") // what the code evals set
+	t.Setenv("SARINA_SANDBOX_TESTS", "")
+	for _, perms := range []config.Permissions{{}, {AllowShellCommands: true}} {
+		note, md := verifyCode(context.Background(), good, &Context{Root: dir, Permissions: perms})
+		if md["verify"] != "ok" || md["verify_tests"] != true || !strings.Contains(note, "sandbox") {
+			t.Fatalf("shell=%v: %v %q", perms.AllowShellCommands, md, note)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "left-behind")); err == nil {
+			t.Fatalf("shell=%v: her test ran on the real project", perms.AllowShellCommands)
+		}
+	}
+}
