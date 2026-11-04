@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -48,6 +49,11 @@ func input(args map[string]any, tc *tools.Context) ([]byte, string, error) {
 	root := tc.Root
 	if root == "" {
 		root, _ = os.Getwd()
+	}
+	if looksLikeDataNotPath(root, path) && text == "" {
+		// the data itself put in "path": read it as the text it is (eval crypto-jwt-not-verified, night 2 2026-11-04: the token went
+		// in as a path, the tool failed, and she decoded the payload in her head instead)
+		return []byte(path), "text", nil
 	}
 	resolved, err := tools.ResolveInRoot(root, path)
 	if err != nil {
@@ -514,4 +520,13 @@ func lettersMostly(s string) bool {
 		}
 	}
 	return letters >= 15 && other*10 <= letters
+}
+
+// looksLikeDataNotPath: a "path" with no folder in it, long enough to be a token, hash or encoded string, and no such file.
+func looksLikeDataNotPath(root, path string) bool {
+	if len(path) < 16 || strings.ContainsAny(path, "/\\") {
+		return false
+	}
+	_, err := os.Lstat(filepath.Join(root, path))
+	return os.IsNotExist(err)
 }

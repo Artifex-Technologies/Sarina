@@ -421,3 +421,16 @@ func TestHashToolTakesTheEmptyString(t *testing.T) {
 		t.Fatal("neither text nor path given: want an error")
 	}
 }
+
+// The token itself given as "path" is read as text (crypto-jwt-not-verified, night 2): a missing short file name stays an error.
+func TestDataGivenAsPathIsReadAsText(t *testing.T) {
+	root := t.TempDir()
+	tok := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2ln"
+	b, src, err := input(map[string]any{"path": tok}, &tools.Context{Root: root})
+	if err != nil || string(b) != tok || src != "text" {
+		t.Fatalf("token as path: %q %q %v", b, src, err)
+	}
+	if _, _, err := input(map[string]any{"path": "notes.txt"}, &tools.Context{Root: root}); err == nil {
+		t.Fatal("a missing file name must stay an error")
+	}
+}
