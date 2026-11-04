@@ -45,6 +45,9 @@ type Permissions struct {
 	AllowFileWrite                bool `json:"allow_file_write"`
 	AllowShellCommands            bool `json:"allow_shell_commands"`
 	AllowDestructiveShellCommands bool `json:"allow_destructive_shell_commands"`
+	// AllowPrivileged lets her bash tool run sudo, doas, pkexec, run0, su or claude-sudo. Nothing sets it: not a config file
+	// (never read from one), not --unsafe, not the access ladder. Privileged work goes through the owner.
+	AllowPrivileged bool `json:"-"`
 }
 
 // BudgetConfig limits a session. A nil field means "unset".

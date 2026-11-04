@@ -61,7 +61,7 @@ func TestBashOutputFormat(t *testing.T) {
 func TestBashDestructiveGateAndUnsafeFlag(t *testing.T) {
 	e := shellEnv(t)
 	e.put("victim.txt", "x")
-	for _, cmd := range []string{"rm victim.txt", "echo hi && rm victim.txt", "bash -c 'rm victim.txt'", "echo $(rm victim.txt)", "sudo rm victim.txt"} {
+	for _, cmd := range []string{"rm victim.txt", "echo hi && rm victim.txt", "bash -c 'rm victim.txt'", "echo $(rm victim.txt)"} { // sudo rm: refused as privileged first (TestBashRefusesPrivilegedAtEveryTier)
 		r := e.fails("bash", map[string]any{"command": cmd}, "permission_denied")
 		if !strings.Contains(r.Content, "--unsafe") {
 			t.Errorf("%q: the refusal must name --unsafe: %q", cmd, r.Content)
@@ -79,6 +79,29 @@ func TestBashDestructiveGateAndUnsafeFlag(t *testing.T) {
 	e.ok("bash", map[string]any{"command": "rm victim.txt"})
 	if e.exists("victim.txt") {
 		t.Fatal("--unsafe should let the command run")
+	}
+}
+
+func TestBashRefusesPrivilegedAtEveryTier(t *testing.T) {
+	e := shellEnv(t)
+	e.put("victim.txt", "x")
+	// --unsafe (destructive allowed) does not open it: only AllowPrivileged would, and nothing sets it
+	e.tc.Permissions.AllowDestructiveShellCommands = true
+	for _, cmd := range []string{"claude-sudo pacman -U x.pkg", "pkexec systemctl restart heimdall", "su -c 'rm -rf /' root", "run0 pacman -Syu",
+		"sudo rm victim.txt", "echo ok && claude-sudo rm victim.txt"} {
+		r := e.fails("bash", map[string]any{"command": cmd}, "permission_denied")
+		if !strings.Contains(r.Content, "privileged") {
+			t.Errorf("%q: the refusal must say why: %q", cmd, r.Content)
+		}
+		e.fails("bash", map[string]any{"command": cmd, "run_in_background": true}, "permission_denied")
+	}
+	if !e.exists("victim.txt") {
+		t.Fatal("a refused privileged command ran")
+	}
+	e.ok("bash", map[string]any{"command": "echo sudo is a word here"})
+	var zero config.Permissions
+	if zero.AllowPrivileged {
+		t.Fatal("AllowPrivileged must default to false")
 	}
 }
 

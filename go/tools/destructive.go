@@ -39,9 +39,29 @@ func CheckDestructive(command, root string) Verdict {
 	return Verdict{}
 }
 
+// CheckPrivileged decides whether a bash command would run something with
+// root's (or another account's) rights: sudo, doas, pkexec, run0, su,
+// runuser, systemd-run outside --user, and the ecosystem's own claude-sudo and
+// sarina-sudo, found wherever they sit (behind env/xargs/timeout-style
+// wrappers, in a pipeline, a subshell, a `-c` string, eval, find -exec, or
+// named in an interpreter's inline code). Her bash tool refuses such a command
+// at every tier unless Permissions.AllowPrivileged is set, which nothing sets
+// (--unsafe does not): a passwordless root path (claude-sudo) must never be
+// reachable from a prompt-injected session. A command whose program is only
+// known at run time is refused too, since it could be any of them.
+func CheckPrivileged(command string) Verdict {
+	c := &checker{priv: true}
+	if why := c.script(command); why != "" {
+		return Verdict{Blocked: true, Reason: why}
+	}
+	return Verdict{}
+}
+
 type checker struct {
 	root  string
 	depth int
+	// priv: look only for privileged programs (CheckPrivileged); the destructive checks are skipped
+	priv bool
 }
 
 type member struct {
@@ -70,6 +90,9 @@ func (c *checker) script(src string) string {
 		if why != "" {
 			return why
 		}
+		if c.priv {
+			continue
+		}
 		if cmd.PipeID != 0 {
 			pipes[cmd.PipeID] = append(pipes[cmd.PipeID], m)
 		}
@@ -97,6 +120,9 @@ func (c *checker) script(src string) string {
 func (c *checker) command(cmd *shellparse.Command) (string, member) {
 	if cmd.Data {
 		return "", member{}
+	}
+	if c.priv {
+		return c.words(cmd.Words, cmd.Heredocs, 0)
 	}
 	for _, r := range cmd.Redirects {
 		if r.Writes() {
@@ -163,7 +189,20 @@ var wrappers = map[string]wrapSpec{
 	"watch":   {short: "n", long: []string{"interval"}},
 	"flock":   {short: "wE", positional: 1},
 	"chroot":  {positional: 1},
+	// claude-sudo CMD... and sarina-sudo CMD... run CMD as root through an agent account; pkexec and run0 through polkit
+	"claude-sudo": {}, "sarina-sudo": {},
+	"pkexec": {long: []string{"user"}},
+	"run0": {short: "ugD", long: []string{"user", "group", "chdir", "unit", "property", "description", "slice", "nice", "setenv",
+		"background", "machine", "shell-prompt-prefix", "area"}},
 }
+
+// privilegedProgs run a command (or a shell) as root or as another account.
+var privilegedProgs = map[string]bool{
+	"sudo": true, "doas": true, "pkexec": true, "run0": true, "su": true, "runuser": true, "claude-sudo": true, "sarina-sudo": true,
+}
+
+// privilegedWord finds a privileged program named in inline interpreter code (python -c "subprocess.run(['sudo', ...])").
+var privilegedWord = regexp.MustCompile(`(^|[^a-z0-9_-])(sudo|doas|pkexec|run0|claude-sudo|sarina-sudo)([^a-z0-9_-]|$)`)
 
 var shells = map[string]bool{
 	"sh": true, "bash": true, "zsh": true, "dash": true, "ksh": true, "mksh": true, "ash": true,
@@ -206,6 +245,9 @@ func (c *checker) words(ws []shellparse.Word, heredocs []string, depth int) (str
 	prog := strings.TrimSuffix(strings.ToLower(base), ".exe")
 	args := ws[1:]
 	m := member{prog: prog, download: downloaders[prog]}
+	if c.priv {
+		return c.privileged(prog, args, heredocs, depth), m
+	}
 
 	if why, ok := destructiveProgs[prog]; ok {
 		return fmt.Sprintf("%s %s", prog, why), m
@@ -303,8 +345,75 @@ func (c *checker) words(ws []shellparse.Word, heredocs []string, depth int) (str
 }
 
 func (c *checker) nested(src string) string {
-	sub := &checker{root: c.root, depth: c.depth + 1}
+	sub := &checker{root: c.root, depth: c.depth + 1, priv: c.priv}
 	return sub.script(src)
+}
+
+// privileged is words() for CheckPrivileged: it names a privileged program and otherwise only follows what runs another
+// command (wrappers, shells, eval, find -exec, interpreters' inline code).
+func (c *checker) privileged(prog string, args []shellparse.Word, heredocs []string, depth int) string {
+	if privilegedProgs[prog] {
+		return prog + " runs a command with root's or another account's rights; privileged commands are never run from this tool"
+	}
+	if prog == "systemd-run" {
+		if !hasLong(args, "--user") {
+			return "systemd-run outside --user starts a system unit with root's rights; privileged commands are never run from this tool"
+		}
+		for _, a := range args { // its many options take values: any word naming a privileged program is enough
+			if p := strings.ToLower(baseName(a.Text)); privilegedProgs[p] {
+				return p + " runs a command with root's or another account's rights; privileged commands are never run from this tool"
+			}
+		}
+		return ""
+	}
+	switch prog {
+	case "eval":
+		var parts []string
+		for _, a := range args {
+			parts = append(parts, a.Text)
+		}
+		return c.nested(strings.Join(parts, " "))
+	case "find":
+		for i := 0; i < len(args); i++ {
+			switch args[i].Text {
+			case "-exec", "-execdir", "-ok", "-okdir":
+				j := i + 1
+				for j < len(args) && args[j].Text != ";" && args[j].Text != "+" {
+					j++
+				}
+				if why, _ := c.words(args[i+1:j], nil, depth+1); why != "" {
+					return why
+				}
+				i = j
+			}
+		}
+		return ""
+	}
+	if spec, ok := wrappers[prog]; ok {
+		rest, scripts, noExec := unwrap(prog, spec, args)
+		for _, s := range scripts {
+			if why := c.nested(s.Text); why != "" {
+				return why
+			}
+		}
+		if noExec || len(rest) == 0 {
+			return ""
+		}
+		why, _ := c.words(rest, heredocs, depth+1)
+		return why
+	}
+	if shells[prog] {
+		why, _ := c.shell(prog, args, heredocs, member{})
+		return why
+	}
+	if pythonLike.MatchString(prog) || nodeLike.MatchString(prog) || prog == "perl" || prog == "ruby" || prog == "php" ||
+		prog == "lua" || prog == "luajit" || prog == "pwsh" || prog == "powershell" || strings.HasSuffix(prog, "awk") {
+		code := strings.Join(texts(args), " ") + "\n" + strings.Join(heredocs, "\n")
+		if m := privilegedWord.FindStringSubmatch(strings.ToLower(code)); m != nil {
+			return fmt.Sprintf("%s code names %s, which runs a command with root's rights; privileged commands are never run from this tool", prog, m[2])
+		}
+	}
+	return ""
 }
 
 // hasFlag reports whether args hold the short option letter (alone or in a

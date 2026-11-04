@@ -135,3 +135,50 @@ func TestDestructiveForkBombNeedsSelfPipe(t *testing.T) {
 		t.Fatalf("a function used once in a pipeline is fine: %+v", v)
 	}
 }
+
+func TestPrivilegedBlocked(t *testing.T) {
+	blocked := []string{
+		// the plan's four (2026-10-28 Day 1 step 5)
+		"claude-sudo pacman -U x.pkg", "pkexec systemctl restart heimdall", "su -c 'rm -rf /' root", "run0 pacman -Syu",
+		"sudo pacman -Syu", "sudo -n true", "doas pacman -Syu", "sarina-sudo labyrinth-agent pkg-install x", "su", "su - root",
+		"runuser -u root -- id", "/usr/local/bin/claude-sudo id", "pkexec --user root id", "run0 -u root id", "run0 --user=root id",
+		// wherever it sits
+		"echo hi && claude-sudo id", "ls; sudo id", "true | sudo tee /etc/x", "(claude-sudo id)", "{ sudo id; }", "echo $(sudo id)",
+		"bash -c 'claude-sudo pacman -U x.pkg'", "sh -c \"sudo id\"", "eval claude-sudo id", "env FOO=1 claude-sudo id",
+		"timeout 5 pkexec id", "nice -n 5 run0 id", "xargs sudo rm", "echo x | xargs -I{} claude-sudo cat {}", "nohup sudo id",
+		"command sudo id", "exec claude-sudo id", "find . -exec sudo chmod 777 {} ;", "FOO=1 sudo id",
+		"systemd-run pacman -Syu", "systemd-run --user -p X=1 sudo id",
+		"python3 -c 'import subprocess; subprocess.run([\"sudo\", \"id\"])'", "perl -e 'system(\"claude-sudo id\")'",
+		"node -e \"require('child_process').execSync('pkexec id')\"",
+		// a program known only at run time could be any of them
+		"$S id", "\"$(which sudo)\" id", "`echo sudo` id",
+	}
+	for _, cmd := range blocked {
+		if v := CheckPrivileged(cmd); !v.Blocked {
+			t.Errorf("not refused as privileged: %q", cmd)
+		}
+	}
+}
+
+func TestPrivilegedAllowed(t *testing.T) {
+	allowed := []string{
+		"ls -la", "echo sudo", "echo 'claude-sudo pacman -U x'", "grep -rn sudo .", "man sudo", "which pkexec", "command -v run0",
+		"systemctl --user restart pipewire", "systemd-run --user --scope sleep 1", "git log --grep=sudo", "cat /etc/sudoers.d/README",
+		"pacman -Q sudo", "rm x", "python3 -c 'print(1)'", "find . -name '*.go' -exec gofmt -l {} +", "subtle", "suspend-check",
+		"echo \"$HOME\"", "$HOME/bin/tool --version",
+	}
+	for _, cmd := range allowed {
+		if v := CheckPrivileged(cmd); v.Blocked {
+			t.Errorf("refused as privileged: %q (%s)", cmd, v.Reason)
+		}
+	}
+}
+
+func TestDestructiveSeesThroughPrivilegedWrappers(t *testing.T) {
+	for _, cmd := range []string{"claude-sudo rm -rf /", "sarina-sudo rm x", "pkexec rm x", "pkexec --user root rm x", "run0 rm x",
+		"run0 -u root rm x", "run0 --property=X=1 rm x", "su -c 'rm -rf /' root"} {
+		if v := CheckDestructive(cmd, t.TempDir()); !v.Blocked {
+			t.Errorf("destructive command behind a wrapper not refused: %q", cmd)
+		}
+	}
+}

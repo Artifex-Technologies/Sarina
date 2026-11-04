@@ -26,6 +26,12 @@ func Bash() Tool {
 		if why := ExfilRisk(command); why != "" {
 			return "", nil, Denied("%s", exfilRefusal("this command", why))
 		}
+		// at every tier and with --unsafe: nothing sets AllowPrivileged (claude-sudo is a passwordless root path on the owner's PC)
+		if !tc.Permissions.AllowPrivileged {
+			if v := CheckPrivileged(command); v.Blocked {
+				return "", nil, Denied("refused: %s. Tell the user the exact command and let them run it themselves if they want it.", v.Reason)
+			}
+		}
 		if !tc.Permissions.AllowDestructiveShellCommands {
 			if v := CheckDestructive(command, tc.Root); v.Blocked {
 				return "", nil, Denied("refused: %s. Destructive commands are blocked unless the operator re-runs with --unsafe (allow destructive shell commands). "+
