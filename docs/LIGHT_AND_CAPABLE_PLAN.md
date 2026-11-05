@@ -70,6 +70,21 @@ Matt's goals, from the conversation of 2026-11-04:
 (code, reverse engineering, analysis) to the candidate through the compute tiers (`go/tiers`). Switching models costs a few
 seconds of loading on the card.
 
+**Decided direction (Matt, 2026-11-04): use both, swapped, never both on the card.**
+- One model on the card at a time. The other's file stays cached in system RAM, so a swap reads from RAM, not disk, and takes
+  a few seconds.
+- **Not gaming:** qwen3:8b for talk and voice; the candidate (`n-cpu-moe 30`, 8.8 GB on the card) for code, analysis and long
+  tasks.
+- **While a game runs:** the candidate in a low-card mode, for talk too, and qwen3:8b unloaded. All experts in RAM is about
+  3 GB on the card at about 33 tokens/s; CPU only is 0 GB, slower, and it shares the processor with the game, so measure it.
+  That leaves the game more graphics memory than qwen3:8b would (6.2 GB).
+- **Pieces:**
+  - a small swapper: one local OpenAI-compatible address, the model name chooses, it starts and stops the right server
+    (Ollama for qwen3:8b, llama-server for the candidate);
+  - the game detection Sarina already has (`sysinfo/gaming.go`) picks the mode;
+  - the tiers route heavy tasks to the candidate.
+- **To measure:** swap time, talk speed in the low-card mode, and a game's frame rate with each mode beside it.
+
 ## 2. Hardware tiers: `sarina fit` (now)
 
 From Odysseus's hardware-aware model picker; the idea only, written in Go.
