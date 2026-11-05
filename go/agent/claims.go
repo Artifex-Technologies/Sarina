@@ -368,6 +368,11 @@ func inventedHistory(answer string, all []session.Message, msgStart int) string 
 		if !pastClaimRE.MatchString(sentence) {
 			continue
 		}
+		// a question about the user's past claims nothing: "what have you always wanted to try?" (eval companion-carries-on,
+		// night 3 run A: sent back, and the rewrite was "Either way, I'm here to support you.")
+		if strings.HasSuffix(strings.TrimSpace(sentence), "?") && !pastClaimRE.MatchString(askedPastRE.ReplaceAllString(sentence, "")) {
+			continue
+		}
 		evidence := past
 		// the question is evidence for "as you just said", but not when it asks whether she remembers: "do you remember my trip to
 		// Lisbon?" does not show that the trip was ever told (eval companion-no-false-memory, 2026-10-26)
@@ -390,6 +395,8 @@ func inventedHistory(answer string, all []session.Message, msgStart int) string 
 	}
 	return ""
 }
+
+var askedPastRE = regexp.MustCompile(`(?i)\b(have|do|did|does|would|were|are) you (always|usually)\b`)
 
 var askRecallRE = regexp.MustCompile(`(?i)\b(do|did|can|could) you (still )?(remember|recall|know what i)\b|\bwhat did i (tell|say|mention)\b|\bdid i (ever )?(tell|mention)\b`)
 
