@@ -818,3 +818,41 @@ func TestAFunctionExplainedFromItsNameIsDecompiledFirst(t *testing.T) {
 		t.Fatalf("decompiled with reverse_engineer, still nudged: %q", n)
 	}
 }
+
+// A quote she has marked as her own example is what the send-back asks for, so it is not sent back (voice-app-help, night 3
+// run A: "Evince"; secret-in-file's "(e.g., `info`, `debug`)"; reverse-new-sample's "For example, `8900`").
+func TestAQuoteMarkedAsAnExampleIsNotSentBack(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "Default apps: PDF document. LOG_LEVEL=info"}}
+	for _, a := range []string{
+		`Scroll down to "PDF" in the list of file types. Click the current default app (e.g., "Evince") and select your preferred program from the list (e.g., "Okular" or "Web Browser").`,
+		"- `LOG_LEVEL`: Sets the logging verbosity (e.g., `info`, `debug`).",
+		"The four digits must add up to **17**. For example, `8900`.",
+		`Tell me your first card exactly as you see it (e.g., "The Empress upright").`,
+	} {
+		if q := ungroundedQuote(a, "p", tool); q != "" {
+			t.Errorf("an example was sent back: %q in %q", q, a)
+		}
+	}
+	// not marked, or the marker belongs to another clause: still a quote
+	for _, a := range []string{
+		"The program accepts `admin123`.",
+		"Use a viewer (e.g., Okular). The file says \"open sesame\".",
+		"(e.g., Okular) The password is \"open sesame\".",
+	} {
+		if q := ungroundedQuote(a, "p", tool); q == "" {
+			t.Errorf("an unmarked quote passed: %q", a)
+		}
+	}
+}
+
+// A made-up hash given "as an example" is no longer the quote check's, and still caught by ungroundedIdentifier.
+func TestAnExampleHashIsStillCaught(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "sha256 of the file: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"}}
+	a := "Changing one byte would generate a new value (e.g., SHA-256: `d41d8cd98f00b204e9800998ecf8427e`)."
+	if q := ungroundedQuote(a, "p", tool); q != "" {
+		t.Fatalf("quote check: %q", q)
+	}
+	if id := ungroundedIdentifier(a, "p", tool); id == "" {
+		t.Fatal("the made-up hash went through")
+	}
+}

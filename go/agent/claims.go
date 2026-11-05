@@ -175,7 +175,7 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 		if lq == "" || strings.Contains(ev, lq) || strings.Contains(p, lq) || strings.Contains(evTight, strings.Join(strings.Fields(lq), "")) {
 			continue
 		}
-		if notAQuote(lq) {
+		if notAQuote(lq) || markedExample(answer[:loc[0]]) {
 			continue
 		}
 		// a path, a command or a name the model writes in its own words is not a quote from the evidence: only literal-looking text counts
@@ -193,6 +193,14 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 var notAQuoteRE = regexp.MustCompile(`(?i)^(\S+=\S*(\s+\S+=\S*)*|.*\s\S+=\S+.*|((zero|one|two|three|four|five|six|seven|eight|nine)(,?\s+|$))+|null|nullptr|none|nil|true|false|undefined|nan|.*<[a-z_ -]+>.*|.*\byour[_ ]\w+.*|\w*_here|\.[a-z0-9]{1,5})$`)
 
 func notAQuote(lq string) bool { return notAQuoteRE.MatchString(lq) }
+
+// exampleRE is an example marker followed, in the same clause, by the quote: "(e.g., `info`, `debug`)", "For example, `L****7`".
+// The send-back itself tells her to mark her own examples plainly, so a marked one is not sent back (61 of 221 quote send-backs
+// in the session files on 2026-11-04 were such examples, among them voice-app-help's "Evince" in night 3 run A). A made-up hash
+// given as an example is still ungroundedIdentifier's.
+var exampleRE = regexp.MustCompile(`(?i)\b(e\.g\.|for example|for instance|such as)[^().\n]{0,40}$`)
+
+func markedExample(before string) bool { return exampleRE.MatchString(before) }
 
 func ungroundedText(q string) string {
 	return "Check before you finish: your answer quotes \"" + q + "\", but no tool output in this task contains it. Write your whole answer again, complete: keep everything the tools showed, and either leave that quote out, mark it plainly as your own example, or look it up with your tools first. Do not talk about this check."
