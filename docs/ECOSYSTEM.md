@@ -440,6 +440,17 @@ Full detail in both repos' 2026-09-26 Coordination Log entries — see
 [`Heimdall/CLAUDE.md`](https://github.com/Artifex-Technologies/Heimdall/blob/main/CLAUDE.md)
 §5 for Heimdall's side.
 
+### 4b2. Heimdall's grant gate — **live, off until the owner switches it on**
+
+Sarina may ask for more than she has (a hand-off to a tier off this computer, a higher access tier) and never grant it to
+herself. She files a request with Heimdall (`POST /v1/requests` on the host of `HEIMDALL_REVIEW_URL`, `go/heimdall/grants.go`
+`RequestGrant`) and reads the owner's answer from `/etc/heimdall/grants.json`, a file only root writes (`sudo heimdalld grant
+approve|deny|tier`), never from an HTTP answer. The file existing switches the gate on. Two call sites only:
+`config.AccessTierFromEnv` (the tier is the lower of `SARINA_ACCESS_TIER` and the file's cap) and `tiers.Router.attempt`
+(a tier off this computer needs an unexpired approval, whatever its `auto`). A file not root's, writable by others or damaged
+allows nothing. Heimdall's side: `docs/GRANTS.md` and `internal/grants`. Since 2026-11-05 Heimdall's API answers only root,
+its own account, `sarina` and members of `wheel` (identified by the kernel's socket table; no client change).
+
 ### 4c. Heimdall asks Sarina for an advisory — **live, opt-in**
 
 Added 2026-10-04 at the owner's request. When Heimdall quarantines a Limbo guest

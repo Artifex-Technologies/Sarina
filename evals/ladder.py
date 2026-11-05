@@ -163,6 +163,9 @@ def set_env_tier(n):
     with open(ENV_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(out) + "\n")
     print("SARINA_ACCESS_TIER=%d written to %s (the file before is %s)" % (n, ENV_FILE, backup if lines else "none"))
+    if os.path.exists("/etc/heimdall/grants.json"):
+        # Heimdall's grant gate is on: Sarina uses the lower of this setting and the owner's cap there (Heimdall docs/GRANTS.md)
+        print("Heimdall's grant gate is on: Sarina uses the lower of this and Heimdall's cap. To raise the cap too: sudo heimdalld grant tier %d" % n)
 
 
 def main(argv):

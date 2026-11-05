@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/config"
+	"github.com/Artifex-Technologies/Sarina/go/heimdall"
 	"github.com/Artifex-Technologies/Sarina/go/llm"
 )
 
@@ -67,6 +69,7 @@ type Router struct {
 	wakeAt   map[int]time.Time
 	approved map[int]bool
 	denied   map[int]bool
+	asked    map[int]bool     // a grant request was filed with Heimdall for this tier this session
 	events   []map[string]any // escalations and refusals not yet recorded in a session
 	redacted map[string]int   // redactions since the last Record, by tier name
 	known    []string         // secret values this process holds, for exact-match redaction
@@ -99,7 +102,7 @@ func New(opt Options) (*Router, error) {
 		opt.WakePoll = 2 * time.Second
 	}
 	r := &Router{opt: opt, clients: map[int]Completer{}, health: map[int]healthEntry{}, timeouts: map[int]int{},
-		wakeAt: map[int]time.Time{}, approved: map[int]bool{}, denied: map[int]bool{}, redacted: map[string]int{}, cliRuns: map[int]int{}}
+		wakeAt: map[int]time.Time{}, approved: map[int]bool{}, denied: map[int]bool{}, asked: map[int]bool{}, redacted: map[string]int{}, cliRuns: map[int]int{}}
 	if opt.Base.APIKey != "" {
 		r.known = append(r.known, opt.Base.APIKey)
 	}
@@ -550,6 +553,28 @@ func (r *Router) usable(ctx context.Context, i int, req llm.Request) (verdict, s
 // next tier"; the reason has been recorded in reasons.
 func (r *Router) attempt(ctx context.Context, i int, req llm.Request, on func(llm.StreamEvent), reasons map[int]string) (*llm.Turn, bool, error) {
 	t := r.opt.Config.Tiers[i]
+	// Heimdall's grant gate (docs/GRANTS.md there): while it is on, a tier that sends the conversation off this computer is
+	// used only with the owner's approval in Heimdall's root-owned file, whatever its auto setting; without one, a request is
+	// filed and this tier is skipped. This is the one place every hand-off passes.
+	if i > 0 && offMachine(t) {
+		if g := heimdall.LoadGrants(); g.On {
+			if !g.EscalationAllowed(t.Name, "", r.opt.Now()) {
+				if !r.asked[i] {
+					r.asked[i] = true
+					how, err := heimdall.RequestGrant("escalation", t.Name, "", "the local model could not finish the task")
+					if err != nil {
+						how = "Heimdall could not take the request (" + err.Error() + ")"
+					}
+					reasons[i] = "needs the owner's approval in Heimdall: " + how
+				} else {
+					reasons[i] = "needs the owner's approval in Heimdall (requested)"
+				}
+				r.refuse(i, reasons[i])
+				return nil, false, nil
+			}
+			r.approved[i] = true // the owner's approval in Heimdall is the operator's consent
+		}
+	}
 	if !t.Auto && !r.approved[i] {
 		switch {
 		case r.denied[i]:
@@ -788,3 +813,21 @@ func (r *Router) Pressure(ctx context.Context) (Sample, string) {
 
 // Thresholds returns the configured resource limits.
 func (r *Router) Thresholds() Thresholds { return r.opt.Config.Resource }
+
+// offMachine reports whether a tier sends the conversation off this computer: the claude CLI and the Claude API always, any
+// other tier unless its base URL is a loopback address or localhost (anything unparsable counts as off the machine).
+func offMachine(t Tier) bool {
+	if t.Kind == KindClaudeCLI || t.Kind == KindClaude {
+		return true
+	}
+	u, err := url.Parse(strings.TrimSpace(t.BaseURL))
+	if err != nil || u.Hostname() == "" {
+		return true
+	}
+	h := strings.ToLower(u.Hostname())
+	if h == "localhost" {
+		return false
+	}
+	ip := net.ParseIP(h)
+	return ip == nil || !ip.IsLoopback()
+}

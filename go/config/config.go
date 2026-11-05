@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Artifex-Technologies/Sarina/go/heimdall"
 )
 
 // Defaults for the backend connection.
@@ -163,6 +165,10 @@ func RequestMaxTokensFromEnv(getenv func(string) string) int {
 // sets it after full eval runs earned it; nothing in the program raises it. 0 (unset) is read-only; 1 allows the file tools by
 // default; 2 also runs a project's tests after her changes; 3 allows shell commands by default. Higher values are read as 3: tier 4
 // is an allow list on the operating system, not a flag here.
+//
+// While Heimdall's grant gate is on (/etc/heimdall/grants.json exists, Heimdall's docs/GRANTS.md), the result is the lower
+// of this setting and the owner's cap in that root-owned file: sarina.env is in a folder her own account can write, the cap
+// is not, so she cannot raise her own tier.
 func AccessTierFromEnv(getenv func(string) string) int {
 	if getenv == nil {
 		getenv = os.Getenv
@@ -171,7 +177,7 @@ func AccessTierFromEnv(getenv func(string) string) int {
 	if err != nil || n <= 0 {
 		return 0
 	}
-	return min(n, 3)
+	return heimdall.LoadGrants().TierCap(min(n, 3))
 }
 
 // ContextWindowFromEnv reads SARINA_CONTEXT_WINDOW; zero means "not set".

@@ -17,7 +17,14 @@ each step.
 The applied tier is the line `SARINA_ACCESS_TIER=N` in `~/.config/labyrinth/sarina.env`. `sarina chat` and the service read it as
 the default permissions (`config.AccessTierFromEnv`): tier 1 turns the file tools on, tier 2 also runs a project's tests after
 her changes (`tools/verify.go`), tier 3 turns shell commands on. The `--allow-write` and `--allow-shell` flags still add to it
-for one run; `python3 evals/ladder.py lower N` takes a tier away at once. Spoken questions (Super+S) change nothing at any tier:
+for one run; `python3 evals/ladder.py lower N` takes a tier away at once.
+
+**Heimdall's grant gate.** `sarina.env` sits in a folder Sarina's own account can write, so with a shell she could raise her
+own tier. When the owner switches Heimdall's gate on (`sudo heimdalld grant tier N`, Heimdall's `docs/GRANTS.md`), the tier
+used is the lower of `SARINA_ACCESS_TIER` and the cap in `/etc/heimdall/grants.json`, a file only root can write
+(`go/heimdall/grants.go`). Raising a tier then takes both: `ladder.py apply` and `sudo heimdalld grant tier N`. Lowering takes
+either. With the gate on, a hand-off to a tier off this computer (the claude CLI, a cloud API, a remote machine) also needs
+the owner's approval there (`sudo heimdalld grant approve ID`); Sarina files the request and goes on without that tier. Spoken questions (Super+S) change nothing at any tier:
 the voice rules stay as they are.
 
 `ladder.json` next to the reports (`Labyrinth_OS/docs/sarina-evals/`) holds the last computation: the earned tier, the applied
