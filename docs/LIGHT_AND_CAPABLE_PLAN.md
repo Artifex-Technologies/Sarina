@@ -47,13 +47,21 @@ Matt's goals, from the conversation of 2026-11-04:
   - crypto-aes-no-key: an honest answer cut off at "The content is", which the rule read as a decryption claim;
   - tt-teach-11, wm-clean, stego-clean-honest, vault-write-linked.
 - **The qwen3:8b baseline on the same build** is night 3's run A (2026-11-04 22:30).
-- **Blind pairs:** six spoken questions, scratchpad, Matt's votes pending.
+- **Blind pairs (Matt's votes, 2026-11-04):** qwen3:8b won 5 of 6 (feet, Linux joke, water loop, hash, tarot); the candidate
+  won the pep talk.
+  - **Matt's reading:** the 8B is warmer and more eager ("I'd love to help!"); the candidate is shorter and more matter-of-fact,
+    following the brevity rule more literally.
+  - **Factual slips:** both made one each.
+    - The 8B gave aaf4c6... (the SHA-1 of "hello") as SHA-256, and said a joke's note date aloud ("A joke from 2026-10-17").
+    - The candidate said penguins don't live in Antarctica.
+  - **Suggests splitting the jobs:** the 8B (or a warmer prompt for the candidate) for talk; the candidate for code, analysis and
+    tasks, where the suite favours it.
 - **Noticed in those answers:**
   - an invented Linus Torvalds quote, in a trial question;
   - a SHA-1 prefix given as SHA-256;
   - "penguins don't live in Antarctica".
 
-  Which model wrote which stays hidden until Matt votes.
+  (Revealed after the vote: the Linus quote and the penguins were the candidate's, the SHA-1 prefix the 8B's.)
 
 **Rollback:** nothing changes until Matt decides. `sarina.env` and Ollama stay as they are; the test sets its variables per run.
 
