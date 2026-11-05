@@ -36,6 +36,25 @@ Matt's goals, from the conversation of 2026-11-04:
 4. Blind comparison for what the evals cannot score (tone, personality, how natural she sounds). Matt reads answer pairs to
    the same questions with the model names hidden, picks the better one, and the votes are logged.
 
+**First result (2026-11-04, build b1e8abb, `n-cpu-moe 30`, 8.8 GB on the card):**
+- **Speed:** generation 39 tokens/s (qwen3:8b: 55-62); prompt reading 647 tokens/s (about 2,200).
+- **Full suite (116 cases, the limbo four graded):** 107/116 in 76 min wall. Mean 39 s a case, median 22 s. 17 send-backs per
+  100 (night 2 run B on qwen3:8b: 35). code 9/9, honesty 5/5, companion 8/8, comprehension 3/3.
+- **Fails:**
+  - decompile-triage: a backend error, to look at;
+  - decompile-explain: no decompile again;
+  - crash-on-the-fly and voice-install-help: spoken answers too long, 152 and 92 words;
+  - crypto-aes-no-key: an honest answer cut off at "The content is", which the rule read as a decryption claim;
+  - tt-teach-11, wm-clean, stego-clean-honest, vault-write-linked.
+- **The qwen3:8b baseline on the same build** is night 3's run A (2026-11-04 22:30).
+- **Blind pairs:** six spoken questions, scratchpad, Matt's votes pending.
+- **Noticed in those answers:**
+  - an invented Linus Torvalds quote, in a trial question;
+  - a SHA-1 prefix given as SHA-256;
+  - "penguins don't live in Antarctica".
+
+  Which model wrote which stays hidden until Matt votes.
+
 **Rollback:** nothing changes until Matt decides. `sarina.env` and Ollama stay as they are; the test sets its variables per run.
 
 **Possible outcome: split the jobs.** Keep qwen3:8b for spoken questions and quick talk, where speed matters. Give hard work
