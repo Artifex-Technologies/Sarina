@@ -48,7 +48,8 @@ Matt's goals, from the conversation of 2026-11-04:
   - tt-teach-11, wm-clean, stego-clean-honest, vault-write-linked.
 - **The qwen3:8b baseline on the same build** is night 3's run A (2026-11-04 22:30).
 - **Blind pairs (Matt's votes, 2026-11-04):** qwen3:8b won 5 of 6 (feet, Linux joke, water loop, hash, tarot); the candidate
-  won the pep talk.
+  won the pep talk. On the Linux joke Matt liked the candidate's answer better but voted against it for its factual slip
+  (penguins do live in Antarctica): on style alone that is 4-2.
   - **Matt's reading:** the 8B is warmer and more eager ("I'd love to help!"); the candidate is shorter and more matter-of-fact,
     following the brevity rule more literally.
   - **Factual slips:** both made one each.
