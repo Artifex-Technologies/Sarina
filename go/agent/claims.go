@@ -849,7 +849,110 @@ func unreadDefinition(answer string, msgs []session.Message) (string, int) {
 }
 
 func unreadDefinitionText(name string, line int) string {
-	return fmt.Sprintf("Check before you finish: your answer says what %s does, but you have seen only its first line (line %d, in the list of what the read left out). Read its lines now (read_file start_line %d, end_line %d), then write your whole answer again from the code you saw. Do not talk about this check.", name, line, line, line+40)
+	return fmt.Sprintf("Carry on: your answer says what %s does, but you have seen only its first line (line %d, in the list of what the read left out). Read its lines now (read_file start_line %d, end_line %d), then write your whole answer again from the code you saw.", name, line, line, line+40)
+}
+
+var (
+	ownFunctionsRE  = regexp.MustCompile(`(?m)^## functions \(the program's own\)\n\n(.+)$`)
+	r2FunctionRE    = regexp.MustCompile(`(?m)^0x[0-9a-fA-F]+\s+\d+\s+\d+\s+(\S+)\s*$`)
+	nmFunctionRE    = regexp.MustCompile(`(?m)^[0-9a-fA-F]{8,16} [Tt] (\S+)\s*$`)
+	limboListRE     = regexp.MustCompile(`limbo-decompile\s+functions\s+(\S+)`)
+	logicRE         = regexp.MustCompile(`(?i)\b(checks?|verif(y|ies)|validates?|compares?|requires?|accepts?|rejects?|returns?|must|ensures?|enforces?|computes?|calculates?|decrypts?|encrypts?|decodes?|xors?|length|characters?)\b`)
+	notSeenLogicRE  = regexp.MustCompile(`(?i)\b(not (yet )?(seen|verified|decompiled)|have not|haven'?t|unverified)\b`)
+	listedSkipNames = map[string]bool{"deregister_tm_clones": true, "register_tm_clones": true, "frame_dummy": true}
+)
+
+// undecompiledFunction is one of the program's own functions that a tool listed by name only, which the answer explains (a rule, a
+// check, what it returns) when nothing in this task decompiled it (eval decompile-explain, day run 2026-11-04: the list of functions,
+// then "check_code verifies the input is exactly 10 characters", while the code says 6, 'L' first and '7' last). how says how to
+// decompile it with the tool that listed it.
+func undecompiledFunction(answer string, msgs []session.Message) (name, how string) {
+	listed := map[string]string{}
+	var order []string
+	decompiled := map[string]bool{}
+	limboFile := ""
+	add := func(n, via string) {
+		n = strings.TrimPrefix(n, "sym.")
+		if strings.HasPrefix(n, "_") || strings.HasPrefix(n, "imp.") || strings.Contains(n, ".") || listedSkipNames[n] || len(n) <= 4 {
+			return
+		}
+		if _, ok := listed[n]; !ok {
+			order = append(order, n)
+			listed[n] = via
+		}
+	}
+	callTool := map[string]string{}
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			callTool[c.ID] = c.Function.Name
+			var a struct{ Command, Target string }
+			_ = json.Unmarshal([]byte(c.Function.Arguments), &a)
+			switch c.Function.Name {
+			case "reverse_engineer":
+				if a.Command == "decompile" {
+					decompiled[strings.TrimPrefix(a.Target, "sym.")] = true
+				}
+			case "limbo_validate":
+				if f := limboListRE.FindStringSubmatch(a.Command); f != nil {
+					limboFile = f[1]
+				}
+				if strings.Contains(a.Command, "limbo-decompile decompile") {
+					for _, w := range strings.Fields(a.Command) {
+						decompiled[strings.TrimPrefix(w, "sym.")] = true
+					}
+				}
+			}
+		}
+		if m.Role != "tool" {
+			continue
+		}
+		tool := m.Name
+		if tool == "" {
+			tool = callTool[m.ToolCallID]
+		}
+		for _, t := range toolTexts(m.Content) {
+			switch tool {
+			case "reverse_engineer":
+				if l := ownFunctionsRE.FindStringSubmatch(t); l != nil {
+					for _, e := range strings.Split(l[1], ", ") {
+						if n, _, ok := strings.Cut(e, " ("); ok {
+							add(n, "reverse_engineer")
+						}
+					}
+				}
+				for _, e := range nmFunctionRE.FindAllStringSubmatch(t, -1) {
+					add(e[1], "reverse_engineer")
+				}
+			case "limbo_validate":
+				for _, e := range r2FunctionRE.FindAllStringSubmatch(t, -1) {
+					add(e[1], "limbo_validate")
+				}
+			}
+		}
+	}
+	for _, n := range order {
+		if decompiled[n] {
+			continue
+		}
+		word := nameWordRE(n)
+		for _, sentence := range sentenceEnd.Split(answer, -1) {
+			if word.MatchString(sentence) && logicRE.MatchString(sentence) && !notSeenLogicRE.MatchString(sentence) && !notDecompiledRE.MatchString(sentence) {
+				if listed[n] == "limbo_validate" {
+					file := limboFile
+					if file == "" {
+						file = "<the file>"
+					}
+					return n, "limbo_validate, profile decompile, command limbo-decompile decompile " + file + " " + n
+				}
+				return n, "reverse_engineer, command decompile, the same path, target " + n
+			}
+		}
+	}
+	return "", ""
+}
+
+func undecompiledFunctionText(name, how string) string {
+	return "Carry on: your answer says what " + name + " does, but nothing in this task decompiled it; the list of functions shows only its name. Decompile it now (" + how + "), then write your whole answer again from its code. If you cannot, say plainly that you have not seen its code."
 }
 
 var cannotCheckRE = regexp.MustCompile(`(?i)\b(my|the|system|status) (tools?|access)\b[^.\n]{0,30}\b(are|is) (restricted|unavailable|not available|disabled|limited)\b|` +

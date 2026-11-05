@@ -592,6 +592,25 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					r.segments = nil
 					continue
 				}
+				// code explained from its name or first line is a step not done, not a wrong claim: it asks for a read or a decompile,
+				// and the one claim send-back stays free for inventedCode on the rewrite (eval find-function, 2026-10-26: this one spent
+				// it, and the made-up function in the rewrite went out unchecked)
+				if name, line := unreadDefinition(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); name != "" && !sentNudges["unread:"+name] {
+					nudges++
+					sentNudges["unread:"+name] = true
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: unreadDefinitionText(name, line)})
+					r.emit(event{"type": "continue_nudge", "turn_index": turn})
+					r.segments = nil
+					continue
+				}
+				if name, how := undecompiledFunction(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); name != "" && !sentNudges["decompile:"+name] {
+					nudges++
+					sentNudges["decompile:"+name] = true
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: undecompiledFunctionText(name, how)})
+					r.emit(event{"type": "continue_nudge", "turn_index": turn})
+					r.segments = nil
+					continue
+				}
 			}
 			if answer := strings.Join(r.segments, ""); nudges < 2 && turn < maxTurns && announcedNotDone(answer) {
 				// not a wrong claim, an unfinished task: told to carry on, apart from the one claim check
@@ -627,8 +646,6 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 				} else if f := unreportedChange(answer, hist); f != "" {
 					text = unreportedText(f)
 					// before the quote check: a made-up function outweighs one made-up word in it, and only one send-back is made
-				} else if name, line := unreadDefinition(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); name != "" {
-					text = unreadDefinitionText(name, line)
 				} else if l, omitted := inventedCode(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); l != "" {
 					text = inventedCodeText(l, omitted)
 				} else if q := ungroundedQuote(answer, prompt, sess.Messages[min(msgStart, len(sess.Messages)):]); q != "" && !ownToolNamed(q, a.baseToolNames()) {

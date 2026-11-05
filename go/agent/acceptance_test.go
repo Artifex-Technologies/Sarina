@@ -419,3 +419,32 @@ func TestACutAnswerWithTextStillCarriesOn(t *testing.T) {
 		t.Fatalf("final %q", res.FinalOutput)
 	}
 }
+
+// A function explained from the outline of a cut read is a step not done: she is told to carry on and read it, and the one claim
+// check stays free for the made-up code in the rewrite (find-function, 2026-10-26: the old claim check spent it).
+func TestAnUnreadDefinitionIsANudgeAndKeepsTheClaimCheck(t *testing.T) {
+	outline := "use std::fs;\n[... lines 214-604 of 690 omitted: read_file start_line/end_line, or grep_search ...]\n[defined in the omitted lines, first line only: read a definition's lines (start_line/end_line) before you say what it does or quote it]\n  520: fn protected_with(pkg: &str, os_list: &str) -> bool {\n[...]\nmod tests {}"
+	f := newFakeServer(t,
+		reply("", "tool_calls", use(1, 1), tcall{"c1", "probe", `{}`}),
+		reply("The function `protected_with` checks the name against the prefixes in os_list.", "stop", use(1, 1)),
+		reply("The relevant lines are:\n```rust\nfn protected_with(pkg: &str, os_list: &str) -> bool {\n    os_list.split('\\n').any(|p| pkg.starts_with(p))\n}\n```", "stop", use(1, 1)),
+		reply("I have not read its lines yet, so I cannot quote them.", "stop", use(1, 1)))
+	a := newTestAgent(t, f, func(o *Options) {
+		o.Tools.Extra = []toolT{customTool("probe", func(context.Context, map[string]any, *toolCtx) (string, map[string]any, error) {
+			return outline, nil, nil
+		})}
+	})
+	res := mustRun(t, a, "Which function decides the protected prefixes? Quote the line.")
+	if n := len(f.requests()); n != 4 {
+		t.Fatalf("%d model calls, want 4 (tool, nudge, claim check, answer)", n)
+	}
+	if u := lastUserText(f.requests()[2]); !strings.HasPrefix(u, "Carry on: your answer says what protected_with does") {
+		t.Fatalf("the first send-back is not the read nudge: %q", u)
+	}
+	if u := lastUserText(f.requests()[3]); !strings.Contains(u, "quotes code as if it were in the file") {
+		t.Fatalf("the made-up code was not checked: %q", u)
+	}
+	if !strings.HasPrefix(res.FinalOutput, "I have not read") {
+		t.Fatalf("final %q", res.FinalOutput)
+	}
+}

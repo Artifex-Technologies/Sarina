@@ -723,3 +723,44 @@ func TestQuotesThatClaimNothingAreNotFlagged(t *testing.T) {
 		t.Error("a miscopied word passed")
 	}
 }
+
+// The real decompile-explain answer (day run 2026-11-04): the list of functions only, then a rule for check_code no tool showed.
+func TestAFunctionExplainedFromItsNameIsDecompiledFirst(t *testing.T) {
+	list := `{"tool":"limbo_validate","ok":true,"content":"validation run r18aa5d10 on profile decompile: done, exit code 0\n--- stdout ---\n-- functions (address, size, name; first 400)\nINFO: Analyze all flags starting with sym. and entry0 (aa)\n0x00001030    1      6 sym.imp.puts\n0x00001040    1      6 sym.imp.strlen\n0x00001050    1     37 entry0\n0x00001080    4     34 sym.deregister_tm_clones\n0x000010f0    5     55 entry.fini0\n0x00001149    6     70 sym.check_code\n0x000011e8    1     13 sym._fini\n0x0000118f    5     88 main\n"}`
+	call := func(name, args string) session.Message {
+		return session.Message{Role: "assistant", ToolCalls: []llm.WireToolCall{{ID: "c" + name, Function: llm.FunctionCall{Name: name, Arguments: args}}}}
+	}
+	msgs := []session.Message{call("limbo_validate", `{"command":"limbo-decompile functions demo.bin","profile":"decompile","timeout_seconds":900}`),
+		{Role: "tool", Name: "limbo_validate", ToolCallID: "climbo_validate", Content: list}}
+	answer := "The `demo.bin` binary accepts input that meets two conditions:\n1. The input must be exactly 10 characters long.\n\n**Rule explanation**:\n- The `check_code` function verifies the input length and validity.\n- The `main` function likely calls `check_code` and exits based on its result."
+	name, how := undecompiledFunction(answer, msgs)
+	if name != "check_code" || !strings.Contains(how, "limbo-decompile decompile demo.bin check_code") {
+		t.Fatalf("got %q %q", name, how)
+	}
+	if !strings.Contains(undecompiledFunctionText(name, how), "Carry on") {
+		t.Fatal("it is a nudge to act, not a claim check")
+	}
+	for _, a := range []string{
+		"The list shows check_code and main. I have not decompiled check_code yet, so I cannot say what it accepts.",
+		"I need to decompile check_code to see the rule.",
+		"The program has a function named check_code.",
+	} {
+		if n, _ := undecompiledFunction(a, msgs); n != "" {
+			t.Errorf("no rule stated, but %q was nudged: %q", n, a)
+		}
+	}
+	done := append(msgs, call("limbo_validate", `{"command":"limbo-decompile decompile demo.bin check_code main","profile":"decompile"}`))
+	if n, _ := undecompiledFunction(answer, done); n != "" {
+		t.Fatalf("after the decompile it may be explained: %q", n)
+	}
+	// reverse_engineer's analyze lists the program's own functions the same way
+	re := []session.Message{call("reverse_engineer", `{"command":"analyze","path":"demo.bin"}`),
+		{Role: "tool", Name: "reverse_engineer", ToolCallID: "creverse_engineer", Content: "## subject.name\n\ndemo.bin\n\n## functions (the program's own)\n\ncheck_code (1149), main (118f)\n\nNext: decompile the function"}}
+	if n, how := undecompiledFunction("check_code compares the input with a fixed key.", re); n != "check_code" || !strings.Contains(how, "target check_code") {
+		t.Fatalf("reverse_engineer listing: %q %q", n, how)
+	}
+	re = append(re, call("reverse_engineer", `{"command":"decompile","path":"demo.bin","target":"check_code"}`))
+	if n, _ := undecompiledFunction("check_code compares the input with a fixed key.", re); n != "" {
+		t.Fatalf("decompiled with reverse_engineer, still nudged: %q", n)
+	}
+}
