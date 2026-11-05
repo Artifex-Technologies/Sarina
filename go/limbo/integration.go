@@ -88,7 +88,10 @@ func Tools() []tools.Tool {
 					"anything that needs root (such as pacman) if the profile allows it, and if it fails with a " +
 					"permission error say that the profile may not grant root rather than guessing. The profile also " +
 					"decides the network: a failure to download may mean the profile has none. The timeout (10 to 900 " +
-					"seconds, default 300) covers the command only, not the guest booting.",
+					"seconds, default 300) covers the command only, not the guest booting. Analysis programs a profile names, " +
+					"such as limbo-decompile, are commands for THIS tool: they exist only inside the guest and never as a tool " +
+					"of your own, so call limbo_validate with that profile and the program as the command (for example profile " +
+					"decompile, command `limbo-decompile functions demo.bin`) instead of telling the user to run it.",
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
