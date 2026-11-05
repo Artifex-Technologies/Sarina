@@ -500,7 +500,8 @@ CDC or the BLE serial service. Sarina treats that boundary as read-only.
 | 8765 | Sarina web GUI | Sarina | live |
 | 8899 | Sarina integration service | Sarina | live |
 | 44700 | Sarina control API | Argus_App | live |
-| 8930 | Heimdall status API (loopback, read-only) | Heimdall | live |
+| 8930 | Heimdall API (loopback; callers checked by account) | Heimdall | live |
+| 8931 | Heimdall mesh: alert summaries between the owner's own computers (mutual TLS, enrolled keys; on one non-loopback address the owner picks, off by default) | Heimdall | built, off |
 
 Claim a port by adding it here in the same commit that binds it.
 
