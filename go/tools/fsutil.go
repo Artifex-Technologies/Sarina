@@ -61,7 +61,7 @@ func ResolveInRoot(root, p string) (string, error) {
 	full = filepath.Clean(full)
 	resolved, err := filepath.EvalSymlinks(full)
 	if err != nil {
-		return "", fmt.Errorf("cannot access %s: %v", p, err)
+		return "", fmt.Errorf("cannot access %s: %w", p, err)
 	}
 	if !within(realRoot(root), resolved) {
 		return "", fmt.Errorf("%s is outside the workspace", p)

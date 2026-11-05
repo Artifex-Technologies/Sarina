@@ -149,6 +149,27 @@ func TestReadFile(t *testing.T) {
 	}
 }
 
+// A read of a made-up path names the workspace files with that name (write-edit-one-word, 2026-10-26: "/path/to/greeting.txt").
+func TestReadFileNotFoundNamesTheSameNameFile(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "sub", ".git"), 0o755)
+	os.WriteFile(filepath.Join(root, "sub", "greeting.txt"), []byte("Hello\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "sub", ".git", "greeting.txt"), []byte("x\n"), 0o644)
+	reg := NewRegistry(ReadFile())
+	run := func(p string) Result {
+		return reg.Execute(t.Context(), "read_file", map[string]any{"path": p}, &Context{Root: root, MaxOutputChars: 12000})
+	}
+	for _, p := range []string{"/path/to/greeting.txt", "greeting.txt"} {
+		r := run(p)
+		if r.OK || !strings.Contains(r.Content, "no such file") || !strings.Contains(r.Content, "sub/greeting.txt (relative to the workspace)") || strings.Contains(r.Content, ".git") {
+			t.Fatalf("%s: %q", p, r.Content)
+		}
+	}
+	if r := run("other.txt"); r.OK || strings.Contains(r.Content, "workspace has") {
+		t.Fatalf("no file of that name, no hint: %q", r.Content)
+	}
+}
+
 func TestReadFileSymlinkEscape(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(t.TempDir(), "outside.txt")

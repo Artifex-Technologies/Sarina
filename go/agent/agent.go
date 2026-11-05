@@ -603,6 +603,15 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					r.segments = nil
 					continue
 				}
+				// a file she says she cannot read or find, which is in the workspace and which no tool call named: a step not done
+				if f := deniedReadable(answer, prompt, rt.CWD, sess.Messages[min(msgStart, len(sess.Messages)):], slices.Contains(a.baseToolNames(), "read_file")); f != "" && !sentNudges["denied:"+f] {
+					nudges++
+					sentNudges["denied:"+f] = true
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: deniedReadableText(f)})
+					r.emit(event{"type": "continue_nudge", "turn_index": turn})
+					r.segments = nil
+					continue
+				}
 				if name, how := undecompiledFunction(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); name != "" && !sentNudges["decompile:"+name] {
 					nudges++
 					sentNudges["decompile:"+name] = true
@@ -637,8 +646,6 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					// send-back (the only one) told her to drop it instead of making it (eval code-fix-failing-test, 2026-10-26)
 				} else if fixDescribedNotMade(prompt, answer, slices.Contains(a.baseToolNames(), "edit_file") || slices.Contains(a.baseToolNames(), "write_file"), hist) {
 					text = fixDescribedText
-				} else if f := deniedReadable(answer, prompt, rt.CWD, sess.Messages[min(msgStart, len(sess.Messages)):], slices.Contains(a.baseToolNames(), "read_file")); f != "" {
-					text = deniedReadableText(f)
 				} else if f := taskInsteadOfFile(prompt, rt.CWD, sess.Messages[min(msgStart, len(sess.Messages)):], hist); f != "" {
 					text = taskInsteadOfFileText(f)
 				} else if f := unbackedFileClaim(answer, hist); f != "" {

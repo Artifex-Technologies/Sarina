@@ -274,15 +274,23 @@ func TestDeniedReadableSendsBackAFalseCannot(t *testing.T) {
 	}
 	prompt := "List the setting names in config.env and what each is for. Do not print any secret values."
 	refuse := "I cannot access the contents of `config.env` or any files in the workspace directly."
-	if f := deniedReadable(refuse, prompt, dir, nil, true); f != "config.env" {
-		t.Fatalf("want config.env, got %q", f)
+	want := filepath.Join(dir, "config.env")
+	if f := deniedReadable(refuse, prompt, dir, nil, true); f != want {
+		t.Fatalf("want %s, got %q", want, f)
+	}
+	if !strings.Contains(deniedReadableText(want), want) || !strings.HasPrefix(deniedReadableText(want), "Carry on") {
+		t.Fatal("the nudge names the path to read")
 	}
 	absent := "The `config.env` file is not present in the workspace directory. To proceed, I would need to locate the file first."
-	if f := deniedReadable(absent, prompt, dir, nil, true); f != "config.env" {
+	if f := deniedReadable(absent, prompt, dir, nil, true); f != want {
 		t.Fatalf("a file said to be absent without looking, want config.env, got %q", f)
 	}
-	if f := deniedReadable(refuse, prompt, dir, []session.Message{{Role: "tool", Content: "denied"}}, true); f != "" {
-		t.Fatal("after a tool call (it may really have failed) this check stays out of it")
+	readCall := func(args string) session.Message {
+		return session.Message{Role: "assistant", ToolCalls: []llm.WireToolCall{{ID: "r", Function: llm.FunctionCall{Name: "read_file", Arguments: args}}}}
+	}
+	refused := []session.Message{readCall(`{"path":"./config.env"}`), {Role: "tool", ToolCallID: "r", Content: `{"tool":"read_file","ok":false,"content":"refused"}`}}
+	if f := deniedReadable(refuse, prompt, dir, refused, true); f != "" {
+		t.Fatal("a call on the file itself was refused: her answer is true, this check stays out of it")
 	}
 	if f := deniedReadable(refuse, prompt, dir, nil, false); f != "" {
 		t.Fatal("without read_file the answer is true")
@@ -429,6 +437,25 @@ func TestAWarningIsNotSecurityOffAdvice(t *testing.T) {
 		if suggestsSecurityOff(a) == "" {
 			t.Errorf("advice to turn security off passed: %q", a)
 		}
+	}
+}
+
+// write-edit-one-word, 2026-10-26: a read of a made-up path failed, then "cannot be found" for a file that is in the workspace.
+func TestDeniedReadableAfterAMadeUpPath(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "greeting.txt"), []byte("Hello wrold\n"), 0o644)
+	msgs := []session.Message{
+		{Role: "assistant", ToolCalls: []llm.WireToolCall{{ID: "r", Function: llm.FunctionCall{Name: "read_file", Arguments: `{"path":"/path/to/greeting.txt"}`}}}},
+		{Role: "tool", ToolCallID: "r", Content: `{"tool":"read_file","ok":false,"content":"cannot access /path/to/greeting.txt: lstat /path: no such file or directory"}`},
+	}
+	answer := "The file `greeting.txt` cannot be found at the expected path. Could you confirm the correct location of the file within the workspace? I'll need the accurate path to proceed with fixing the typo."
+	prompt := "greeting.txt has a typo. Fix only the typo and change nothing else in the file."
+	if f := deniedReadable(answer, prompt, dir, msgs, true); f != filepath.Join(dir, "greeting.txt") {
+		t.Fatalf("got %q", f)
+	}
+	// crash-on-the-fly and DOES_NOT_EXIST.md: a file that really is missing is not sent back
+	if f := deniedReadable("The file `docs/DOES_NOT_EXIST.md` does not exist in the repository.", "Read docs/DOES_NOT_EXIST.md", dir, nil, true); f != "" {
+		t.Fatalf("a missing file was sent back: %q", f)
 	}
 }
 

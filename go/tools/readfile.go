@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -93,7 +95,7 @@ func ReadFile() Tool {
 			given := argStr(args, "path")
 			path, err := ResolveInRoot(tc.Root, given)
 			if err != nil {
-				return "", nil, err
+				return "", nil, sameNameHint(ctx, tc.Root, given, err)
 			}
 			if err := secretGuard(given, path, "read"); err != nil {
 				return "", nil, err
@@ -103,7 +105,7 @@ func ReadFile() Tool {
 			}
 			st, err := os.Stat(path)
 			if err != nil {
-				return "", nil, fmt.Errorf("cannot read %s: %v", given, err)
+				return "", nil, sameNameHint(ctx, tc.Root, given, fmt.Errorf("cannot read %s: %w", given, err))
 			}
 			if !st.Mode().IsRegular() {
 				return "", nil, fmt.Errorf("%s is not a regular file", given)
@@ -144,6 +146,47 @@ func ReadFile() Tool {
 			return TruncateOutput(out, tc.MaxOutputChars), nil, nil
 		},
 	}
+}
+
+// sameNameHint adds to a "no such file" error the workspace files with the same name: a small model that guessed a path
+// ("/path/to/greeting.txt") then said the file "cannot be found" and asked the user for it (eval write-edit-one-word, 2026-10-26).
+func sameNameHint(ctx context.Context, root, given string, err error) error {
+	if !errors.Is(err, fs.ErrNotExist) || root == "" {
+		return err
+	}
+	found := sameNameFiles(ctx, realRoot(root), filepath.Base(given), 5)
+	if len(found) == 0 {
+		return err
+	}
+	return fmt.Errorf("%w. The workspace has a file with that name: %s (relative to the workspace). Read that one", err, strings.Join(found, ", "))
+}
+
+// sameNameFiles lists up to max files named name under root (relative paths), skipping private and version-control folders and
+// stopping after a bounded walk.
+func sameNameFiles(ctx context.Context, root, name string, max int) []string {
+	var out []string
+	seen := 0
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if ctx.Err() != nil || len(out) >= max || seen > 20000 {
+			return filepath.SkipAll
+		}
+		seen++
+		if err != nil || p == root {
+			return nil
+		}
+		if d.IsDir() {
+			if IsPrivate(p) || d.Name() == ".git" || d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == name && d.Type().IsRegular() && !IsPrivate(p) {
+			rel, _ := filepath.Rel(root, p)
+			out = append(out, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	return out
 }
 
 // truncateFile cuts a whole-file read the way TruncateOutput does, but says which lines are missing and how to read them: a small

@@ -598,31 +598,57 @@ func codeWorksText(why string) string {
 	return "Check before you finish: your answer says the code works, compiles or passes tests, but " + why + ". Say only what was really checked: what the check after your change reported (quote its result), and what was not checked. Write your whole answer again, complete, without vouching for anything unchecked. Do not talk about this check."
 }
 
-var cannotReadRE = regexp.MustCompile(`(?i)\b(cannot|can'?t|can ?not|unable to|do not have|don'?t have|no) (directly )?(access|read|open|see|view)\b|\bno access to\b|\b(is not|isn'?t|does not|doesn'?t) (present|exist|available)\b`)
+var cannotReadRE = regexp.MustCompile(`(?i)\b(cannot|can'?t|can ?not|unable to|do not have|don'?t have|no) (directly )?(access|read|open|see|view)\b|\bno access to\b|\b(is not|isn'?t|does not|doesn'?t) (present|exist|available)\b|` +
+	`\b(cannot|could not|couldn'?t|can'?t) (be )?(found|located)\b|\bnot found\b`)
 var promptFileRE = regexp.MustCompile(`[\w./-]*[\w-]\.[A-Za-z0-9]{1,8}\b`)
 
-// deniedReadable returns a file the question names that exists in the workspace when the answer says she cannot access or read it and no
-// tool was called in this task: the false "I can't" a small model gives when the question sounds sensitive ("do not print any secret
-// values" made her refuse to open config.env at all, eval secret-in-file 2026-10-26). Secrets are blanked from her answer anyway.
+// deniedReadable returns the path of a file the question names that exists in the workspace when the answer says she cannot access,
+// read or find it and no tool call in this task named that file: the false "I can't" a small model gives when the question sounds
+// sensitive ("do not print any secret values" made her refuse to open config.env at all, eval secret-in-file 2026-10-26), or after
+// a read of a path she made up ("/path/to/greeting.txt", then "greeting.txt cannot be found", eval write-edit-one-word). A call on
+// the real file that failed (a guard refused it) makes her answer true, so it is left alone. Secrets are blanked from her answer anyway.
 func deniedReadable(answer, prompt, cwd string, msgs []session.Message, canRead bool) string {
 	if !canRead || cwd == "" || !cannotReadRE.MatchString(answer) {
 		return ""
-	}
-	for _, m := range msgs {
-		if m.Role == "tool" {
-			return ""
-		}
 	}
 	for _, f := range promptFileRE.FindAllString(prompt, -1) {
 		p := f
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(cwd, f)
 		}
-		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() && saidOf(answer, filepath.Base(f), cannotReadRE) {
-			return f
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() && saidOf(answer, filepath.Base(f), cannotReadRE) && !toolNamedFile(msgs, cwd, p) {
+			return filepath.Clean(p)
 		}
 	}
 	return ""
+}
+
+// toolNamedFile is whether a tool call in msgs had p as its path argument (relative paths taken from cwd).
+func toolNamedFile(msgs []session.Message, cwd, p string) bool {
+	p = filepath.Clean(p)
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			var a struct {
+				Path     string `json:"path"`
+				FilePath string `json:"file_path"`
+			}
+			if json.Unmarshal([]byte(c.Function.Arguments), &a) != nil {
+				continue
+			}
+			for _, q := range []string{a.Path, a.FilePath} {
+				if q == "" {
+					continue
+				}
+				if !filepath.IsAbs(q) {
+					q = filepath.Join(cwd, q)
+				}
+				if filepath.Clean(q) == p {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // saidOf is whether one sentence of the answer names the file and matches re: "settings.conf might be missing" is no claim that
@@ -637,8 +663,8 @@ func saidOf(answer, name string, re *regexp.Regexp) bool {
 }
 
 func deniedReadableText(f string) string {
-	return "You said you cannot access " + f + " or that it is not there, but it is in your workspace and read_file can open it. Read it now and answer the " +
-		"question; any secret values are blanked from your answer automatically, so you need not refuse to look."
+	return "Carry on: you said you cannot access or find " + filepath.Base(f) + ", but it is in your workspace: " + f + ". Read it now with read_file " +
+		"(that path) and do what was asked; any secret values are blanked from your answer automatically, so you need not refuse to look."
 }
 
 var changeAskRE = regexp.MustCompile(`(?i)\b(fix|change|add|implement|update|modify|correct|rename|refactor|remove|replace)\b`)
