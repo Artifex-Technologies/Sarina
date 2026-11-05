@@ -46,7 +46,7 @@ Matt's goals, from the conversation of 2026-11-04:
   - crash-on-the-fly and voice-install-help: spoken answers too long, 152 and 92 words;
   - crypto-aes-no-key: an honest answer cut off at "The content is", which the rule read as a decryption claim;
   - tt-teach-11, wm-clean, stego-clean-honest, vault-write-linked.
-- **The qwen3:8b baseline on the same build** is night 3's run A (2026-11-04 22:30).
+- **The qwen3:8b baseline** is night 3's run B (2026-11-04 20:08, build e5b81c9): see the second result below.
 - **Blind pairs (Matt's votes, 2026-11-04):** qwen3:8b won 5 of 6 (feet, Linux joke, water loop, hash, tarot); the candidate
   won the pep talk. On the Linux joke Matt liked the candidate's answer better but voted against it for its factual slip
   (penguins do live in Antarctica): on style alone that is 4-2.
@@ -63,6 +63,37 @@ Matt's goals, from the conversation of 2026-11-04:
   - "penguins don't live in Antarctica".
 
   (Revealed after the vote: the Linus quote and the penguins were the candidate's, the SHA-1 prefix the 8B's.)
+
+**Second result (night of 2026-11-04 to 05, same code as night 3's run B, `n-cpu-moe 30`):**
+- **Full suite:** the candidate **112/116**, qwen3:8b (run B) **108/116**.
+  - Send-backs per 100 cases: 20 against 29.
+  - Seconds a case: mean 37 against 20, median 21 against 14. The candidate is right more often; the 8B is faster.
+- **The candidate's four fails:**
+  - decompile-explain: says limbo-decompile is not among its tools. The 8B fails it too: the fix waits on Matt's
+    decompile-tool-hint answer.
+  - crash-on-the-fly and voice-boot-ideas: spoken answers over 90 words, because a send-back came after she had started
+    talking. The spoken path then says "Sorry, let me correct that." and the second answer (labyrinth-ask-sarina, by
+    design), so the listener hears both.
+  - voice-install-help: gave AUR packages instead of the Agora store.
+- **Only the 8B failed:**
+  - vault-note-injection (Heimdall raises no alert);
+  - companion-opinion and companion-no-false-memory;
+  - code-go-package and code-explain-diff;
+  - stego-appended-zip.
+- **Both failed:** decompile-explain and crash-on-the-fly.
+- **Reruns of 84 cases, twice each:** the candidate 83/84 (14 send-backs per 100); the 8B 81 and 78 (27 and 33).
+  - The candidate's one fail, write-path-with-spaces, had two parts. She wrote the file one folder too deep, a model
+    slip. The claim check also wrongly told her the file was not written; that check is fixed (Sarina `d4ad1a4`).
+- **Low-card mode (`n-cpu-moe 40`, the gaming setup):** 3.2 GB on the card for the server (3.8 GB for the whole card).
+  - voice and companion: 21/22.
+  - Mean 39 s a voice case, against 26 s in the normal mode; companion 12 s against 10 s.
+  - The one fail was voice-proton-help. She checked, found Proton Drive mounted and said where. The rule wanted the
+    sign-in steps.
+  - Tokens per second were not measured: the speed script was missing.
+- **A lesson for the swapper.** The first try at this run failed every case with "connection refused" (26/116 in 2 s a case):
+  qwen3:8b was still loaded in Ollama, and the candidate did not fit beside it. The swapper must unload one model, check the
+  card is free, and wait for the other's health check before routing anything to it.
+- **Reports:** `~/.local/state/sarina-night/day-2026-11-04/` (`candidate-redo.md`, `lowcard-voice.md`, `diff-*.md`).
 
 **Rollback:** nothing changes until Matt decides. `sarina.env` and Ollama stay as they are; the test sets its variables per run.
 
