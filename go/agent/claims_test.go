@@ -26,6 +26,10 @@ func TestUnbackedFileClaim(t *testing.T) {
 		{"notes.txt says the dock is pinned. I did not change notes.txt.", nil, ""},
 		{"The summary of notes.txt: Dana finishes the icons by Friday.", nil, ""},
 		{"Nothing was changed in config.env.", nil, ""},
+		// a name with a space (eval write-path-with-spaces): the pattern sees "notes.txt", the tool wrote "my notes.txt"
+		{"Created `dir with space/my notes.txt` containing \"remember the milk.\"",
+			[]map[string]any{{"tool_name": "write_file", "ok": true, "path": "/w/dir with space/my notes.txt"}}, ""},
+		{"I created notes.txt.", []map[string]any{{"tool_name": "write_file", "ok": true, "path": "/w/notes.txt.bak"}}, "notes.txt"},
 	}
 	for _, c := range cases {
 		if got := unbackedFileClaim(c.answer, c.hist); got != c.want {

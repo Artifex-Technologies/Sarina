@@ -52,12 +52,23 @@ func unbackedFileClaim(answer string, history []map[string]any) string {
 		}
 		for _, m := range claimFileRE.FindAllStringSubmatch(s, -1) {
 			f := strings.ToLower(filepath.Base(m[1]))
-			if !written[f] {
+			if !written[f] && !endsAWrittenName(written, f) {
 				return m[1]
 			}
 		}
 	}
 	return ""
+}
+
+// endsAWrittenName: the file pattern stops at a space, so "my notes.txt" is seen as "notes.txt" (eval write-path-with-spaces, night 3:
+// she wrote "dir with space/my notes.txt" and was told she had not).
+func endsAWrittenName(written map[string]bool, f string) bool {
+	for w := range written {
+		if strings.HasSuffix(w, " "+f) {
+			return true
+		}
+	}
+	return false
 }
 
 func claimCheckText(file string) string {
