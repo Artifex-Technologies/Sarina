@@ -749,7 +749,14 @@ func TestAFunctionExplainedFromItsNameIsDecompiledFirst(t *testing.T) {
 			t.Errorf("no rule stated, but %q was nudged: %q", n, a)
 		}
 	}
-	done := append(msgs, call("limbo_validate", `{"command":"limbo-decompile decompile demo.bin check_code main","profile":"decompile"}`))
+	// night 3 rerun: the decompile named a profile that does not exist, then the answer explained check_code anyway
+	failed := append(msgs, call("limbo_validate", `{"command":"limbo-decompile decompile demo.bin check_code main","profile":"default","timeout_seconds":300}`),
+		session.Message{Role: "tool", Name: "limbo_validate", ToolCallID: "climbo_validate", Content: `{"tool":"limbo_validate","ok":false,"content":"profile_unknown: there is no profile named \"default\". Remedy: call limbo_profiles for the names that exist"}`})
+	if n, _ := undecompiledFunction("- `check_code` (address 0x00001149): The validation logic, which likely checks if the input meets specific criteria.", failed); n != "check_code" {
+		t.Fatalf("a failed decompile counted as done: %q", n)
+	}
+	done := append(msgs, call("limbo_validate", `{"command":"limbo-decompile decompile demo.bin check_code main","profile":"decompile"}`),
+		session.Message{Role: "tool", Name: "limbo_validate", ToolCallID: "climbo_validate", Content: `{"tool":"limbo_validate","ok":true,"content":"-- decompiled C (Ghidra)\n=== check_code ===\n"}`})
 	if n, _ := undecompiledFunction(answer, done); n != "" {
 		t.Fatalf("after the decompile it may be explained: %q", n)
 	}
@@ -759,7 +766,8 @@ func TestAFunctionExplainedFromItsNameIsDecompiledFirst(t *testing.T) {
 	if n, how := undecompiledFunction("check_code compares the input with a fixed key.", re); n != "check_code" || !strings.Contains(how, "target check_code") {
 		t.Fatalf("reverse_engineer listing: %q %q", n, how)
 	}
-	re = append(re, call("reverse_engineer", `{"command":"decompile","path":"demo.bin","target":"check_code"}`))
+	re = append(re, call("reverse_engineer", `{"command":"decompile","path":"demo.bin","target":"check_code"}`),
+		session.Message{Role: "tool", Name: "reverse_engineer", ToolCallID: "creverse_engineer", Content: "undefined8 check_code(char *param_1)"})
 	if n, _ := undecompiledFunction("check_code compares the input with a fixed key.", re); n != "" {
 		t.Fatalf("decompiled with reverse_engineer, still nudged: %q", n)
 	}

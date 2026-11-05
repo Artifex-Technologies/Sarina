@@ -882,6 +882,9 @@ func undecompiledFunction(answer string, msgs []session.Message) (name, how stri
 		}
 	}
 	callTool := map[string]string{}
+	// a decompile counts once its result came back without an error (night 3 rerun: both first calls named a profile that does not
+	// exist, and the answer then explained check_code "from decompiled code" it never got)
+	pending := map[string][]string{}
 	for _, m := range msgs {
 		for _, c := range m.ToolCalls {
 			callTool[c.ID] = c.Function.Name
@@ -890,7 +893,7 @@ func undecompiledFunction(answer string, msgs []session.Message) (name, how stri
 			switch c.Function.Name {
 			case "reverse_engineer":
 				if a.Command == "decompile" {
-					decompiled[strings.TrimPrefix(a.Target, "sym.")] = true
+					pending[c.ID] = []string{strings.TrimPrefix(a.Target, "sym.")}
 				}
 			case "limbo_validate":
 				if f := limboListRE.FindStringSubmatch(a.Command); f != nil {
@@ -898,13 +901,21 @@ func undecompiledFunction(answer string, msgs []session.Message) (name, how stri
 				}
 				if strings.Contains(a.Command, "limbo-decompile decompile") {
 					for _, w := range strings.Fields(a.Command) {
-						decompiled[strings.TrimPrefix(w, "sym.")] = true
+						pending[c.ID] = append(pending[c.ID], strings.TrimPrefix(w, "sym."))
 					}
 				}
 			}
 		}
 		if m.Role != "tool" {
 			continue
+		}
+		var res struct {
+			OK *bool `json:"ok"`
+		}
+		if json.Unmarshal([]byte(m.Content), &res) != nil || res.OK == nil || *res.OK {
+			for _, n := range pending[m.ToolCallID] {
+				decompiled[n] = true
+			}
 		}
 		tool := m.Name
 		if tool == "" {
