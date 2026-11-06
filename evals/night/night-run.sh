@@ -39,6 +39,12 @@ morning() { # a short morning report when the night could not run as planned
   { echo "# Sarina, night $NIGHT ($STAMP): $1"; echo; echo "$2"; echo; echo "Log: $LOG"; } >"$MORNING"; }
 
 say "night $NIGHT of the plan; stops by $(date -d @"$deadline" +%H:%M)"
+# too late to be worth it (a start after 04:20 counted down from a deadline already past: on 2026-11-05 a 05:00 start ran every
+# step with negative time). Run A, the work and run B need about two hours at the least.
+if (( ! CHECK && $(left) < 7200 )); then
+  morning "skipped" "The night started at $(date +%H:%M), under two hours before $(date -d @"$deadline" +%H:%M): too late to run. Nothing changed; night $NIGHT runs again at the next start."
+  say "too late to start (left: $(( $(left) / 60 )) min); skipped"; exit 0
+fi
 
 # ---- 1. an idle card
 busy() { # prints why the card is busy, nothing when idle; the same test as run_evals.card_shared (the desktop's own use swings
@@ -73,7 +79,14 @@ if ! (cd "$REPO" && git diff --quiet && git diff --cached --quiet); then
   say "uncommitted changes in $REPO; stopping"; exit 0
 fi
 build || { morning "stopped" "Sarina did not build at HEAD; nothing was run. See the log."; exit 1; }
-fullrun A
+# a night cut off and started again (SARINA_NIGHT_REUSE_A=1): the run A it already finished, within the last 8 hours, is the
+# night's before-picture, and the hour it takes goes to the work instead
+prevA=$(cat "$STATE/runA" 2>/dev/null)
+if [[ ${SARINA_NIGHT_REUSE_A:-} == 1 && -s $prevA && $(stat -c %Y "$prevA") -gt $(( $(date +%s) - 28800 )) ]] && grep -q 'cases passed' "$prevA"; then
+  say "run A from earlier tonight kept: $prevA ($(grep -m1 -o '\*\*[0-9]* of [0-9]* cases passed' "$prevA"))"
+else
+  fullrun A
+fi
 
 # ---- 3. the night's engineering
 session() { # $1 = prompt file, $2 = seconds allowed
