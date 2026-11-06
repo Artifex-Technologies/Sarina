@@ -186,6 +186,14 @@ func ungroundedQuote(answer, prompt string, msgs []session.Message) string {
 		if lq == "" || strings.Contains(ev, lq) || strings.Contains(p, lq) || strings.Contains(evTight, strings.Join(strings.Fields(lq), "")) {
 			continue
 		}
+		// JSON she writes back from a tool's `key: "value"` lines (a JWT header) and a function named with its parentheses
+		// (`Push()` where the code shows `Push(1)`) are the evidence in another spelling
+		if (strings.HasPrefix(lq, "{") || strings.HasPrefix(lq, "[")) && jsonInEvidence(lq, jsonLoose(evTight)) {
+			continue
+		}
+		if fn := funcNameRE.FindStringSubmatch(lq); fn != nil && strings.Contains(ev, fn[1]+"(") {
+			continue
+		}
 		if notAQuote(lq) || markedExample(answer[:loc[0]]) {
 			continue
 		}
@@ -211,7 +219,61 @@ func notAQuote(lq string) bool { return notAQuoteRE.MatchString(lq) }
 // given as an example is still ungroundedIdentifier's.
 var exampleRE = regexp.MustCompile(`(?i)\b(e\.g\.|for example|for instance|such as)[^().\n]{0,40}$`)
 
-func markedExample(before string) bool { return exampleRE.MatchString(before) }
+// exampleLabelRE: an "Example:" label earlier on the quote's line ("Example: `L****7`", "Valid examples: \"L1237\"",
+// "(example: `hunter2`)"), in the same clause. exampleHeadingRE: a heading or label line about examples ("**Valid Examples**:",
+// "### Example Valid Inputs:", "**Example**:") right above the quote's line or the list it is in (night 3 repeat, run A:
+// reverse-explain and reverse-new-sample; 45 of 251 quote send-backs in the session files were under such a label).
+var (
+	exampleLabelRE   = regexp.MustCompile(`(?i)\bexamples?\b[^().\n:]{0,25}:[^().\n]{0,40}$`)
+	exampleHeadingRE = regexp.MustCompile(`(?i)^\s*(#{1,6}\s*)?[*_]*[^.\n]{0,25}\bexamples?\b[^.\n]{0,25}[*_]*\s*:?[*_]*\s*$`)
+	listItemRE       = regexp.MustCompile(`^\s*([-*+]|\d+[.)])(\s|$)`)
+)
+
+func markedExample(before string) bool {
+	if exampleRE.MatchString(before) || exampleLabelRE.MatchString(before) {
+		return true
+	}
+	// the lines above the quote's line: skip the items of the list it is in, then the next line must be the heading
+	lines := strings.Split(before, "\n")
+	cur := lines[len(lines)-1]
+	inList := listItemRE.MatchString(cur)
+	for i := len(lines) - 2; i >= 0; i-- {
+		l := lines[i]
+		if strings.TrimSpace(l) == "" {
+			return false
+		}
+		if inList && listItemRE.MatchString(l) {
+			continue
+		}
+		return exampleHeadingRE.MatchString(l)
+	}
+	return false
+}
+
+// funcNameRE: a function named with empty parentheses, "push()" or "s.pop()".
+var funcNameRE = regexp.MustCompile(`^([a-z_][\w.]*)\(\)$`)
+
+// jsonInEvidence: every "key": value pair of the JSON she quotes is in the evidence, in any order (the tool sorts the keys).
+func jsonInEvidence(lq, evLoose string) bool {
+	pairs := strings.Split(jsonLoose(lq), ",")
+	for _, kv := range pairs {
+		if kv == "" || !strings.Contains(evLoose, kv) {
+			return false
+		}
+	}
+	return len(pairs) > 0
+}
+
+// jsonLoose drops what JSON adds to a tool's `key: "value"` text: braces, brackets and quote marks.
+func jsonLoose(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '{', '}', '[', ']', '"', '\'', ' ', '\t', '\n':
+			return -1
+		}
+		return r
+	}, s)
+}
 
 func ungroundedText(q string) string {
 	return "Check before you finish: your answer quotes \"" + q + "\", but no tool output in this task contains it. Write your whole answer again, complete: keep everything the tools showed, and either leave that quote out, mark it plainly as your own example, or look it up with your tools first. Do not talk about this check."

@@ -860,3 +860,57 @@ func TestAnExampleHashIsStillCaught(t *testing.T) {
 		t.Fatal("the made-up hash went through")
 	}
 }
+
+// An "Example:" label on the quote's line, or a heading about examples right above it, marks it as hers just as "e.g." does
+// (night 3 repeat, run A: reverse-explain's "Example: `"L****7"`", reverse-new-sample's "**Valid Examples**:" list).
+func TestAQuoteUnderAnExampleLabelIsNotSentBack(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "undefined8 check_pin(char *param_1) { if (sVar1 == 4) ... if (iVar2 == 0x11) return 1; }"}}
+	for _, a := range []string{
+		"- The **sixth character** (last) must be `'7'`.  \n\nExample: `\"L****7\"` (where `*` are any characters).",
+		"**Valid Examples**:  \n- `9800` (9+8+0+0 = 17)  \n- `7800` (7+8+0+0 = 15 → invalid)  \n- `9701` (9+7+0+1 = 17)  ",
+		"### Example Valid Inputs:\n- `8900`\n- `8810`",
+		"**Example**:  \nA valid input could be `\"8900\"`.",
+		"Valid examples: \"L1237\"",
+		"**Example valid input:** `8900`",
+		"   Authentication password (example: `\"hunter2-correct-horse-9\"`)",
+	} {
+		if q := ungroundedQuote(a, "p", tool); q != "" {
+			t.Errorf("a labelled example was sent back: %q in %q", q, a)
+		}
+	}
+	// the label belongs to another paragraph, or the heading is not about examples: still a quote
+	for _, a := range []string{
+		"### Example Valid Inputs:\n- `8900`\n\nThe program prints `open sesame`.",
+		"**Valid Inputs**:\n- `8900`",
+		"Example: L3457. The password is `admin123`.",
+	} {
+		if q := ungroundedQuote(a, "p", tool); q == "" {
+			t.Errorf("an unmarked quote passed: %q", a)
+		}
+	}
+}
+
+// The tool prints a JWT's JSON as `alg: "HS256", typ: "JWT"`; the same keys and values written back as JSON are no new quote
+// (crypto-jwt-not-verified, 7 send-backs in the session files, the latest in the night 3 repeat's run A).
+func TestJSONRewrittenFromKeyValuesIsNotSentBack(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "JWT (JSON Web Token)\n  Header: alg: \"HS256\", typ: \"JWT\"\n  Payload: iat: 1516239022, name: \"John Doe\", sub: \"1234567890\"\n"}}
+	a := "**Evidence**:  \n- Header: `{\"alg\": \"HS256\", \"typ\": \"JWT\"}`  \n- Payload: `{\"sub\":\"1234567890\",\"name\":\"John Doe\",\"iat\":1516239022}`"
+	if q := ungroundedQuote(a, "what is in it?", tool); q != "" {
+		t.Fatalf("the header in JSON form was sent back: %q", q)
+	}
+	if q := ungroundedQuote("- Header: `{\"alg\": \"none\", \"typ\": \"JWT\"}`", "what is in it?", tool); q == "" {
+		t.Fatal("a header the tool did not show passed")
+	}
+}
+
+// `Push()` names a function the evidence shows as `Push(`: no new quote (code-go-package, night 3 repeat run A). A function the
+// evidence never shows is still sent back.
+func TestAFunctionNameWithParenthesesIsGroundedByItsCall(t *testing.T) {
+	tool := []session.Message{{Role: "tool", Content: "// stack_test.go\nt.Run(\"Pop from empty\", func(t *testing.T) { var s Stack; s.Push(1); if v, ok := s.Pop(); ok {"}}
+	if q := ungroundedQuote("Edit `stack_test.go` to remove the `Push()` call in the \"Pop from empty\" test case.", "p", tool); q != "" {
+		t.Fatalf("a function the file calls was sent back: %q", q)
+	}
+	if q := ungroundedQuote("The crash might stem from invalid memory access in `load_profile()`.", "p", tool); q != "load_profile()" {
+		t.Fatalf("a made-up function passed: %q", q)
+	}
+}
