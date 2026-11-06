@@ -28,7 +28,8 @@ What she does today:
 - **Helps with crashes as they happen.** For a program that crashed she names the function, the source
   file and line and quotes it when the source is on the computer; Labyrinth's crash helper offers to ask her.
 - **Studies programs without running them.** Static analysis with REA and Ghidra in a sandbox (no network,
-  no home folder); an installed program is copied read-only into the analysis folder first.
+  no home folder); an installed program is copied read-only into the analysis folder first. On Labyrinth OS the tools
+  this needs (Java for Ghidra, Node for REA, bubblewrap, binutils) come with Sarina's install (since 2026-11-05).
 - **Remembers in a vault of notes** (an Obsidian folder): she searches it by words and by meaning and
   writes lessons into it through a safety gate.
 - **Writes her own small programs ("agents")** and runs them only inside Limbo's disposable virtual
