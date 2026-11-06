@@ -27,7 +27,9 @@ var (
 	// findOutRE: she tells the user to find out whether, or by whom, a file was changed ("Check if the original `agent.go` was
 	// modified", "determine who or what wrote agent.go"); a file named after it is the question, not her claim (night 3 repeat:
 	// wm-find-in-code, whose prompt says another agent edited agent.go; five such send-backs in the session files)
-	findOutRE = regexp.MustCompile(`(?i)\b(check|confirm|verify|see|find out|look at|determine|ask)\s+(if|whether|who|what|which)\b|\bwho or what\b`)
+	// keptAsItWasRE: the file named right before it is said to stay as it was ("original `agent.go` remains unchanged")
+	keptAsItWasRE = regexp.MustCompile(`(?i)^[` + "`" + `*"']*\s+(file\s+)?(remains|stays|is|was|is left|was left|is still|was still)\s+(unchanged|untouched|intact|as it was|the same)\b`)
+	findOutRE     = regexp.MustCompile(`(?i)\b(check|confirm|verify|see|find out|look at|determine|ask)\s+(if|whether|who|what|which)\b|\bwho or what\b`)
 )
 
 var fileWriteTools = map[string]bool{"write_file": true, "edit_file": true, "vault_write": true}
@@ -38,6 +40,12 @@ func unbackedFileClaim(answer string, history []map[string]any) string {
 	for _, e := range history {
 		name, _ := e["tool_name"].(string)
 		ok, _ := e["ok"].(bool)
+		// stego_clean writes a cleaned copy (NAME.clean.EXT, metadata "copy") and leaves the file it read as it was (wm-clean,
+		// night 3 repeat: five send-backs in the session files for a copy the tool had written)
+		if c, _ := e["copy"].(string); name == "stego_clean" && ok && c != "" {
+			written[strings.ToLower(filepath.Base(c))] = true
+			continue
+		}
 		if !fileWriteTools[name] || !ok {
 			continue
 		}
@@ -56,7 +64,7 @@ func unbackedFileClaim(answer string, history []map[string]any) string {
 		}
 		q := findOutRE.FindStringIndex(s)
 		for _, m := range claimFileRE.FindAllStringSubmatchIndex(s, -1) {
-			if q != nil && q[0] < m[2] {
+			if (q != nil && q[0] < m[2]) || keptAsItWasRE.MatchString(s[m[3]:]) {
 				continue
 			}
 			name := s[m[2]:m[3]]

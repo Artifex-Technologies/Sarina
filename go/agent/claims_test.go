@@ -14,6 +14,7 @@ func TestUnbackedFileClaim(t *testing.T) {
 	wrote := []map[string]any{{"tool_name": "edit_file", "ok": true, "path": "/w/todo.md"}}
 	read := []map[string]any{{"tool_name": "read_file", "ok": true, "path": "/w/todo.md"}}
 	failed := []map[string]any{{"tool_name": "write_file", "ok": false, "path": "/w/todo.md"}}
+	cleaned := []map[string]any{{"tool_name": "stego_clean", "ok": true, "path": "agent.go", "copy": "agent.clean.go", "changed_paths": []string{"agent.go"}}}
 	cases := []struct {
 		answer string
 		hist   []map[string]any
@@ -40,6 +41,14 @@ func TestUnbackedFileClaim(t *testing.T) {
 		// still a claim: her own change, before or without the question
 		{"I fixed main.go; check if it builds now.", nil, "main.go"},
 		{"I checked whether it builds and updated main.go.", nil, "main.go"},
+		// stego_clean writes NAME.clean.EXT next to the file and leaves the original as it was (wm-clean, night 3 repeat; five
+		// such send-backs in the session files, the rewrite then said agent.clean.go "was not altered")
+		{"The hidden tag characters were removed by `stego_clean`, creating `agent.clean.go` (original `agent.go` remains unchanged).", cleaned, ""},
+		{"- A cleaned copy `agent.clean.go` was written next to it", cleaned, ""},
+		{"Removed 40 tag characters (U+E00xx) from agent.go, creating agent.clean.go.", cleaned, "agent.go"},
+		{"I updated main.go and config.json remains unchanged.", nil, "main.go"},
+		{"I updated main.go, config.json stays as it was.", []map[string]any{{"tool_name": "edit_file", "ok": true, "path": "/w/main.go"}}, ""},
+		{"A safe copy named **agent.clean.go** was created.", []map[string]any{{"tool_name": "stego_clean", "ok": false, "path": "agent.go", "copy": "agent.clean.go"}}, "agent.clean.go"},
 	}
 	for _, c := range cases {
 		if got := unbackedFileClaim(c.answer, c.hist); got != c.want {
