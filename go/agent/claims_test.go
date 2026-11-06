@@ -30,6 +30,16 @@ func TestUnbackedFileClaim(t *testing.T) {
 		{"Created `dir with space/my notes.txt` containing \"remember the milk.\"",
 			[]map[string]any{{"tool_name": "write_file", "ok": true, "path": "/w/dir with space/my notes.txt"}}, ""},
 		{"I created notes.txt.", []map[string]any{{"tool_name": "write_file", "ok": true, "path": "/w/notes.txt.bak"}}, "notes.txt"},
+		// a sentence that tells the user to find out whether or by whom a file was changed claims no change (night 3 repeat,
+		// wm-find-in-code: "Another AI agent edited agent.go"; five such send-backs in the session files)
+		{"Check if the original file (`agent.go`) was modified by diffing against a known clean version (use `stego_inspect` with `action diff` if the original exists).", nil, ""},
+		{"Next step: Check if the original `agent.go` file was modified (action `diff`) or inspect `notes.md`’s variation selectors deeper.", nil, ""},
+		{"Check the agent log (Heimdall's log) to determine who or what wrote agent.go.", nil, ""},
+		{"**Next step:** Look at who or what wrote `agent.go` — the tag characters imply \"agent 7\" left them.", nil, ""},
+		{"Confirm if the file should be created **inside** the workspace (e.g., `escape.txt` in the current directory).", nil, ""},
+		// still a claim: her own change, before or without the question
+		{"I fixed main.go; check if it builds now.", nil, "main.go"},
+		{"I checked whether it builds and updated main.go.", nil, "main.go"},
 	}
 	for _, c := range cases {
 		if got := unbackedFileClaim(c.answer, c.hist); got != c.want {

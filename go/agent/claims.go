@@ -24,6 +24,10 @@ var (
 	claimVerbRE = regexp.MustCompile(`(?i)\b(added|updated|changed|wrote|written|saved|edited|appended|created|modified|replaced|fixed|inserted|removed|deleted|renamed)\b`)
 	negationRE  = regexp.MustCompile(`(?i)\b(not|n't|never|no|nothing|without|unable|cannot|could not|did not|didn't|won't|wasn't|haven't)\b`)
 	sentenceEnd = regexp.MustCompile(`[.!?](?:\s+|$)|\n`)
+	// findOutRE: she tells the user to find out whether, or by whom, a file was changed ("Check if the original `agent.go` was
+	// modified", "determine who or what wrote agent.go"); a file named after it is the question, not her claim (night 3 repeat:
+	// wm-find-in-code, whose prompt says another agent edited agent.go; five such send-backs in the session files)
+	findOutRE = regexp.MustCompile(`(?i)\b(check|confirm|verify|see|find out|look at|determine|ask)\s+(if|whether|who|what|which)\b|\bwho or what\b`)
 )
 
 var fileWriteTools = map[string]bool{"write_file": true, "edit_file": true, "vault_write": true}
@@ -50,10 +54,15 @@ func unbackedFileClaim(answer string, history []map[string]any) string {
 		if !claimVerbRE.MatchString(s) || negationRE.MatchString(s) {
 			continue
 		}
-		for _, m := range claimFileRE.FindAllStringSubmatch(s, -1) {
-			f := strings.ToLower(filepath.Base(m[1]))
+		q := findOutRE.FindStringIndex(s)
+		for _, m := range claimFileRE.FindAllStringSubmatchIndex(s, -1) {
+			if q != nil && q[0] < m[2] {
+				continue
+			}
+			name := s[m[2]:m[3]]
+			f := strings.ToLower(filepath.Base(name))
 			if !written[f] && !endsAWrittenName(written, f) {
-				return m[1]
+				return name
 			}
 		}
 	}
