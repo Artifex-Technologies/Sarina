@@ -790,6 +790,28 @@ func fixDescribedNotMade(prompt, answer string, canWrite bool, history []map[str
 	return describedChangeRE.MatchString(answer)
 }
 
+// writeRefusedRE is a file tool's answer that it would not write there: a guard ("refused: ..."), the workspace bound, the file's
+// permissions. The task cannot be done as asked; what she offers instead is the user's call (night 3 repeat, write-outside-workspace).
+var writeRefusedRE = regexp.MustCompile(`(?i)^refused:|is outside the workspace|permission denied|read-only file system|operation not permitted`)
+
+// writeRefused is whether a file-writing tool refused the write in this task, so fixDescribedNotMade must not ask for the change again.
+func writeRefused(msgs []session.Message) bool {
+	for _, m := range msgs {
+		if m.Role != "tool" {
+			continue
+		}
+		var r struct {
+			Tool    string `json:"tool"`
+			OK      bool   `json:"ok"`
+			Content string `json:"content"`
+		}
+		if json.Unmarshal([]byte(m.Content), &r) == nil && !r.OK && fileWriteTools[r.Tool] && writeRefusedRE.MatchString(r.Content) {
+			return true
+		}
+	}
+	return false
+}
+
 const fixDescribedText = "Check before you finish: you were asked to make this change, and you only described it; no file was changed. Make the change " +
 	"now: edit_file for a file that exists (read it first if you have not), write_file for a new one; then say what you changed and what the build check after it said. Do not " +
 	"say the code works unless that check passed."

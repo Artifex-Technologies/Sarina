@@ -644,7 +644,7 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = codeWorksText(why)
 					// the work not done comes before the quote checks: her proposed fix is "quoted" nowhere in the tools, and that
 					// send-back (the only one) told her to drop it instead of making it (eval code-fix-failing-test, 2026-10-26)
-				} else if fixDescribedNotMade(prompt, answer, slices.Contains(a.baseToolNames(), "edit_file") || slices.Contains(a.baseToolNames(), "write_file"), hist) {
+				} else if fixDescribedNotMade(prompt, answer, slices.Contains(a.baseToolNames(), "edit_file") || slices.Contains(a.baseToolNames(), "write_file"), hist) && !writeRefused(sess.Messages[min(msgStart, len(sess.Messages)):]) {
 					text = fixDescribedText
 				} else if f := taskInsteadOfFile(prompt, rt.CWD, sess.Messages[min(msgStart, len(sess.Messages)):], hist); f != "" {
 					text = taskInsteadOfFileText(f)
