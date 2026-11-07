@@ -2,6 +2,7 @@ package daily
 
 import (
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -125,6 +126,9 @@ func Load(vault string, day time.Time) Note {
 // Save writes the note.
 func Save(vault string, n Note) error {
 	p := filepath.Join(vault, "Daily", n.Day+".md")
+	if err := testguard.Allow(p); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}

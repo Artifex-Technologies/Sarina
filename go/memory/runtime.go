@@ -13,6 +13,7 @@ package memory
 import (
 	"errors"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -216,6 +217,9 @@ func (r *Runtime) Remove(scope, oldText string) (Mutation, error) {
 
 func (r *Runtime) commit(scope, action string, before int, entries []string) (Mutation, error) {
 	p, _ := r.path(scope)
+	if err := testguard.Allow(p); err != nil {
+		return Mutation{}, fail("%v", err)
+	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return Mutation{}, fail("cannot write memory: %v", err)
 	}

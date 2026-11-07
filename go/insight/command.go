@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"os"
 	"path/filepath"
 	"time"
@@ -99,7 +100,7 @@ func ingestCommand(env *cli.Env, args []string) int {
 	}
 	if err := os.MkdirAll(filepath.Dir(*statePath), 0o700); err == nil {
 		b, _ := json.Marshal(done)
-		_ = os.WriteFile(*statePath, b, 0o600)
+		_ = writeState(*statePath, b)
 	}
 	return 0
 }
@@ -154,7 +155,7 @@ func reflectCommand(env *cli.Env, args []string) int {
 			st.Last = echoes[len(echoes)-1].When
 			if err := os.MkdirAll(filepath.Dir(*statePath), 0o700); err == nil {
 				b, _ := json.Marshal(st)
-				_ = os.WriteFile(*statePath, b, 0o600)
+				_ = writeState(*statePath, b)
 			}
 		}
 		return 0
@@ -216,7 +217,7 @@ func reflectCommand(env *cli.Env, args []string) int {
 	}
 	if err := os.MkdirAll(filepath.Dir(*statePath), 0o700); err == nil {
 		b, _ := json.Marshal(st)
-		_ = os.WriteFile(*statePath, b, 0o600)
+		_ = writeState(*statePath, b)
 	}
 	return 0
 }
@@ -232,4 +233,12 @@ func notWhileGaming(env *cli.Env, job string, force bool) int {
 		return 75
 	}
 	return 0
+}
+
+// writeState keeps which files were read; never under a test run outside its folders.
+func writeState(path string, b []byte) error {
+	if err := testguard.Allow(path); err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o600)
 }

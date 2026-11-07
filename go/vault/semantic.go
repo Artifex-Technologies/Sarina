@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"hash/fnv"
 	"math"
 	"os"
@@ -224,7 +225,8 @@ func refresh(v *Vault, notes []Note, emb Embedder) (*vecindex.Index, map[uint64]
 	if ix == nil {
 		return nil, refs, nil
 	}
-	if changed {
+	// under test the real vault's index is not rewritten (search still works from the fresh one in memory)
+	if changed && testguard.Allow(dir) == nil {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, nil, err
 		}

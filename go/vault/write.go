@@ -2,6 +2,7 @@ package vault
 
 import (
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,6 +49,9 @@ var now = time.Now
 func (v *Vault) Write(gate Scanner, name, content string, mode Mode) (WriteResult, error) {
 	rel, abs, err := v.SafePath(name)
 	if err != nil {
+		return WriteResult{}, err
+	}
+	if err := testguard.Allow(abs); err != nil {
 		return WriteResult{}, err
 	}
 	for _, p := range Protected {
@@ -151,6 +155,9 @@ func touchUpdated(text, today string) string {
 // Init makes the starting folders and a Home note in an empty or new vault, and (when git is installed) a git repository so every change she
 // makes is a commit that can be read and undone. Existing files are never touched. Returns what it made.
 func (v *Vault) Init() ([]string, error) {
+	if err := testguard.Allow(v.Root); err != nil {
+		return nil, err
+	}
 	var made []string
 	for _, f := range Folders {
 		d := filepath.Join(v.Root, f.Name)
@@ -192,6 +199,9 @@ func (v *Vault) Init() ([]string, error) {
 
 // Commit records the vault's changes in git (when it is a repository), as "Sarina: message". Best effort: no repository, no commit.
 func (v *Vault) Commit(message string) {
+	if testguard.Allow(v.Root) != nil {
+		return
+	}
 	if _, err := os.Stat(filepath.Join(v.Root, ".git")); err != nil {
 		return
 	}

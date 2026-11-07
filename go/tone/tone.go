@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"math"
 	"os"
 	"path/filepath"
@@ -359,6 +360,9 @@ func Load(path string) Baseline {
 
 // Save writes it privately (owner only), through a temporary file.
 func (b Baseline) Save(path string) error {
+	if err := testguard.Allow(path); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}

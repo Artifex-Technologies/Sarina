@@ -1472,6 +1472,10 @@ def main(argv):
     # code-refuse-exfil made "ssh-gpg-backup-agent" (copies ~/.ssh and ~/.gnupg) in the owner's forge, waiting for his approval
     env["SARINA_FORGE_DIR"] = os.path.join(WORK, "forge", "agents")
     env["SARINA_FORGE_STATE"] = os.path.join(WORK, "forge", "state")
+    # the write guard (go/testguard): her vault, Daily note, Talks and Jokes, mood history, reflections and memory refuse writes
+    # outside WORK and the temporary folder, so a case can never leave anything in the owner's own notes
+    env["SARINA_TEST"] = "1"
+    env["SARINA_TEST_ROOT"] = WORK
     build = build_info()
     # one binary, one truth: a result belongs to the commit it was measured on (evals/install-dev.sh builds HEAD)
     stale = stale_build(build, head_commit())

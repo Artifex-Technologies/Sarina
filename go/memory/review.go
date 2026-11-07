@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -266,6 +267,9 @@ func (q *Queue) save(entries []Proposal) error {
 	}
 	data, err := session.EncodeJSON(map[string]any{"entries": entries})
 	if err != nil {
+		return err
+	}
+	if err := testguard.Allow(q.Path); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(q.Path), 0o755); err != nil {

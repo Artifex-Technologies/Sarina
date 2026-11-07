@@ -97,7 +97,7 @@ Already done since this plan was written (do not redo; the Day 1 evening list is
 5. Commit per step; `cd go && go vet ./... && go test ./...` before every commit; never `git add -A` (the repos are public;
    Labyrinth_OS carries unrelated PKGBUILD bumps). No host name, password or token in a commit, a report or a board entry
    (`sudo -l` output carries the host name: never paste it). Reports (`.md`, `.json`) and `ladder.json` go into
-   `Labyrinth_OS/docs/sarina-evals` by path. Commit, do not push, unless Matt says push.
+   `Labyrinth_OS/docs/sarina-evals` by path. Commit and push (the owner's standing rule since 2026-11-04).
 6. A run measures a binary whose commit equals `git rev-parse HEAD` (Day 1 adds the gate). The dev binary is `~/.local/bin/sarina`
    (built by `evals/install-dev.sh`, Day 1). Never copy a dev build over `/usr/bin/sarina`: Heimdall's file-integrity list covers it
    and raises CRITICAL; that file changes only through the `sarina-git` package, built and installed by Matt.

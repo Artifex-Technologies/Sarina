@@ -7,7 +7,8 @@ the night script's log `@LOG@`, and `git -C ~/Documents/Github/Sarina log --onel
 1. Compare the two runs by pass SET (case names), not only the count. For each case that flipped, read its answer in both reports
    and say in one line whether tonight's code could have caused it.
 2. In `~/Documents/Github/Labyrinth_OS`: `git add` the two reports (`.md` and `.json`) and `docs/sarina-evals/ladder.json` by path,
-   commit as "sarina-evals: night @NIGHT@ runs (A N/M, B N/M, build <commit>)". Never `git add -A`; never push.
+   commit as "sarina-evals: night @NIGHT@ runs (A N/M, B N/M, build <commit>)" and push. Never `git add -A`. Push the Sarina commits
+   too (`git -C ~/Documents/Github/Sarina push`); pushing as work is committed is the owner's standing rule.
 3. In the plan, fill section 6's rows for tonight's two runs. In `Sarina/CLAUDE.md`, a Coordination Log entry (newest first,
    signed "Sarina / Claude"). In `Labyrinth_OS/docs/TEAM_BOARD.md`, an entry at the bottom
    `### YYYY-MM-DD HH:MM [Claude] Sarina night @NIGHT@: <one-line result>` with "For Matt this morning" and "If cut off, resume at".

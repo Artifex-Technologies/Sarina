@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -148,6 +149,10 @@ func tidyCommand(env *cli.Env, args []string) int {
 		}
 	}
 	for _, c := range changes {
+		if err := testguard.Allow(c.file); err != nil {
+			fmt.Fprintln(env.Stderr, "sarina vault-tidy:", err)
+			return 1
+		}
 		if err := os.WriteFile(c.file, []byte(c.text), 0o644); err != nil {
 			fmt.Fprintln(env.Stderr, "sarina vault-tidy:", err)
 			return 1

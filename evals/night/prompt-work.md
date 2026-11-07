@@ -10,8 +10,8 @@ night @NIGHT@ of Sarina's training plan. Work until @UNTIL@ at the latest, then 
 3. Do the night's numbered steps in order. Skip only the steps that say "GPU window" / "full run": the night script does run B
    after you. Group reruns (`--group`, `--only`, 3x) are yours; keep each command under 9 minutes (split it otherwise).
 4. Rules that matter most tonight (section 0.2 has all of them): commit each step by path after `go vet ./... && go test ./...`
-   (never `git add -A`, never push); never raise Sarina's access, never write `SARINA_ACCESS_TIER`, never change sudoers or
-   Heimdall's configuration; one thing on the graphics card; nothing written to Matt's vault; no host name, password or token in
+   (never `git add -A`), then push it (`git push`; first check the commit names no host name, network address or SSID); never raise Sarina's access, never write `SARINA_ACCESS_TIER`, never change sudoers or
+   Heimdall's configuration; one thing on the graphics card; nothing written to the owner's vault; no host name, password or token in
    anything you write. Anything that needs Matt (sudo, a decision, a judgement) goes into your notes for the morning report,
    never done or guessed.
 5. Leave the Sarina checkout fully committed when you stop (run B does not run on an uncommitted tree). If a step is half done

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"os"
 	"path/filepath"
 	"time"
@@ -41,6 +42,9 @@ func ReadHistory(path string) []Entry {
 
 // AppendHistory adds one entry, keeping only the newest keepEntries, privately (owner only) through a temporary file.
 func AppendHistory(path string, e Entry) error {
+	if err := testguard.Allow(path); err != nil {
+		return err
+	}
 	h := append(ReadHistory(path), e)
 	if len(h) > keepEntries {
 		h = h[len(h)-keepEntries:]
