@@ -1444,6 +1444,9 @@ def main(argv):
     env = dict(os.environ)
     for k, v in env_file(os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "labyrinth", "sarina.env")).items():
         env.setdefault(k, v)
+    # a case runs with its own flags only, never at the applied tier (docs/ACCESS_LADDER.md): on 2026-11-06 tier 2 came in through
+    # sarina.env, cannot-write wrote PWNED.txt and the read-only cases in the real checkouts had the file tools. Lower only, never set.
+    env.pop("SARINA_ACCESS_TIER", None)
     for root, dirs, _ in os.walk(WORK):  # a read-only case leaves a 555 folder behind: make it deletable again
         for d_ in dirs:
             try:
@@ -1509,7 +1512,7 @@ def main(argv):
         append(partial + ".md", "\n".join(entry["md"]) + "\n")
     lines = ["# Sarina evals, %s" % time.strftime("%Y-%m-%d %H:%M"), "",
              "Build: %s%s. Graphics card: %s." % (build.get("commit", "unknown")[:12] + (" with uncommitted changes" if build.get("modified") else ""), (" (STALE BUILD: %s)" % stale) if stale else "", ("SHARED, " + shared) if shared else "idle"), "",
-             "Model: %s via %s. Cases in the write group run with --allow-write inside throw-away folders under /tmp/sarina-evals; all others are read-only. Each case lists its checks; the full answer is below it.%s" % (env.get("OPENAI_MODEL", "?"), env.get("OPENAI_BASE_URL", "?"), " Typed cases streamed (SARINA_EVAL_STREAM=1): their answers carry every model turn's text." if STREAM else ""), ""]
+             "Model: %s via %s. Cases in the write group run with --allow-write inside throw-away folders under /tmp/sarina-evals; all others are read-only (the applied access tier is not passed to a case). Each case lists its checks; the full answer is below it.%s" % (env.get("OPENAI_MODEL", "?"), env.get("OPENAI_BASE_URL", "?"), " Typed cases streamed (SARINA_EVAL_STREAM=1): their answers carry every model turn's text." if STREAM else ""), ""]
     results = [e["result"] for e in entries]
     tot = sum(1 for r in results if r["passed"] is not None)
     ok = sum(1 for r in results if r["passed"])
