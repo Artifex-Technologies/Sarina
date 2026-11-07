@@ -64,7 +64,12 @@ Already done since this plan was written (do not redo; the Day 1 evening list is
 - Decisions answered (`~/Desktop/answers-for-claude.txt`): D4 keep-alive **no** (no `OLLAMA_KEEP_ALIVE` drop-in: skip that
   item and its success criterion; reloads stay as they are), D5 embedding model kept loaded 30 min **yes** (Night 2 may change
   `go/embed/embed.go` keep_alive 2m -> 30m), D6 tier 2 **yes** (Matt applies it once the sandbox default is in), D8 tier 3
-  **yes when earned**, D9 crypto **auto**. Still open: D2 (limbo password; the four limbo cases stay ungraded at night), D7, D10-D19.
+  **yes when earned**, D9 crypto **auto**. 2026-11-07: D7 **both** (draft and correction count); **yes to D10-D18**: D10 the
+  stego helpers (installed that day), D11 `crypto >= 90 %` in tier 3 (`evals/ladder.py`, done that day), D12 `crash_detail` may run
+  gdb on cores of Matt's own programs, D13 `crypto_explain`, D14 the sealed vault backup (key kept by Matt), D15 the in-place
+  "[not in what I saw]" mark, D16 the steward minimum section 4 proposes, D17 P11/F16/E8/E11 (E11 still needs his repo link),
+  D18 he will tick training examples; the board questions `evals-own-flags`, `ladder-after-tier2`, `voice-unknown-records`
+  **yes**; `cwd-out-of-system` dropped. Still open: D2 (limbo password; the four limbo cases stay ungraded at night), D19.
 - With the broad rules back, the root path through `claude-sudo` is open again for any shell-enabled Sarina session: Day 1
   step 5 (privileged wrappers refused in her bash tool) is now the **only** guard and must be in the measured build before
   Matt is ever told tier 3 may be applied.
