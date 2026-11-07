@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Artifex-Technologies/Sarina/go/cli"
 	"github.com/Artifex-Technologies/Sarina/go/vault"
@@ -22,7 +23,7 @@ func init() {
 
 // What is never dropped from the talk log, however old: a laugh, the owner's name, something they like or want, a decision, a plan,
 // people and pets, or anything they said at length.
-var keepRx = regexp.MustCompile(`(?i)\b(haha|hahaha|lol|lmao|rofl|funny|hilarious|cracked me up|matt|matthew|zlothra|i (really )?(like|love|hate|prefer|want|wish|enjoy|miss)|` +
+var keepRx = regexp.MustCompile(`(?i)\b(haha|hahaha|lol|lmao|rofl|funny|hilarious|cracked me up|i (really )?(like|love|hate|prefer|want|wish|enjoy|miss)|` +
 	`my (favou?rite|cat|dog|pet|wife|husband|partner|friend|brother|sister|mom|mum|dad|son|daughter|kid|boss|job|work|project|book|game)|` +
 	`(decided|let'?s go with|i'?ll go with|we'?ll|plan(ning)? to|going to|remember that|don'?t forget|call me|my name)\b|😂|🤣|😆)`)
 
@@ -38,10 +39,24 @@ var trailerRx = regexp.MustCompile(`(\s+(too|again|today|there|though|for you|wi
 
 var statusAnswerRx = regexp.MustCompile(`(?i)^(your (network|audio|system|computer)|everything('s| is) (looking good|fine|stable)|all (good|fine)|no (hiccups|issues|problems))`)
 
+// mentionsOwner says whether a line names the owner (SARINA_OWNER_NAME, local config; never written in the code).
+func mentionsOwner(said string) bool {
+	name := strings.ToLower(strings.TrimSpace(os.Getenv("SARINA_OWNER_NAME")))
+	if name == "" {
+		return false
+	}
+	for _, w := range strings.FieldsFunc(strings.ToLower(said), func(r rune) bool { return !unicode.IsLetter(r) && r != '\'' }) {
+		if strings.TrimSuffix(w, "'s") == name {
+			return true
+		}
+	}
+	return false
+}
+
 // SmallTalk says whether an exchange is small talk that can go once it is old: short on both sides, nothing to keep in it.
 func SmallTalk(l Line) bool {
 	said := strings.TrimSpace(l.Said)
-	if keepRx.MatchString(said) {
+	if keepRx.MatchString(said) || mentionsOwner(said) {
 		return false
 	}
 	s := fillerRx.ReplaceAllString(strings.ToLower(strings.TrimSpace(said)), "")

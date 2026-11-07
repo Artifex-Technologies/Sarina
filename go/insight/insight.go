@@ -51,9 +51,6 @@ func NoteName() string {
 	return "Entities/About " + OwnerFromEnv().Name + ".md"
 }
 
-// LegacyNoteName is where the note was before the owner's name was set: it is renamed once, so nothing learned is lost.
-const LegacyNoteName = "Entities/About Zlothra.md"
-
 // Line is one exchange from the talk log.
 type Line struct {
 	When time.Time
@@ -254,13 +251,15 @@ func grounded(quote string, lines []Line) (Line, bool) {
 }
 
 var stop = map[string]bool{"the": true, "a": true, "an": true, "and": true, "or": true, "of": true, "to": true, "in": true, "is": true, "are": true,
-	"they": true, "their": true, "them": true, "zlothra": true, "has": true, "have": true, "with": true, "for": true, "on": true, "at": true,
+	"they": true, "their": true, "them": true, "has": true, "have": true, "with": true, "for": true, "on": true, "at": true,
 	"likes": true, "like": true, "it": true, "that": true, "was": true, "be": true, "about": true}
 
 func words(s string) map[string]bool {
 	m := map[string]bool{}
+	// the owner's own name starts most observations ("Sam has a cat"): it says nothing about which one this is
+	owner := norm(OwnerFromEnv().Name)
 	for _, w := range strings.Fields(norm(s)) {
-		if !stop[w] && len(w) > 2 {
+		if !stop[w] && len(w) > 2 && w != owner {
 			m[strings.TrimSuffix(w, "s")] = true
 		}
 	}

@@ -168,14 +168,6 @@ func reflectCommand(env *cli.Env, args []string) int {
 		c = llm.NewClient(model)
 	}
 	notePath := filepath.Join(v.Root, filepath.FromSlash(NoteName()))
-	// the note written before the owner's name was set (About Zlothra) becomes this one, once: what was learned and forgotten is kept
-	if legacy := filepath.Join(v.Root, filepath.FromSlash(LegacyNoteName)); legacy != notePath {
-		if _, err := os.Stat(notePath); os.IsNotExist(err) {
-			if _, err := os.Stat(legacy); err == nil {
-				_ = os.Rename(legacy, notePath)
-			}
-		}
-	}
 	old, readErr := os.ReadFile(notePath)
 	n := ParseNote(string(old))
 	gate := gateAdapter{guard.Memory()}

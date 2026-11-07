@@ -13,7 +13,7 @@ for, who writes it, who reads it. Audited 2026-10-25.
 | `README.md` | written for the owner | people | plain words on this map |
 | `Guides/` | the owner, or Claude on their behalf | `labyrinth-ask-sarina` (`guides()`: the guide whose keywords match the question goes in front of it), `vault-search` | the one folder that most changes how she answers about the computer |
 | `Playbooks/` | the owner | her, on a pentest or reverse-engineering task (`skill_section`, `vault-search`) | protected |
-| `Entities/About Zlothra.md` | `sarina reflect` (daily, from Talks) | `labyrinth-ask-sarina` (`known()`: observations seen twice or in the last week, in front of chat questions) | the owner moves wrong lines under `## Forgotten`; a line that is her own voice heard back is never used (`insight.IsEcho`) |
+| `Entities/About <owner>.md` | `sarina reflect` (daily, from Talks) | `labyrinth-ask-sarina` (`known()`: observations seen twice or in the last week, in front of chat questions) | the owner moves wrong lines under `## Forgotten`; a line that is her own voice heard back is never used (`insight.IsEcho`) |
 | `Entities/Inside jokes.md` | `labyrinth-ask-sarina` when the owner laughed | `labyrinth-ask-sarina` (`recall()`: by meaning, at most three lines) | |
 | `Talks/YYYY-MM.md` | `labyrinth-ask-sarina` after every spoken exchange that was not about the computer | `sarina reflect`, `recall()`, `sarina vault-tidy` | one line per exchange: `- YYYY-MM-DD HH:MM \| they said: ... \| I said: ...` |
 | `Jokes/YYYY-MM.md` | `labyrinth-ask-sarina` when she told a joke | `labyrinth-ask-sarina` (a joke told before is asked for again) | |

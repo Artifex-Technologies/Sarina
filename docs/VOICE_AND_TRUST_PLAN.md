@@ -70,7 +70,7 @@ microphone → noise removal → speech detection → speaker check ─┬─ me
   - A clear match goes through.
   - A clear mismatch is dropped.
   - A borderline match goes through to an "unsure" state (section 5).
-- **Speech from someone else is never transcribed.** A guest's words do not end up in Talks or in "About Zlothra". The current
+- **Speech from someone else is never transcribed.** A guest's words do not end up in Talks or in "About <owner>". The current
   echo filter (her own voice heard back, F9) stays.
 - **Later:** separate my voice from another person talking at the same time (target-speaker extraction). This is harder and
   newer research; it comes after the rest works.

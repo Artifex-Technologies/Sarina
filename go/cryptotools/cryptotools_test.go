@@ -316,7 +316,7 @@ func TestPrefetchAndClassic(t *testing.T) {
 	if p := Prefetch("How is the weather in Bozeman today, my friend?"); p != "" {
 		t.Fatalf("plain words must prefetch nothing: %q", p)
 	}
-	if p := Prefetch("Look at /home/zlothra/Documents/Samples/x.bin please"); p != "" {
+	if p := Prefetch("Look at /home/sam/Documents/Samples/x.bin please"); p != "" {
 		t.Fatalf("a path is not data: %q", p)
 	}
 	out, err := Classic(Caesar(prose, 5), "caesar", "", false, true)

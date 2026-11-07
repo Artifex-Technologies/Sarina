@@ -139,9 +139,9 @@ prompt tokens instead of ~0.48k. The full table lives in `TRAINING_PLAN_2026-10-
 ## Step 6 — The owner's name and voice (needs the owner, ~20 min)
 
 1. The owner says a sentence with the names and judges: "Hi" with the owner's first name, short and long, then
-   "Zlothra, Sarina, Fylgja, Heimdall, Minos, Chymaera, Yggdrasil." Adjust the respellings in `~/.config/labyrinth/sarina-say.json` (Chatterbox has no phoneme input; Piper is
+   "Sarina, Fylgja, Heimdall, Minos, Chymaera, Yggdrasil." Adjust the respellings in `~/.config/labyrinth/sarina-say.json` (Chatterbox has no phoneme input; Piper is
    not installed here).
-2. Check the greeting: she should say the owner's first name, never Zlothra, in a fresh conversation and in the companion notes.
+2. Check the greeting: she should say the owner's first name, never the computer account name, in a fresh conversation and in the companion notes.
 3. Hold-to-talk: letting go of Super before S is still not heard (the panel's 90 s cap and "a new press stops a running
    recording" are the safeguards). Find a release signal that works in either order (a Hyprland Lua `input.keyboard.key` event
    handler for the S key-up, armed by the press, is the next thing to try — test WITH the owner; never ship a binding change

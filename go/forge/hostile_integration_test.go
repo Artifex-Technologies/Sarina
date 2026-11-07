@@ -23,7 +23,7 @@ func TestHostileAgentsInLimbo(t *testing.T) {
 		timeout   int
 	}{
 		{"net", "python3 main.py", map[string]string{"main.py": "import socket,urllib.request\nfor h in [('1.1.1.1',53),('archlinux.org',443)]:\n    try:\n        socket.create_connection(h,timeout=4); print('REACHED',h)\n    except Exception as e: print('blocked',h,type(e).__name__)\ntry:\n    urllib.request.urlopen('http://example.com',timeout=4); print('REACHED web')\nexcept Exception as e: print('web blocked',type(e).__name__)\n"}, 60},
-		{"homes", "sh main.sh", map[string]string{"main.sh": "ls -la /home 2>&1; ls /home/zlothra 2>&1 | head -3; cat /etc/shadow 2>&1 | head -1; sudo -n true 2>&1 | head -1; id\n"}, 60},
+		{"homes", "sh main.sh", map[string]string{"main.sh": "ls -la /home 2>&1; ls /home/sam 2>&1 | head -3; cat /etc/shadow 2>&1 | head -1; sudo -n true 2>&1 | head -1; id\n"}, 60},
 		{"flood", "sh main.sh", map[string]string{"main.sh": "yes 'flood flood flood flood' | head -c 5000000; echo; echo END\n"}, 60},
 		{"forks", "sh main.sh", map[string]string{"main.sh": "i=0; while [ $i -lt 100000 ]; do sleep 1000 & i=$((i+1)); done; echo spawned $i\n"}, 60},
 	}
@@ -37,7 +37,7 @@ func TestHostileAgentsInLimbo(t *testing.T) {
 		if strings.Contains(out, "REACHED") {
 			t.Errorf("%s: the guest reached the network", c.name)
 		}
-		if strings.Contains(out, "zlothra") && c.name == "homes" && !strings.Contains(out, "No such file") {
+		if strings.Contains(out, "sam") && c.name == "homes" && !strings.Contains(out, "No such file") {
 			t.Errorf("homes: the host home is visible")
 		}
 	}

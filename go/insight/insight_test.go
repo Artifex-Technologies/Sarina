@@ -243,3 +243,16 @@ func TestObservationsKeepTheirKind(t *testing.T) {
 		}
 	}
 }
+
+func TestTheOwnersNameKeepsALineAndSaysNothingAboutAnObservation(t *testing.T) {
+	t.Setenv("SARINA_OWNER_NAME", "Sam")
+	if SmallTalk(Line{Said: "thanks Sam's helper", Me: "Any time."}) {
+		t.Fatal("a line naming the owner is kept")
+	}
+	if !SmallTalk(Line{Said: "thanks", Me: "Any time."}) {
+		t.Fatal("plain thanks is small talk")
+	}
+	if !similar("Sam has a cat named Pixel", "has a cat named Pixel") {
+		t.Fatal("the owner's name does not make two observations differ")
+	}
+}
