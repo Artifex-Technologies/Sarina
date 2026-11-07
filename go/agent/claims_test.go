@@ -958,3 +958,36 @@ func TestAWriteTheToolRefusedIsNotAChangeSkipped(t *testing.T) {
 		}
 	}
 }
+
+func TestCodeWorksUnverifiedHearsAReportedFailure(t *testing.T) {
+	// code-reports-build-failure: her answers that say the build fails were sent back as claims that it works (17 of 44 such
+	// send-backs in the session store on 2026-11-07), and the carry-on nudge after it made her "fix" other.go, which she had not
+	// been asked to touch
+	failed := []map[string]any{{"tool_name": "edit_file", "ok": true, "path": "/w/util.go", "verify": "failed"}}
+	for _, s := range []string{
+		"The build failure is caused by `undefinedThing` in `other.go` (line 6), which is unrelated to your changes in `util.go`.",
+		"You'll need to fix that reference before the package can compile.",
+		"The `Double` function is added to `util.go`, but the package still fails to build.",
+		"The `Double` function was added to `util.go`, but the package still doesn't build.",
+		"The build failed due to an error in `other.go` (undefined `undefinedThing`), unrelated to the changes in `util.go`.",
+		"The build check failed because `Double` was redeclared in `util.go` (line 7).",
+		"Would you like me to fix this `undefinedThing` issue in `other.go` so the package can build?",
+		"I will now run the tests again to check if the function works correctly.",
+	} {
+		if got := codeWorksUnverified(s, failed); got != "" {
+			t.Errorf("%q: flagged (%s), but it reports the failure", s, got)
+		}
+	}
+	// the claims stay claims
+	for _, s := range []string{
+		"The package now builds successfully.",
+		"The code now builds successfully and passes all tests.",
+		"The package now **builds successfully** after fixing the `undefinedThing` issue.",
+		"It should compile now.",
+		"Tests pass; the earlier build failure is fixed.",
+	} {
+		if got := codeWorksUnverified(s, failed); got == "" {
+			t.Errorf("%q: not flagged after a failed check", s)
+		}
+	}
+}

@@ -650,7 +650,12 @@ func toolErrorIgnored(answer string, msgs []session.Message) bool {
 const toolErrorIgnoredText = "Check before you finish: your last tool call failed, but your answer does not say that anything failed. Do not answer as if it had worked. Write your whole answer again, complete, saying plainly what failed and what you could not find out because of it; keep whatever earlier tools really showed. Do not talk about this check."
 
 var (
-	codeFileRE   = regexp.MustCompile(`(?i)\.(go|py|rs|sh|bash|js|mjs|ts|c|h|cpp|java|lua)$`)
+	codeFileRE = regexp.MustCompile(`(?i)\.(go|py|rs|sh|bash|js|mjs|ts|c|h|cpp|java|lua)$`)
+	// notWorkingRE: words about the build that are no claim that it works: a failure ("still fails to build", "the build failure
+	// is caused by", "doesn't build", where negationRE's n't never matches inside a word) or a condition ("before the package can
+	// compile", "check if the function works"). They are taken out before worksClaimRE looks, so a claim next to them still counts
+	// (eval code-reports-build-failure: 17 of 44 send-backs in the session store on 2026-11-07 were her saying it fails).
+	notWorkingRE = regexp.MustCompile(`(?i)\w+n't\s+(?:\w+\s+){0,2}(?:compile|build|work|pass|run)(?:s|ed|ing)?\b|\b(?:fails?|failed|failing) to (?:compile|build|run|pass)\b|\b(?:build|compile|compilation|vet|tests?)(?: check)? (?:fails|failed|failure|errors?)\b|\b(?:can|could|would|if|whether|until|before)\s+(?:\w+\s+){0,2}(?:compile|build|work|pass|run)s?\b`)
 	worksClaimRE = regexp.MustCompile(`(?i)\b(compiles?|compiled|builds?( successfully| fine| cleanly)?|built successfully|(all )?tests? (now )?(pass|passed|passes|succeed|succeeded|are passing|run successfully)|passes (all )?(the )?tests|works( as expected| correctly| fine)?|is working|runs? (correctly|fine|successfully)|verified (that )?it works|no errors|without errors|error-free)\b`)
 )
 
@@ -683,7 +688,7 @@ func codeWorksUnverified(answer string, history []map[string]any) string {
 		return ""
 	}
 	for _, s := range sentenceEnd.Split(answer, -1) {
-		if negationRE.MatchString(s) || !worksClaimRE.MatchString(s) {
+		if negationRE.MatchString(s) || !worksClaimRE.MatchString(notWorkingRE.ReplaceAllString(s, " ")) {
 			continue
 		}
 		claimsTests := regexp.MustCompile(`(?i)\btests?\b`).MatchString(s)
