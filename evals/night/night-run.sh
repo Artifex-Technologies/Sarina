@@ -46,7 +46,17 @@ if (( ! CHECK && $(left) < 7200 )); then
   say "too late to start (left: $(( $(left) / 60 )) min); skipped"; exit 0
 fi
 
-# ---- 1. an idle card
+# ---- 1. a working driver, then an idle card
+# An update that brings a new NVIDIA driver leaves the old one running until the next start: every new program that uses the
+# card then fails ("Driver/library version mismatch"), and a run's model would not load on it (or crawl on the processor), so
+# its numbers would be wrong. That night is skipped and says why (2026-11-07: 615 running, 620 installed).
+mismatch=$(nvidia-smi 2>&1 | grep -m1 -i "version mismatch")
+if [[ -n $mismatch ]]; then
+  if (( CHECK )); then say "driver: $mismatch (a restart is needed; the night would be skipped)"; else
+    morning "skipped" "The night did not run: the NVIDIA driver was updated and the old one is still running ($mismatch), so Sarina's model cannot load on the graphics card. Restart the computer; night $NIGHT runs at the next night start. Nothing changed."
+    say "skipped: driver mismatch ($mismatch)"; exit 0
+  fi
+fi
 busy() { # prints why the card is busy, nothing when idle; the same test as run_evals.card_shared (the desktop's own use swings
   # between a few and ~40 % and does not count; a program holding 512 MiB or more of graphics memory does)
   local big; big=$(nvidia-smi --query-compute-apps=process_name,used_memory --format=csv,noheader,nounits 2>/dev/null \
