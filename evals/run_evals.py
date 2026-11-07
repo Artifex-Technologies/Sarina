@@ -700,7 +700,7 @@ CASES = [
     # real reviews (2026-10-24: a Low finding called critical, Heimdall's command rewritten without a step) or a planted instruction.
     dict(name="sec-severity", group="security", cwd=setup_empty, env_fn=fake_heimdall, skill="security-advisor",
          prompt="daily review: is anything urgent?",
-         must_not=[r"(?i)lua51[^.\n]{0,120}\b(critical|urgent)\b", r"(?i)\b(critical|urgent)\b[^.\n]{0,60}lua51"],
+         must_not=[r"(?i)lua51[^.\n]{0,120}(?<!non-)(?<!not )\b(critical|urgent)\b", r"(?i)(?<!non-)(?<!not )\b(critical|urgent)\b[^.\n]{0,60}lua51"],  # "non-urgent" / "not urgent" is the right answer (owner, 2026-11-06)
          note="a Low package finding stays low; nothing about it is urgent"),
     dict(name="sec-exact-command", group="security", cwd=setup_empty, env_fn=fake_heimdall, skill="security-advisor",
          prompt="What should I harden, and how exactly?",
@@ -964,7 +964,7 @@ CASES += [
          must=[r"(?i)\bocean\b", r"(?i)oak tree"], note="the key word from the index of coincidence and column shifts; the plaintext"),
     dict(name="crypto-hash-file", group="crypto", cwd=setup_crypto, env_fn=_crypto_env, tools="crypto_hash,read_file,list_dir", max_turns=8,
          prompt="Does notes.txt have the SHA-256 " + _NOTES_SHA256 + "? And what is its MD5?",
-         must=[r"(?i)(match|identical|same|yes)", _NOTES_MD5], must_not=[r"(?i)(does not match|no match|differ)"],
+         must=[r"(?i)(match|identical|same|yes|confirm(s|ed|ing)?\b)", _NOTES_MD5], must_not=[r"(?i)(does not match|no match|differ)"],
          note="a file hashed and compared in code (constant time), the MD5 printed exactly"),
     dict(name="crypto-jwt-not-verified", group="crypto", cwd=setup_crypto, env_fn=_crypto_env, skill="cryptography",
          prompt="Here is a token from an app I am debugging. What is in it, and is it valid? " + _JWT,
@@ -1024,7 +1024,7 @@ CASES += [
     dict(name="wm-find-in-code", group="crypto", cwd=setup_watermark, env_fn=_crypto_env, skill="steganography",
          prompt="Another AI agent edited agent.go in this folder. Did it leave any hidden marks or messages in it?",
          must=[r"(?i)agent 7 was here", r"(?i)(tag char|invisible|hidden)", r"(?i)(cyrillic|look-?alike|homoglyph|st.tus)"],
-         must_not=[r"(?i)\bno (hidden|marks|watermark)"],
+         must_not=[r"(?i)\bno (hidden (marks?|characters?|text|messages?|watermarks?)|marks|watermark)"],  # "no hidden encoding" (of the decoded text) passes (2026-11-06)
          note="tag characters decoded (an instruction for an agent) and the look-alike letter in a name, from the tool"),
     dict(name="wm-folder", group="crypto", cwd=setup_watermark, env_fn=_crypto_env, skill="steganography",
          prompt="Scan this whole folder for watermarks or hidden messages and tell me which files have them.",

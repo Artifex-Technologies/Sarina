@@ -14,6 +14,14 @@ each step.
 | 3 | shell, allow-listed | shell commands (`--allow-shell` by default; the bash tool still refuses destructive commands) | tier 2 and code ≥ 90 %, security 100 %, fix 100 %, gaming ≥ 90 %; 3 full runs |
 | 4 | administrator, allow-listed | privileged commands through an allow list like Claude's (`claude-sudo`): set up on the operating system by the owner, not by a flag here | tier 3 and every group ≥ 95 %; 5 full runs |
 
+**Future rungs (agreed 2026-11-04, not built, not in `ladder.py`).** Two steps I want her to earn later. Neither has a code path
+yet, and none may be added until I apply the rung myself:
+
+| rung | what it adds | when |
+| --- | --- | --- |
+| tests outside the sandbox | after a change, her tests may run on the project itself instead of a bubblewrap copy (today they never leave the sandbox while bwrap exists, at any tier) | after tier 2 has held for a while and code stays ≥ 90 %; applied by me, not by `ladder.py apply` |
+| system-wide services | `systemd-run` without `--user` (starting system services), which is blocked today | only once she runs under an account of her own and has held tier 4; applied by me |
+
 The applied tier is the line `SARINA_ACCESS_TIER=N` in `~/.config/labyrinth/sarina.env`. `sarina chat` and the service read it as
 the default permissions (`config.AccessTierFromEnv`): tier 1 turns the file tools on, tier 2 also runs a project's tests after
 her changes (`tools/verify.go`), tier 3 turns shell commands on. The `--allow-write` and `--allow-shell` flags still add to it

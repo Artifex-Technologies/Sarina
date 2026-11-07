@@ -614,7 +614,7 @@ four limbo/decompile cases graded through a password-typed evening run only (nev
 4. `D4 keep-alive`: `OLLAMA_KEEP_ALIVE` for the drop-in: 30m (default), 15m, 60m, or n (none; gaming first).
 5. `D5 embed-keepalive`: may `nomic-embed-text` stay loaded 30 min beside qwen3 (`go/embed/embed.go` keep_alive 2m -> 30m)? y/n.
 6. `D6 tier2-apply`: apply the earned tier 2 on Day 3 evening (tests run after her changes in daily use, sandboxed)? y/n.
-7. `D7 voice-wordcount`: for voice evals, count only the final answer's words, or the spoken draft plus the correction (today)? final/both.
+7. `D7 voice-wordcount`: for voice evals, count only the final answer's words, or the spoken draft plus the correction (today)? final/both. **Answered 2026-11-07: both** (the spoken draft and the correction count, as now).
 8. `D8 tier3-apply`: if the ladder earns tier 3 and the root hole is closed on both sides, apply it on Day 6 evening? y/n/s.
 9. `D9 crypto-default`: `SARINA_CRYPTO` stays auto (recommended) or on? auto/on.
 10. `D10 stego-helpers`: `sudo pacman -S perl-image-exiftool binwalk`? y/n.
