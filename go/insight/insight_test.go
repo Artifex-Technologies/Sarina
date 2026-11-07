@@ -17,9 +17,9 @@ func talks(t *testing.T) string {
 	os.MkdirAll(filepath.Join(d, "Talks"), 0o755)
 	os.WriteFile(filepath.Join(d, "Talks", "2026-10.md"), []byte(`# Talks 2026-10
 
-- 2026-10-20 21:14 | they said: my cat Pixel knocked my coffee off the desk again | I said: Pixel is running gravity tests.
+- 2026-10-20 21:14 | they said: my cat Biscuit knocked my coffee off the desk again | I said: Biscuit is running gravity tests.
 - 2026-10-21 22:40 | they said: I'm thinking about picking up drawing but I'm honestly terrible at it | I said: Everyone starts somewhere.
-- 2026-10-22 23:10 | they said: Pixel woke me up at five again, that cat | I said: A dedicated alarm.
+- 2026-10-22 23:10 | they said: Biscuit woke me up at five again, that cat | I said: A dedicated alarm.
 `), 0o644)
 	return d
 }
@@ -36,15 +36,15 @@ func (noGate) Blocked(text string) bool { return strings.Contains(text, "passwor
 
 func TestOnlyGroundedObservationsAreKeptAndRepeatsAreRefined(t *testing.T) {
 	lines := ReadTalks(talks(t), time.Date(2026, 10, 20, 0, 0, 0, 0, time.Local))
-	if len(lines) != 3 || lines[0].Said != "my cat Pixel knocked my coffee off the desk again" {
+	if len(lines) != 3 || lines[0].Said != "my cat Biscuit knocked my coffee off the desk again" {
 		t.Fatalf("talks: %+v", lines)
 	}
 	reply := `<think>hmm</think>Here you go:
-{"observation": "Zlothra has a cat named Pixel", "quote": "my cat Pixel knocked my coffee"}
-{"observation": "Zlothra wants to start drawing", "quote": "thinking about picking up drawing"}
-{"observation": "Zlothra lives in Lisbon", "quote": "I live in Lisbon"}
-{"observation": "Zlothra's password is hunter2", "quote": "my cat Pixel knocked"}
-{"observation": "Zlothra has a cat called Pixel.", "quote": "Pixel woke me up at five again"}`
+{"observation": "Zee has a cat named Biscuit", "quote": "my cat Biscuit knocked my coffee"}
+{"observation": "Zee wants to start drawing", "quote": "thinking about picking up drawing"}
+{"observation": "Zee lives in Lisbon", "quote": "I live in Lisbon"}
+{"observation": "Zee's password is hunter2", "quote": "my cat Biscuit knocked"}
+{"observation": "Zee has a cat called Biscuit.", "quote": "Biscuit woke me up at five again"}`
 	props, err := Ask(context.Background(), fakeModel{reply}, lines)
 	if err != nil || len(props) != 5 {
 		t.Fatalf("proposals: %v %v", props, err)
@@ -58,7 +58,7 @@ func TestOnlyGroundedObservationsAreKeptAndRepeatsAreRefined(t *testing.T) {
 		t.Errorf("an invented quote was kept: %v", dropped)
 	}
 	cat := n.Observations[0]
-	if cat.Seen != 2 || cat.Last != "2026-10-22" || len(cat.Evidence) != 2 || cat.Evidence[0] != "Pixel woke me up at five again" {
+	if cat.Seen != 2 || cat.Last != "2026-10-22" || len(cat.Evidence) != 2 || cat.Evidence[0] != "Biscuit woke me up at five again" {
 		t.Errorf("the cat: %+v", cat)
 	}
 
@@ -67,15 +67,15 @@ func TestOnlyGroundedObservationsAreKeptAndRepeatsAreRefined(t *testing.T) {
 	if len(n2.Observations) != 2 || n2.Observations[0].Seen != 2 || len(n2.Observations[0].Evidence) != 2 {
 		t.Fatalf("round trip: %+v", n2)
 	}
-	if _, r, _ := n2.Merge([]Proposal{{Observation: "Zlothra has a cat named Pixel", Quote: "Pixel woke me up at five again"}}, lines, noGate{}); r != 0 {
+	if _, r, _ := n2.Merge([]Proposal{{Observation: "Zee has a cat named Biscuit", Quote: "Biscuit woke me up at five again"}}, lines, noGate{}); r != 0 {
 		t.Error("the same quote counted twice")
 	}
 
 	// what the owner moves under Forgotten does not come back
-	edited := strings.Replace(n.Render(), "## Forgotten\n", "## Forgotten\n\n- Zlothra wants to start drawing\n", 1)
-	edited = strings.Replace(edited, "- Zlothra wants to start drawing — seen", "- (moved) x — seen", 1)
+	edited := strings.Replace(n.Render(), "## Forgotten\n", "## Forgotten\n\n- Zee wants to start drawing\n", 1)
+	edited = strings.Replace(edited, "- Zee wants to start drawing — seen", "- (moved) x — seen", 1)
 	n3 := ParseNote(edited)
-	if a, _, d := n3.Merge([]Proposal{{Observation: "Zlothra wants to start drawing", Quote: "thinking about picking up drawing"}}, lines, noGate{}); a != 0 || len(d) != 1 || !strings.Contains(d[0], "forget") {
+	if a, _, d := n3.Merge([]Proposal{{Observation: "Zee wants to start drawing", Quote: "thinking about picking up drawing"}}, lines, noGate{}); a != 0 || len(d) != 1 || !strings.Contains(d[0], "forget") {
 		t.Errorf("forgotten came back: %d %v", a, d)
 	}
 }
@@ -141,12 +141,12 @@ func vaultNotes(root string) ([]vault.Note, error) {
 func TestHerOwnVoiceHeardBackIsNotTheOwner(t *testing.T) {
 	// the 2026-10-23 morning: the speakers were on, and her answers came back through the microphone as "what they said"
 	lines := []Line{
-		{Said: "Hey, Sarina, I have...", Me: "Hey Zlothra, what's up? Are you ready to tackle whatever you need help with?"},
-		{Said: "I am completely out of the loop on that conversation, but I am always ready to help you tackle whatever is on your mind.", Me: "Hey Zlothra, no worries—sometimes conversations take a few loops to catch up! What’s on your mind?"},
+		{Said: "Hey, Sarina, I have...", Me: "Hey Zee, what's up? Are you ready to tackle whatever you need help with?"},
+		{Said: "I am completely out of the loop on that conversation, but I am always ready to help you tackle whatever is on your mind.", Me: "Hey Zee, no worries—sometimes conversations take a few loops to catch up! What’s on your mind?"},
 		{Said: "Hear your custom AI respond with such natural cadence and support is a seriously impressive technical achievement. I'm right here whenever you're ready to dive back into your projects or just keep chatting.", Me: "Your audio system is stable and ready—no hiccups detected."},
 		{Said: "I'm standing by whenever you want to return to our conversation or dive into your creative projects.", Me: "Your network is stable and connected."},
-		{Said: "This is actually called me Matt as Lothra is actually just my social media name.", Me: "Oh, I see! What's on your mind, Matt?"},
-		{Said: "my cat Pixel knocked my coffee off the desk again", Me: "Pixel is running gravity tests."},
+		{Said: "Actually call me Sam, Zee is just my social media name.", Me: "Oh, I see! What's on your mind, Sam?"},
+		{Said: "my cat Biscuit knocked my coffee off the desk again", Me: "Biscuit is running gravity tests."},
 	}
 	kept, echoes := WithoutEchoes(lines)
 	if len(echoes) != 3 || len(kept) != 3 {
@@ -157,7 +157,7 @@ func TestHerOwnVoiceHeardBackIsNotTheOwner(t *testing.T) {
 			t.Errorf("kept an echo: %q", k.Said)
 		}
 	}
-	if !strings.Contains(kept[1].Said, "Matt") || !strings.Contains(kept[2].Said, "Pixel") {
+	if !strings.Contains(kept[1].Said, "Sam") || !strings.Contains(kept[2].Said, "Biscuit") {
 		t.Errorf("the owner's own words were dropped: %+v", kept)
 	}
 	// a proposal that quotes an echo line is not grounded once the echoes are gone
@@ -171,10 +171,10 @@ func TestTidyDropsOldSmallTalkAndEchoesKeepsTheRest(t *testing.T) {
 
 What we talked about when it was not about the computer.
 
-- 2026-09-01 08:00 | they said: Hey Sarina, just wanted to check and see how things were looking for you. | I said: Hey Zlothra, everything's looking good here! How can I assist you today?
+- 2026-09-01 08:00 | they said: Hey Sarina, just wanted to check and see how things were looking for you. | I said: Hey Zee, everything's looking good here! How can I assist you today?
 - 2026-09-01 08:01 | they said: Yeah, thank you too. | I said: You're welcome! Have a great day!
 - 2026-09-01 08:02 | they said: What time is it? | I said: It's 08:02 on Monday.
-- 2026-09-01 08:03 | they said: This is actually called me Matt as Lothra is actually just my social media name. | I said: Oh, I see! What's on your mind, Matt?
+- 2026-09-01 08:03 | they said: Actually call me Sam, Zee is just my social media name. | I said: Oh, I see! What's on your mind, Sam?
 - 2026-09-01 08:04 | they said: haha that was a good one | I said: I try.
 - 2026-09-01 08:05 | they said: I really like the new dock, keep it | I said: Noted.
 - 2026-09-01 08:06 | they said: I'm standing by whenever you want to return to our conversation. | I said: Your network is stable and connected.
@@ -186,7 +186,7 @@ What we talked about when it was not about the computer.
 		t.Fatalf("dropped %d: %v", len(dropped), dropped)
 	}
 	joined := strings.Join(kept, "\n")
-	for _, must := range []string{"Matt", "haha", "really like the new dock", "picking up drawing", "# Talks 2026-09"} {
+	for _, must := range []string{"Sam", "haha", "really like the new dock", "picking up drawing", "# Talks 2026-09"} {
 		if !strings.Contains(joined, must) {
 			t.Errorf("lost %q", must)
 		}
@@ -204,16 +204,16 @@ What we talked about when it was not about the computer.
 }
 
 func TestTheOwnersNameAndPronouns(t *testing.T) {
-	t.Setenv("SARINA_OWNER_NAME", "Matt")
+	t.Setenv("SARINA_OWNER_NAME", "Sam")
 	t.Setenv("SARINA_OWNER_PRONOUNS", "he/him")
-	if NoteName() != "Entities/About Matt.md" {
+	if NoteName() != "Entities/About Sam.md" {
 		t.Fatalf("note: %s", NoteName())
 	}
 	p := prompt()
-	if strings.Contains(p, "Zlothra") || !strings.Contains(p, "what he likes") || !strings.Contains(p, "Matt said") && !strings.Contains(p, "things Matt said") {
+	if strings.Contains(p, "Zee") || !strings.Contains(p, "what he likes") || !strings.Contains(p, "Sam said") && !strings.Contains(p, "things Sam said") {
 		t.Fatalf("prompt: %s", p[:300])
 	}
-	if r := (Note{}).Render(); !strings.HasPrefix(r, "# About Matt") || strings.Contains(r, "their own words") {
+	if r := (Note{}).Render(); !strings.HasPrefix(r, "# About Sam") || strings.Contains(r, "their own words") {
 		t.Fatalf("render: %s", r[:200])
 	}
 	t.Setenv("SARINA_OWNER_NAME", "")
@@ -226,14 +226,14 @@ func TestTheOwnersNameAndPronouns(t *testing.T) {
 // Observations are sorted under kinds (Companion-AI's idea), as ### headings the voice script's reader skips; an untagged
 // observation stays readable under Other, and a later proposal can give it its kind.
 func TestObservationsKeepTheirKind(t *testing.T) {
-	t.Setenv("SARINA_OWNER_NAME", "Matt")
-	n := ParseNote("# About Matt\n\n## Observations\n\n- Matt works ten-hour shifts — seen 1×, last 2026-11-04.\n\n## Forgotten\n")
-	lines := []Line{{When: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), Said: "I'm about to head to my 10hr shift, so start it now"},
-		{When: time.Date(2026, 11, 4, 9, 1, 0, 0, time.UTC), Said: "I really like pulling tarot cards in the evening"}}
-	n.Merge([]Proposal{{Observation: "Matt likes pulling tarot cards in the evening", Quote: "really like pulling tarot cards", Kind: "like"},
-		{Observation: "Matt works ten-hour shifts", Quote: "head to my 10hr shift", Kind: "habit"}}, lines, noGate{})
+	t.Setenv("SARINA_OWNER_NAME", "Sam")
+	n := ParseNote("# About Sam\n\n## Observations\n\n- Sam works night shifts — seen 1×, last 2026-11-04.\n\n## Forgotten\n")
+	lines := []Line{{When: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC), Said: "I'm about to head to my night shift, so start it now"},
+		{When: time.Date(2026, 11, 4, 9, 1, 0, 0, time.UTC), Said: "I really like baking bread in the evening"}}
+	n.Merge([]Proposal{{Observation: "Sam likes baking bread in the evening", Quote: "really like baking bread", Kind: "like"},
+		{Observation: "Sam works night shifts", Quote: "head to my night shift", Kind: "habit"}}, lines, noGate{})
 	out := n.Render()
-	if !strings.Contains(out, "### Likes\n\n- Matt likes pulling tarot cards") || !strings.Contains(out, "### Habits and routines\n\n- Matt works ten-hour shifts") {
+	if !strings.Contains(out, "### Likes\n\n- Sam likes baking bread") || !strings.Contains(out, "### Habits and routines\n\n- Sam works night shifts") {
 		t.Fatalf("render:\n%s", out)
 	}
 	n2 := ParseNote(out)

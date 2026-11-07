@@ -27,8 +27,8 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/llm"
 )
 
-// Owner is who the About note is about: SARINA_OWNER_NAME is what to call them (the account name is not it: "Zlothra" is a
-// social-media handle, the owner is Matt), SARINA_OWNER_PRONOUNS how to refer to them (he/him, she/her, they/them: the default).
+// Owner is who the About note is about: SARINA_OWNER_NAME is what to call them (an account name is not what to call them: it may
+// be only a handle), SARINA_OWNER_PRONOUNS how to refer to them (he/him, she/her, they/them: the default).
 type Owner struct{ Name, Subject, Object, Possessive, Reflexive string }
 
 // OwnerFromEnv reads the owner's name and pronouns.
@@ -46,7 +46,7 @@ func OwnerFromEnv() Owner {
 	return o
 }
 
-// NoteName is the note she keeps about the owner (Entities/About Matt.md).
+// NoteName is the note she keeps about the owner (Entities/About <name>.md).
 func NoteName() string {
 	return "Entities/About " + OwnerFromEnv().Name + ".md"
 }
@@ -373,7 +373,8 @@ Answer only with one JSON object per line: {"observation": "...", "quote": "..."
 
 `
 
-// prompt is the template with the owner's name and pronouns: "Zlothra ... they" made the notes call Matt by his handle and "their".
+// prompt is the template with the owner's name and pronouns: an account handle and "they" made the notes call the owner by the
+// handle and "their".
 func prompt() string {
 	o := OwnerFromEnv()
 	return strings.NewReplacer("{name}", capital(o.Name), "{he}", o.Subject, "{him}", o.Object, "{his}", o.Possessive, "{himself}", o.Reflexive).Replace(promptTemplate)

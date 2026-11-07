@@ -19,7 +19,7 @@ type Embedder interface {
 	Name() string
 }
 
-// KeepAlive is how long Ollama keeps the embedding model loaded after a request. Thirty minutes (Matt's decision D5, 2026-11-02;
+// KeepAlive is how long Ollama keeps the embedding model loaded after a request. Thirty minutes (the owner's decision D5, 2026-11-02;
 // it was two): the model is small (~0.3 GB, partly on the CPU beside qwen3:8b), and reloading it made the first recall of a
 // conversation slower than the rest.
 const KeepAlive = "30m"
