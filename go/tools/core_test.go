@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -795,5 +796,39 @@ func TestANearMissShowsTheLinesThatAreThere(t *testing.T) {
 	r := e.fails("edit_file", map[string]any{"path": "slug.py", "old_text": "import re\ndef slugify(t):", "new_text": "x"}, "tool_execution_error")
 	if !strings.Contains(r.Content, "first line is at line 1") || !strings.Contains(r.Content, "2: \n3: def slugify(t):") {
 		t.Fatalf("the lines that are there are not shown: %q", r.Content)
+	}
+}
+
+func TestWriteKeepsTheFinalLineBreak(t *testing.T) {
+	// write-long-file-one-line, 2026-11-06: she rewrote all 200 lines of data.txt right but without the last line break
+	e := newEnv(t, writeAll())
+	var b strings.Builder
+	for i := 1; i <= 200; i++ {
+		fmt.Fprintf(&b, "line %03d\n", i)
+	}
+	e.put("data.txt", b.String())
+	e.ok("read_file", map[string]any{"path": "data.txt"})
+	want := strings.Replace(b.String(), "line 100\n", "line one hundred\n", 1)
+	out := e.ok("write_file", map[string]any{"path": "data.txt", "content": strings.TrimSuffix(want, "\n")}).Content
+	if e.read("data.txt") != want {
+		t.Fatal("the file's final line break was lost")
+	}
+	if !strings.Contains(out, "line break") {
+		t.Fatalf("the tool answer should say the line break was kept: %s", out)
+	}
+	// a Windows file keeps its own kind of line break
+	e.put("crlf.txt", "a\r\nb\r\n")
+	e.ok("read_file", map[string]any{"path": "crlf.txt"})
+	e.ok("write_file", map[string]any{"path": "crlf.txt", "content": "a\r\nc"})
+	if e.read("crlf.txt") != "a\r\nc\r\n" {
+		t.Fatalf("crlf: %q", e.read("crlf.txt"))
+	}
+	// a file that had none, and a new file, get exactly what she wrote
+	e.put("none.txt", "x")
+	e.ok("read_file", map[string]any{"path": "none.txt"})
+	e.ok("write_file", map[string]any{"path": "none.txt", "content": "y"})
+	e.ok("write_file", map[string]any{"path": "new.txt", "content": "z"})
+	if e.read("none.txt") != "y" || e.read("new.txt") != "z" {
+		t.Fatalf("content changed: %q %q", e.read("none.txt"), e.read("new.txt"))
 	}
 }

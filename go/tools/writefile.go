@@ -163,7 +163,7 @@ func WriteFile() Tool {
 			st.markAuthored(path)
 
 			md := map[string]any{"action": "write_file", "path": relPath(tc.Root, path), "content_length": len([]rune(content))}
-			var before string
+			var before, keptEOL string
 			info, statErr := os.Stat(path)
 			switch {
 			case statErr == nil && info.IsDir():
@@ -187,6 +187,12 @@ func WriteFile() Tool {
 				}
 				md["before_exists"], md["before_sha256"] = true, sha256Hex(before)
 				md["before_size"], md["before_preview"] = len(data), preview(before, 240)
+				// a rewrite keeps the file's final line break (write-long-file-one-line, 2026-11-06: all 200 lines right, the last
+				// line break gone, so "keep every other line exactly as it is" failed)
+				if eol := finalLineBreak(before); eol != "" && content != "" && !strings.HasSuffix(content, "\n") {
+					content += eol
+					keptEOL = " The file ended with a line break, and still does."
+				}
 			default:
 				md["before_exists"], md["before_sha256"], md["before_size"], md["before_preview"] = false, nil, nil, nil
 			}
@@ -205,7 +211,7 @@ func WriteFile() Tool {
 			for k, v := range vmd {
 				md[k] = v
 			}
-			return fmt.Sprintf("Wrote %s (%d characters). Read back from disk: it matches.", relPath(tc.Root, path), len([]rune(content))) + note, md, nil
+			return fmt.Sprintf("Wrote %s (%d characters). Read back from disk: it matches.", relPath(tc.Root, path), len([]rune(content))) + keptEOL + note, md, nil
 		},
 	}
 }
@@ -364,6 +370,17 @@ func nearestLines(file, old string) string {
 			fmt.Fprintf(&b, "%d: %s\n", j+1, lines[j])
 		}
 		return ". Its first line is at line " + fmt.Sprint(i+1) + "; the file has there (blank lines and spaces count):\n" + strings.TrimRight(b.String(), "\n")
+	}
+	return ""
+}
+
+// finalLineBreak is the line break a file's text ends with ("\r\n" or "\n"), or "" when it ends without one.
+func finalLineBreak(s string) string {
+	switch {
+	case strings.HasSuffix(s, "\r\n"):
+		return "\r\n"
+	case strings.HasSuffix(s, "\n"):
+		return "\n"
 	}
 	return ""
 }
