@@ -786,6 +786,23 @@ func TestCommandMinConfidenceWithApply(t *testing.T) {
 	}
 }
 
+func TestCommandOnlyCategoryWritesThoseAlone(t *testing.T) {
+	d := deps{
+		entries: func() []DesktopEntry { return nil },
+		packages: func() []InstalledPackage {
+			return []InstalledPackage{toolPkg("nmap", realTools[0].desc), toolPkg("squashfs-tools", "Tools for squashfs, a highly compressed read-only filesystem for Linux")}
+		},
+	}
+	target := t.TempDir()
+	out, _, _ := runCmd(t, d, t.TempDir(), "--apply", "--only-category", "Security, Game", "--target-dir", target)
+	if !strings.Contains(out, "1 entries written.") || !strings.Contains(out, "sarina-nmap.desktop") || strings.Contains(out, "wrote "+filepath.Join(target, "sarina-squashfs-tools.desktop")) {
+		t.Fatal(out)
+	}
+	if got := OnlyCategories([]CategoryProposal{{Categories: []string{"System"}}}, " "); len(got) != 1 {
+		t.Fatal("an empty list keeps everything")
+	}
+}
+
 func TestCommandModelDirUnavailableFallsBackToDeterministic(t *testing.T) {
 	out, _, code := runCmd(t, fakeDeps(), t.TempDir(), "--model-dir", "/some/model")
 	if code != 0 || !strings.Contains(out, "semantic inference unavailable:") || !strings.Contains(out, "Python helper") || !strings.Contains(out, "nmap") {

@@ -268,6 +268,30 @@ func AuditMenu(entries []DesktopEntry, packages []InstalledPackage, opt AuditOpt
 // ApplyProposals writes proposals as .desktop files into targetDir (default:
 // the user application directory) and returns the paths written. Proposals
 // below minConfidence are skipped. The caller must have asked the operator.
+// OnlyCategories keeps the proposals that carry one of the comma-separated categories in list (all of them when list is empty):
+// a distribution that wants menu entries for one kind of tool (Niflheim: Security) and not for every command-line package.
+func OnlyCategories(proposals []CategoryProposal, list string) []CategoryProposal {
+	want := map[string]bool{}
+	for _, c := range strings.Split(list, ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			want[c] = true
+		}
+	}
+	if len(want) == 0 {
+		return proposals
+	}
+	var out []CategoryProposal
+	for _, p := range proposals {
+		for _, c := range p.Categories {
+			if want[c] {
+				out = append(out, p)
+				break
+			}
+		}
+	}
+	return out
+}
+
 func ApplyProposals(proposals []CategoryProposal, targetDir string, minConfidence float64) ([]string, error) {
 	if targetDir == "" {
 		targetDir = UserApplicationDir()

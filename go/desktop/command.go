@@ -59,6 +59,7 @@ func runAudit(env *cli.Env, args []string, d deps) int {
 	inclLibs := fs.Bool("include-libraries", false, "also consider library-shaped packages")
 	apply := fs.Bool("apply", false, "write the proposed entries")
 	minConf := fs.Float64("min-confidence", 0.0, "with --apply, skip proposals below this confidence")
+	only := fs.String("only-category", "", "with --apply, write only proposals with one of these categories (comma-separated, e.g. Security)")
 	target := fs.String("target-dir", "", "where entries are written (default: the user application directory)")
 	removeGen := fs.Bool("remove-generated", false, "delete previously generated entries and exit")
 	noCache := fs.Bool("no-cache", false, "do not cache semantic classification results")
@@ -107,7 +108,7 @@ func runAudit(env *cli.Env, args []string, d deps) int {
 		}
 		return 0
 	}
-	written, err := ApplyProposals(audit.Proposals, *target, *minConf)
+	written, err := ApplyProposals(OnlyCategories(audit.Proposals, *only), *target, *minConf)
 	for _, p := range written {
 		fmt.Fprintf(out, "wrote %s\n", p)
 	}
