@@ -42,12 +42,12 @@ func TestSecretsInJSONToolResultsAreHidden(t *testing.T) {
 }
 
 func TestStreamedRepliesHideSecretsAsTheyGo(t *testing.T) {
-	msgs := []session.Message{{Role: "tool", Content: `{"tool":"read_file","ok":true,"content":"user = matt\npassword = \"hunter2-correct-horse\"\n"}`}}
+	msgs := []session.Message{{Role: "tool", Content: `{"tool":"read_file","ok":true,"content":"user = ada\npassword = \"hunter2-correct-horse\"\n"}`}}
 	red := newStreamRedactor(msgs)
 	if red == nil {
 		t.Fatal("no redactor although the output holds a password")
 	}
-	reply := "The file sets the user to matt and the password to hunter2-correct-horse, which you should rotate."
+	reply := "The file sets the user to ada and the password to hunter2-correct-horse, which you should rotate."
 	var out strings.Builder
 	for i := 0; i < len(reply); i += 3 { // token-sized pieces, the secret split across several
 		out.WriteString(red.push(reply[i:min(i+3, len(reply))]))
@@ -56,7 +56,7 @@ func TestStreamedRepliesHideSecretsAsTheyGo(t *testing.T) {
 		}
 	}
 	out.WriteString(red.flush())
-	if want := "The file sets the user to matt and the password to [hidden], which you should rotate."; out.String() != want {
+	if want := "The file sets the user to ada and the password to [hidden], which you should rotate."; out.String() != want {
 		t.Fatalf("got %q", out.String())
 	}
 	if newStreamRedactor([]session.Message{{Role: "tool", Content: "nothing secret here"}}) != nil {
