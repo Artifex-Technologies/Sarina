@@ -1,10 +1,10 @@
 # Light and capable: the model test, hardware tiers, and what to take from Odysseus (plan, 2026-11-04)
 
-Matt's goals, from the conversation of 2026-11-04:
+My goals, from the conversation of 2026-11-04:
 
 - Sarina should be as capable as possible, and also lighter and faster, so that other people can run her locally too.
 - More tools are welcome, but **she needs more training before she gets more tools**.
-- He is ready to try a bigger model (the MoE candidate below) on today's PC. The upgrade (Ultra 7 270K Plus, RTX 5090) is months
+- I am ready to try a bigger model (the MoE candidate below) on today's PC. The upgrade (Ultra 7 270K Plus, RTX 5090) is months
   to a year away.
 
 ## Principles
@@ -33,8 +33,8 @@ Matt's goals, from the conversation of 2026-11-04:
 1. Tune N. Measure tokens per second (prompt and generation) and memory on the card.
 2. Run the full eval suite on the candidate. Compare with the same build on qwen3:8b: pass set, mean seconds, send-backs.
 3. Measure spoken-turn timing (`LABYRINTH_VOICE_TIMING=1`, the stage medians of night 2).
-4. Blind comparison for what the evals cannot score (tone, personality, how natural she sounds). Matt reads answer pairs to
-   the same questions with the model names hidden, picks the better one, and the votes are logged.
+4. Blind comparison for what the evals cannot score (tone, personality, how natural she sounds). I read answer pairs to
+   the same questions with the model names hidden, pick the better one, and the votes are logged.
 
 **First result (2026-11-04, build b1e8abb, `n-cpu-moe 30`, 8.8 GB on the card):**
 - **Speed:** generation 39 tokens/s (qwen3:8b: 55-62); prompt reading 647 tokens/s (about 2,200).
@@ -47,10 +47,10 @@ Matt's goals, from the conversation of 2026-11-04:
   - crypto-aes-no-key: an honest answer cut off at "The content is", which the rule read as a decryption claim;
   - tt-teach-11, wm-clean, stego-clean-honest, vault-write-linked.
 - **The qwen3:8b baseline** is night 3's run B (2026-11-04 20:08, build e5b81c9): see the second result below.
-- **Blind pairs (Matt's votes, 2026-11-04):** qwen3:8b won 5 of 6 (feet, Linux joke, water loop, hash, tarot); the candidate
-  won the pep talk. On the Linux joke Matt liked the candidate's answer better but voted against it for its factual slip
+- **Blind pairs (my votes, 2026-11-04):** qwen3:8b won 5 of 6 (feet, Linux joke, water loop, hash, tarot); the candidate
+  won the pep talk. On the Linux joke I liked the candidate's answer better but voted against it for its factual slip
   (penguins do live in Antarctica): on style alone that is 4-2.
-  - **Matt's reading:** the 8B is warmer and more eager ("I'd love to help!"); the candidate is shorter and more matter-of-fact,
+  - **My reading:** the 8B is warmer and more eager ("I'd love to help!"); the candidate is shorter and more matter-of-fact,
     following the brevity rule more literally.
   - **Factual slips:** both made one each.
     - The 8B gave aaf4c6... (the SHA-1 of "hello") as SHA-256, and said a joke's note date aloud ("A joke from 2026-10-17").
@@ -69,8 +69,9 @@ Matt's goals, from the conversation of 2026-11-04:
   - Send-backs per 100 cases: 20 against 29.
   - Seconds a case: mean 37 against 20, median 21 against 14. The candidate is right more often; the 8B is faster.
 - **The candidate's four fails:**
-  - decompile-explain: says limbo-decompile is not among its tools. The 8B fails it too: the fix waits on Matt's
-    decompile-tool-hint answer.
+  - decompile-explain: says limbo-decompile is not among its tools. The 8B fails it too. The fix waited on my
+    decompile-tool-hint answer; it came 2026-11-05 and is built (`324ad44`: limbo_validate says analysis programs such as
+    limbo-decompile are its commands, not her tools). On qwen3:8b decompile-explain then passed 3/3 (night 3 repeat).
   - crash-on-the-fly and voice-boot-ideas: spoken answers over 90 words, because a send-back came after she had started
     talking. The spoken path then says "Sorry, let me correct that." and the second answer (labyrinth-ask-sarina, by
     design), so the listener hears both.
@@ -95,13 +96,13 @@ Matt's goals, from the conversation of 2026-11-04:
   card is free, and wait for the other's health check before routing anything to it.
 - **Reports:** `~/.local/state/sarina-night/day-2026-11-04/` (`candidate-redo.md`, `lowcard-voice.md`, `diff-*.md`).
 
-**Rollback:** nothing changes until Matt decides. `sarina.env` and Ollama stay as they are; the test sets its variables per run.
+**Rollback:** nothing changes until I decide. `sarina.env` and Ollama stay as they are; the test sets its variables per run.
 
 **Possible outcome: split the jobs.** Keep qwen3:8b for spoken questions and quick talk, where speed matters. Give hard work
 (code, reverse engineering, analysis) to the candidate through the compute tiers (`go/tiers`). Switching models costs a few
 seconds of loading on the card.
 
-**Decided direction (Matt, 2026-11-04): use both, swapped, never both on the card.**
+**Decided direction (mine, 2026-11-04): use both, swapped, never both on the card.**
 - One model on the card at a time. The other's file stays cached in system RAM, so a swap reads from RAM, not disk, and takes
   a few seconds.
 - **Not gaming:** qwen3:8b for talk and voice; the candidate (`n-cpu-moe 30`, 8.8 GB on the card) for code, analysis and long
@@ -146,7 +147,7 @@ taken; only the behaviour, described in our own words. Surveyed 2026-11-04.
 
 | Idea | Sarina today | Plan | When |
 | --- | --- | --- | --- |
-| Test whether a lesson helps | `sarina lessons`, the evals | `sarina lessons audit` at night: rerun the cases linked to each active lesson with and without its rule, graded by the eval checks (not a model judge). Write the result into the lesson's front matter; propose retiring rules that change nothing (Matt decides). Keeps the 20-rule cap useful. | now (training) |
+| Test whether a lesson helps | `sarina lessons`, the evals | `sarina lessons audit` at night: rerun the cases linked to each active lesson with and without its rule, graded by the eval checks (not a model judge). Write the result into the lesson's front matter; propose retiring rules that change nothing (I decide). Keeps the 20-rule cap useful. | now (training) |
 | A stronger model's fix becomes a lesson | tiers escalation, `council_ask` | After repeated send-backs or an escalated turn, she offers "make a lesson". Only after the owner's yes does the sanitised trace (`tiers.Sanitize`) go to the stronger tier. The proposed rule comes back as untrusted text and is saved as a `status: proposed` lesson. Training data for the fine-tune stays her own approved answers, not the stronger model's text. | now (training) |
 | Match models to the hardware | `tiers/resource.go`, `doctor` | `sarina fit` (section 2) | now |
 | Blind comparison | `sarina council` names the models | `council --blind`, local members only, the vote logged (section 1, step 4) | with the model test |

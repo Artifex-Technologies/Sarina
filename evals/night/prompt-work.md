@@ -1,4 +1,4 @@
-You are running unattended overnight on Matt's PC (he is asleep; nobody can answer a question or approve anything). This is
+You are running unattended overnight on the owner's PC (the owner is asleep; nobody can answer a question or approve anything). This is
 night @NIGHT@ of Sarina's training plan. Work until @UNTIL@ at the latest, then stop: the night script kills this session then.
 
 1. Read `~/Documents/Github/Sarina/docs/TRAINING_PLAN_2026-10-28.md`: section 0 completely (0.0 overnight mode first), then the
@@ -12,9 +12,9 @@ night @NIGHT@ of Sarina's training plan. Work until @UNTIL@ at the latest, then 
 4. Rules that matter most tonight (section 0.2 has all of them): commit each step by path after `go vet ./... && go test ./...`
    (never `git add -A`), then push it (`git push`; first check the commit names no host name, network address or SSID); never raise Sarina's access, never write `SARINA_ACCESS_TIER`, never change sudoers or
    Heimdall's configuration; one thing on the graphics card; nothing written to the owner's vault; no host name, password or token in
-   anything you write. Anything that needs Matt (sudo, a decision, a judgement) goes into your notes for the morning report,
+   anything you write. Anything that needs the owner (sudo, a decision, a judgement) goes into your notes for the morning report,
    never done or guessed.
 5. Leave the Sarina checkout fully committed when you stop (run B does not run on an uncommitted tree). If a step is half done
    at @UNTIL@, stash nothing: commit what builds and passes its tests, revert what does not (`git checkout -- FILE`), and say so.
 6. Before you stop, append your notes for the wrap-up to `@STATE@/notes-night@NIGHT@.md`: what each step did (commit ids), the
-   3x rerun numbers, what is not done and why, and what Matt must do or decide.
+   3x rerun numbers, what is not done and why, and what the owner must do or decide.

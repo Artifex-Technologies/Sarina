@@ -21,6 +21,8 @@ Ground rules that have held up (from the training notes so far):
 
 ## State of the checkout (uncommitted, 2026-10-26 morning)
 
+**Checked 2026-11-07: everything in this table is committed now**, the two "NOT done" rows included (BACKLOG F10, F11).
+
 Everything below builds (`cd go && go build ./...`) and its own unit tests pass. It is NOT yet committed because the eval runs that
 would prove it were cut off by the session limit. Step 1 is to prove it and commit it in pieces.
 
@@ -42,7 +44,7 @@ would prove it were cut off by the session limit. Step 1 is to prove it and comm
 Committed already (2026-10-25 evening): the vault clean-up (vault repo), the daily check-up writing the Daily note (Labyrinth), the
 whole voice path change (Labyrinth + Yggdrasil panel): one model for voice and everything else, thinking per turn
 (`LABYRINTH_VOICE_THINK=computer`), speech streamed sentence by sentence, the self-echo dropped, routing cached, status questions
-read the Daily note when fresh, the owner named Matt, a pronunciation list (`~/.config/labyrinth/sarina-say.json`).
+read the Daily note when fresh, the owner called by first name, a pronunciation list (`~/.config/labyrinth/sarina-say.json`).
 
 ## Step 1 — Prove the tree, then commit it (first session back; ~1.5 h, mostly GPU time)
 
@@ -136,10 +138,10 @@ prompt tokens instead of ~0.48k. The full table lives in `TRAINING_PLAN_2026-10-
 
 ## Step 6 — The owner's name and voice (needs the owner, ~20 min)
 
-1. The owner says a sentence with the names and judges: "Hi Matt. Hi Matthew. Zlothra, Sarina, Fylgja, Heimdall, Minos,
-   Chymaera, Yggdrasil." Adjust the respellings in `~/.config/labyrinth/sarina-say.json` (Chatterbox has no phoneme input; Piper is
+1. The owner says a sentence with the names and judges: "Hi" with the owner's first name, short and long, then
+   "Zlothra, Sarina, Fylgja, Heimdall, Minos, Chymaera, Yggdrasil." Adjust the respellings in `~/.config/labyrinth/sarina-say.json` (Chatterbox has no phoneme input; Piper is
    not installed here).
-2. Check the greeting: she should say Matt, never Zlothra, in a fresh conversation and in the companion notes.
+2. Check the greeting: she should say the owner's first name, never Zlothra, in a fresh conversation and in the companion notes.
 3. Hold-to-talk: letting go of Super before S is still not heard (the panel's 90 s cap and "a new press stops a running
    recording" are the safeguards). Find a release signal that works in either order (a Hyprland Lua `input.keyboard.key` event
    handler for the S key-up, armed by the press, is the next thing to try — test WITH the owner; never ship a binding change
