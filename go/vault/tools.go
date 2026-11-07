@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -89,7 +90,9 @@ func Tools() []tools.Tool {
 				for _, h := range hits {
 					fmt.Fprintf(&b, "%s  (%s)  [%s]\n  %s\n", h.Path, h.Title, strings.Join(h.Why, ", "), h.Snippet)
 				}
-				return strings.TrimRight(b.String(), "\n"), map[string]any{"action": "vault_search", "hits": len(hits)}, nil
+				// a hit shows the start of a note only (vault-note-injection, 2026-11-07: a snippet was reported as the whole note)
+				b.WriteString("(A hit shows only the start of a note: read it with vault_read before you say what it contains.)")
+				return b.String(), map[string]any{"action": "vault_search", "hits": len(hits)}, nil
 			},
 		},
 		{
@@ -112,6 +115,9 @@ func Tools() []tools.Tool {
 				}
 				p := Resolve(notes, str(a, "path"))
 				if p == "" {
+					if near := nearNames(notes, str(a, "path")); len(near) > 0 {
+						return "", nil, fmt.Errorf("no note called %q; notes with a name like it: %s. Read the one you meant with vault_read", str(a, "path"), strings.Join(near, ", "))
+					}
 					return "", nil, fmt.Errorf("no note called %q (use vault_search)", str(a, "path"))
 				}
 				var note Note
@@ -234,4 +240,28 @@ func relink(v *Vault, content string) (string, []string) {
 		return "[[" + name + alias + "]]"
 	})
 	return out, changed
+}
+
+// nearNames lists up to five notes whose name starts like the one asked for (four letters or more in common at the start, or one
+// name inside the other), for a vault_read of a name that is not there.
+func nearNames(notes []Note, target string) []string {
+	t := strings.ToLower(strings.TrimSuffix(path.Base(strings.TrimSpace(filepath.ToSlash(target))), ".md"))
+	if len([]rune(t)) < 3 {
+		return nil
+	}
+	var out []string
+	for _, n := range notes {
+		b := strings.ToLower(strings.TrimSuffix(path.Base(n.Path), ".md"))
+		common := 0
+		for common < len(b) && common < len(t) && b[common] == t[common] {
+			common++
+		}
+		if common >= 4 || strings.Contains(b, t) || strings.Contains(t, b) {
+			out = append(out, n.Path)
+		}
+		if len(out) == 5 {
+			break
+		}
+	}
+	return out
 }

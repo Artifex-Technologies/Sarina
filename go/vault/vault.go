@@ -149,7 +149,8 @@ func (v *Vault) Notes() ([]Note, error) {
 
 // Resolve finds the note a [[link]] means: by path, or Obsidian-style by file name, then by the note's title (its first heading), ignoring case. "" when there is none.
 func Resolve(notes []Note, target string) string {
-	t := strings.ToLower(strings.TrimSuffix(filepath.ToSlash(strings.TrimSpace(target)), ".md"))
+	// a leading "/" means the vault's top, not the file system: "/dock" is the note Dock (vault-note-injection, 2026-11-07)
+	t := strings.ToLower(strings.TrimSuffix(strings.TrimLeft(filepath.ToSlash(strings.TrimSpace(target)), "/"), ".md"))
 	for _, n := range notes {
 		p := strings.ToLower(strings.TrimSuffix(n.Path, ".md"))
 		if p == t || strings.HasSuffix(p, "/"+t) {

@@ -52,7 +52,9 @@ func TestParseNote(t *testing.T) {
 
 func TestResolveLikeObsidian(t *testing.T) {
 	notes := []Note{{Path: "Projects/Labyrinth.md"}, {Path: "Lessons/Verify after writing.md"}, {Path: "Playbooks/Pentest.md", Title: "Pentest playbook"}}
-	for in, want := range map[string]string{"Pentest playbook": "Playbooks/Pentest.md", "pentest PLAYBOOK": "Playbooks/Pentest.md", "Labyrinth": "Projects/Labyrinth.md", "projects/labyrinth": "Projects/Labyrinth.md", "verify after writing": "Lessons/Verify after writing.md", "Nope": ""} {
+	for in, want := range map[string]string{"Pentest playbook": "Playbooks/Pentest.md", "pentest PLAYBOOK": "Playbooks/Pentest.md", "Labyrinth": "Projects/Labyrinth.md", "projects/labyrinth": "Projects/Labyrinth.md", "verify after writing": "Lessons/Verify after writing.md", "Nope": "",
+		// vault-note-injection, 2026-11-07: she asked for "/dock", was told there is no such note, and said so
+		"/labyrinth": "Projects/Labyrinth.md", "/Projects/Labyrinth.md": "Projects/Labyrinth.md"} {
 		if got := Resolve(notes, in); got != want {
 			t.Errorf("Resolve(%q) = %q, want %q", in, got, want)
 		}
@@ -323,5 +325,31 @@ func TestRelinkPointsNearMissesAtExistingNotes(t *testing.T) {
 	out, changed := relink(v, "Check df first. [[Verify writes]] and [[Totally unrelated idea]] and [[Verify after writing]].")
 	if len(changed) != 1 || !strings.Contains(out, "[[Verify after writing]] and [[Totally unrelated idea]]") || strings.Contains(out, "[[Verify writes]]") {
 		t.Fatalf("%q %v", out, changed)
+	}
+}
+
+func TestReadAndSearchPointAtTheWholeNote(t *testing.T) {
+	// vault-note-injection, 2026-11-07: a search snippet (the note's first lines) was reported as the note; a name that was not
+	// found ended the task
+	v := tmpVault(t)
+	t.Setenv(EnvVar, v.Root)
+	put(t, v, "Projects/Dock.md", "# Dock\n\nThe dock shows pinned apps.\nMore below.\n", 0)
+	put(t, v, "Projects/Docking station.md", "# Docking station\n\nUSB-C.\n", 0)
+	tc := &tools.Context{Runtimes: map[string]any{RuntimeKey: v, ScannerKey: Scanner(deny("NOPE"))}}
+	byName := map[string]tools.Tool{}
+	for _, tl := range Tools() {
+		byName[tl.Spec.Name] = tl
+	}
+	out, _, _ := byName["vault_search"].Handler(context.Background(), map[string]any{"query": "dock"}, tc)
+	if !strings.Contains(out, "vault_read") {
+		t.Errorf("search should say a hit is only the start of a note: %q", out)
+	}
+	_, _, err := byName["vault_read"].Handler(context.Background(), map[string]any{"path": "Dok"}, tc)
+	if err == nil || !strings.Contains(err.Error(), "vault_search") {
+		t.Errorf("a name with nothing like it: %v", err)
+	}
+	_, _, err = byName["vault_read"].Handler(context.Background(), map[string]any{"path": "Docks"}, tc)
+	if err == nil || !strings.Contains(err.Error(), "Projects/Dock.md") || !strings.Contains(err.Error(), "Projects/Docking station.md") {
+		t.Errorf("the notes it may have meant should be named: %v", err)
 	}
 }
