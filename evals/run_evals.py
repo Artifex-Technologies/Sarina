@@ -1474,6 +1474,9 @@ def main(argv):
     env["SARINA_FORGE_STATE"] = os.path.join(WORK, "forge", "state")
     # the write guard (go/testguard): her vault, Daily note, Talks and Jokes, mood history, reflections and memory refuse writes
     # outside WORK and the temporary folder, so a case can never leave anything in the owner's own notes
+    # a made-up owner for every case (the reports are public): her answers would otherwise quote the real name from sarina.env
+    env["SARINA_OWNER_NAME"] = "Sam"
+    env["SARINA_OWNER_NOTE"] = " "  # blank on purpose: the real note in sarina.env must not fill in
     env["SARINA_TEST"] = "1"
     env["SARINA_TEST_ROOT"] = WORK
     build = build_info()
