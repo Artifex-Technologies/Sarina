@@ -151,7 +151,8 @@ type fileState struct {
 	edits         map[string]int
 	summaryWrites int
 	authored      map[string]bool
-	read          map[string]int // files read whole or in part in this context, and the step of the last read
+	read          map[string]int    // files read whole or in part in this context, and the step of the last read
+	failedTest    map[string]string // per Go package checked: the test that failed in the last check, run first next time
 }
 
 func stateOf(tc *Context) *fileState {
@@ -163,7 +164,7 @@ func stateOf(tc *Context) *fileState {
 	if s, ok := tc.Runtimes[runtimeFileState].(*fileState); ok {
 		return s
 	}
-	s := &fileState{edits: map[string]int{}, authored: map[string]bool{}, read: map[string]int{}}
+	s := &fileState{edits: map[string]int{}, authored: map[string]bool{}, read: map[string]int{}, failedTest: map[string]string{}}
 	tc.Runtimes[runtimeFileState] = s
 	return s
 }

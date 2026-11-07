@@ -36,7 +36,9 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 	dir := filepath.Dir(path)
 	tests, trusted, sandbox := verifyMode(tc, os.Getenv, haveBwrap())
 	var steps [][]string
-	var label string
+	var label, failKey string
+	testFrom := 1 // the steps from this one on run her code (the tests); the ones before only build or check syntax
+	vetFallback := []string(nil)
 	switch ext {
 	case ".go":
 		if root := findUp(dir, "go.mod"); root != "" {
@@ -45,11 +47,23 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 			if rel == "." {
 				pkg = "./..."
 			}
-			steps = append(steps, []string{"go", "vet", pkg})
-			label = "go vet " + pkg
 			if tests {
+				// go test vets the package itself (a subset of go vet) before it runs anything, so the test run is the build check
+				// too; a retry runs the test that failed last time first, and the whole package only once that one passes
+				failKey = root + "|" + pkg
+				st := stateOf(tc)
+				st.mu.Lock()
+				prev := st.failedTest[failKey]
+				st.mu.Unlock()
+				if prev != "" {
+					steps = append(steps, []string{"go", "test", "-count=1", "-timeout", "60s", "-run", "^" + regexp.QuoteMeta(prev) + "$", pkg})
+				}
 				steps = append(steps, []string{"go", "test", "-count=1", "-timeout", "60s", pkg})
-				label += " and go test " + pkg
+				label = "go test " + pkg + " (it vets the package too)"
+				testFrom, vetFallback = 0, []string{"go", "vet", pkg}
+			} else {
+				steps = append(steps, []string{"go", "vet", pkg})
+				label = "go vet " + pkg
 			}
 			dir = root
 		} else {
@@ -117,8 +131,12 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 			md["verify"] = "skipped"
 			return fmt.Sprintf("\nCheck skipped: %s would run the project's own build code, and there is no sandbox here (bubblewrap): the change was not verified.", strings.Join(step[:2], " ")), md
 		}
-		if sandbox && (i > 0 || builds) && step[0] != "shellcheck" {
+		if sandbox && (i >= testFrom || builds) && step[0] != "shellcheck" {
 			sd, sargv, cleanup, why := sandboxStep(dir, step)
+			if why != "" && vetFallback != nil && i == 0 {
+				// nothing has checked the build yet: check it here (compiling runs nothing of hers) and say the tests did not run
+				return vetOnly(ctx, tc, dir, path, vetFallback, why, md)
+			}
 			if why != "" {
 				md["verify"] = "ok"
 				return fmt.Sprintf("\nCheck passed: the build. Tests were not run (%s): do not say the tests pass.", why), md
@@ -143,20 +161,43 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 			if text == "" {
 				text = err.Error()
 			}
-			md["verify"], md["verify_output"] = "failed", clipText(text, 3000)
+			// the whole output stays in the metadata; the answer gets a computed first line and at most 40 lines of it
+			md["verify"], md["verify_output"] = "failed", clipText(text, 12000)
 			what := "build"
-			if i > 0 {
+			if i >= testFrom && !goBuildBadRE.MatchString(text) {
 				what = "tests"
 			}
 			md["verify_kind"] = what
-			return fmt.Sprintf("\nCHECK FAILED (%s, %s):\n%s%s\nFix this before you answer; do not say the code works.", what, strings.Join(step, " "), clipText(text, 3000), around(text, dir, path)), md
+			head, tail := "", around(text, dir, path)
+			if what == "tests" {
+				summary, lines := localise(text, filepath.Dir(path))
+				if summary != "" {
+					head = summary + "\n"
+				}
+				if lines != "" {
+					tail = "\nThe code it points at, as it is now (read it before you edit; an edit's old_text must match these lines):\n" + lines
+				}
+				if m := goFailRE.FindStringSubmatch(text); m != nil && failKey != "" {
+					st := stateOf(tc)
+					st.mu.Lock()
+					st.failedTest[failKey] = strings.SplitN(m[1], "/", 2)[0]
+					st.mu.Unlock()
+				}
+			}
+			return fmt.Sprintf("\nCHECK FAILED (%s, %s):\n%s%s%s\nFix this before you answer; do not say the code works.", what, strings.Join(step, " "), head, clipText(clipLines(text, 40), 3000), tail), md
 		}
-		if i > 0 {
+		if i >= testFrom {
 			md["verify_tests"] = true
 		}
 		if text != "" {
 			out.WriteString(clipText(text, 1200))
 		}
+	}
+	if failKey != "" {
+		st := stateOf(tc)
+		st.mu.Lock()
+		delete(st.failedTest, failKey)
+		st.mu.Unlock()
 	}
 	md["verify"] = "ok"
 	note := "\nCheck passed: " + label + "."
@@ -346,4 +387,22 @@ func shellLint(path string) string {
 func dirExists(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
+}
+
+// vetOnly is the build check of a Go change whose tests could not be put in the sandbox: go vet, which compiles and runs nothing.
+func vetOnly(ctx context.Context, tc *Context, dir, path string, step []string, why string, md map[string]any) (string, map[string]any) {
+	cmd := exec.CommandContext(ctx, step[0], step[1:]...)
+	cmd.Dir = dir
+	cmd.Env = append(childEnv(tc), "GOPROXY=off", "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local", "NO_COLOR=1")
+	b, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(strings.ToValidUTF8(string(b), "\uFFFD"))
+	if err != nil {
+		if text == "" {
+			text = err.Error()
+		}
+		md["verify"], md["verify_output"], md["verify_kind"] = "failed", clipText(text, 12000), "build"
+		return fmt.Sprintf("\nCHECK FAILED (build, %s):\n%s%s\nFix this before you answer; do not say the code works.", strings.Join(step, " "), clipText(clipLines(text, 40), 3000), around(text, dir, path)), md
+	}
+	md["verify"] = "ok"
+	return fmt.Sprintf("\nCheck passed: the build (%s). Tests were not run (%s): do not say the tests pass.", strings.Join(step, " "), why), md
 }
