@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/heimdall"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -137,7 +138,7 @@ func Tools() []tools.Tool {
 		}
 		bin = p
 	}
-	return []tools.Tool{stageTool(), {
+	return []tools.Tool{stageTool(), ruleTool(), {
 		Class: tools.ClassReadOnly,
 		Spec: llm.ToolSpec{
 			Name:        "reverse_engineer",
@@ -186,6 +187,32 @@ func Tools() []tools.Tool {
 			return text, map[string]any{"action": "reverse_engineer", "command": str("command"), "path": str("path")}, nil
 		},
 	}}
+}
+
+// ruleTool sends a YARA rule draft for a sample Heimdall holds (owner's yes, 2026-11-05: sarina-rule-tool). A draft does
+// nothing until the owner tests and approves it (sudo heimdalld immunity rule test / approve), so it needs no permission here.
+func ruleTool() tools.Tool {
+	return tools.Tool{
+		Class: tools.ClassMutating,
+		Spec: llm.ToolSpec{
+			Name:        "draft_yara_rule",
+			Description: "Send Heimdall a YARA rule draft for a sample it holds (its SHA-256), built only from strings or bytes the analysis showed. The owner tests and approves it; nothing changes until then.",
+			Parameters: map[string]any{"type": "object", "required": []string{"sample_sha256", "rule"}, "properties": map[string]any{
+				"sample_sha256": map[string]any{"type": "string", "description": "The held sample's SHA-256."},
+				"rule":          map[string]any{"type": "string", "description": "One YARA rule."},
+				"note":          map[string]any{"type": "string", "description": "What it matches and why, in one line."},
+			}},
+		},
+		Handler: func(ctx context.Context, a map[string]any, tc *tools.Context) (string, map[string]any, error) {
+			str := func(k string) string { v, _ := a[k].(string); return strings.TrimSpace(v) }
+			id, next, err := heimdall.DraftRule(strings.ToLower(str("sample_sha256")), str("rule"), str("note"))
+			if err != nil {
+				return "", nil, err
+			}
+			return "Draft " + id + " is with Heimdall. It is not active: the owner tests it first (" + next + ").",
+				map[string]any{"action": "draft_yara_rule", "id": id}, nil
+		},
+	}
 }
 
 func stageTool() tools.Tool {

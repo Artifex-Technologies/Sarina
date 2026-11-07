@@ -66,7 +66,8 @@ func TestToolIsOfferedOnlyWithTheSandboxInstalled(t *testing.T) {
 	}
 	t.Setenv("LABYRINTH_REA", "/bin/true")
 	ts := Tools()
-	if len(ts) != 2 || ts[1].Spec.Name != "reverse_engineer" || ts[1].Requires != 0 || ts[0].Spec.Name != "stage_binary" {
+	if len(ts) != 3 || ts[2].Spec.Name != "reverse_engineer" || ts[2].Requires != 0 || ts[0].Spec.Name != "stage_binary" ||
+		ts[1].Spec.Name != "draft_yara_rule" || ts[1].Requires != 0 {
 		t.Errorf("tool: %+v", ts)
 	}
 	t.Setenv("SARINA_REVERSE", "")
