@@ -31,7 +31,7 @@ LOG=$STATE/$STAMP-night$NIGHT.log
 exec >>"$LOG" 2>&1
 
 deadline=$(date -d 'tomorrow 04:20' +%s); (( $(date +%H) < 12 )) && deadline=$(date -d 'today 04:20' +%s)
-# a daytime run Matt asks for (he is away): SARINA_NIGHT_HOURS=N stops it N hours from now instead (1-6.5, under the unit's 7 h limit)
+# a daytime run I ask for (while I am away): SARINA_NIGHT_HOURS=N stops it N hours from now instead (1-6.5, under the unit's 7 h limit)
 if [[ ${SARINA_NIGHT_HOURS:-} =~ ^[1-6](\.[0-9])?$ ]]; then deadline=$(( $(date +%s) + $(awk -v h="$SARINA_NIGHT_HOURS" 'BEGIN{printf "%d", h*3600}') )); fi
 left() { echo $(( deadline - $(date +%s) )); }
 say() { echo "[$(date +%H:%M:%S)] $*"; }

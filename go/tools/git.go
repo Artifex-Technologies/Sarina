@@ -102,7 +102,7 @@ func GitRead() Tool {
 			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			defer cancel()
 			if risky := GitConfigRisk(ctx, tc.Root); risky != "" {
-				return "", nil, fmt.Errorf("this repository's own git settings name programs for git to run (%s): git_read does not run git here; ask Matt to look at .git/config", risky)
+				return "", nil, fmt.Errorf("this repository's own git settings name programs for git to run (%s): git_read does not run git here; ask the owner to look at .git/config", risky)
 			}
 			cmd := exec.CommandContext(ctx, "git", append(append(append([]string{}, gitSafe...), "-C", tc.Root), gitArgs...)...)
 			cmd.Env = append(childEnv(tc), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat", "PAGER=cat")
