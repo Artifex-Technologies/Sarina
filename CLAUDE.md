@@ -235,6 +235,19 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-08 — Night 5 wrap-up: A 108/116, B 112/120, Done when not met (crypto 85 %); state file stays at 5
+- Run A (#8) on `7967ab4`, run B (#9) on `bc83f5d` (`2bcccc2` stego test, `c9a4119` + `3018fc2` affine/Beaufort/autokey/columnar
+  with "How it fell", `e4a8422` four eval cases, `a87c900` + `5ba518b` identify cracks them, `bfcfab5` no copyable skill key,
+  `bc83f5d` long prefetch strings not shown cut). Reports in Labyrinth_OS `ca6aab3`.
+- The four new cipher cases pass in run B and `go test ./cryptotools` is green, but crypto is 17/20: stego-appended-zip and
+  wm-folder (the carry-on nudge, agent.go, sent her to crypto_identify and she dropped the zip / notes.md), wm-clean (never
+  called stego_clean). None traced to tonight's code; the same build went 59/60 in the work session's 3x.
+- Other flips: +code-add-function, +companion-no-false-memory, +tt-two-finger, +stego-zero-width (variance), +decompile-triage
+  (maybe `4cce302`, another session's limbo change); -code-python-fix, -tt-code-test (not crypto code).
+- Next night repeats night 5 from step 3. The carry-on advice false positive is the likeliest lever (owner question `carry-on-advice`).
+
+Signed: Sarina / Claude
+
 ### 2026-11-07 — Niflheim OS is now LykanOS (the security edition, renamed again)
 - The owner renamed Niflheim OS to **LykanOS** (repository `Artifex-Technologies/LykanOS`, GitHub redirects the old name;
   os-release `ID=lykanos`, `install_dir` the same). Its integration files are `lykanos-*.conf`, its menu hook
