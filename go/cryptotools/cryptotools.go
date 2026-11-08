@@ -483,7 +483,7 @@ func Prefetch(task string) string {
 		if len(cs) == 0 || cs[0].Score < 50 {
 			continue
 		}
-		parts = append(parts, "Looked at "+TruncateText(tok, 80)+":\n"+IdentifyReport(tok, "string"))
+		parts = append(parts, "Looked at "+lookedAt(tok, "a string in the question")+":\n"+IdentifyReport(tok, "string"))
 	}
 	// a message of words in quotes that are not English words: a classical cipher (Caesar, Vigenère, substitution). Its words are
 	// short and spaced, so the token scan above never sees it (eval crypto-caesar, 2026-10-26: no tool called, a made-up "the quick
@@ -502,7 +502,7 @@ func Prefetch(task string) string {
 		}
 		seen[q] = true
 		if cs, _ := Identify(q); len(cs) > 0 && cs[0].Score >= 40 {
-			parts = append(parts, "Looked at the quoted text "+TruncateText(q, 80)+":\n"+IdentifyReport(q, "quoted text"))
+			parts = append(parts, "Looked at "+lookedAt(q, "the quoted text")+":\n"+IdentifyReport(q, "quoted text"))
 		}
 	}
 	if len(parts) == 0 {
@@ -556,6 +556,20 @@ func command(env *cli.Env, args []string) int {
 	}
 	fmt.Fprintln(env.Stdout, out)
 	return 0
+}
+
+// lookedAt names what the prefetch looked at: a short string itself, a long one only by its length and first characters. Shown cut at
+// 80, a long one was copied cut into a tool call (eval crypto-columnar, 2026-11-08: 80 of its 97 letters went to the cracker, which
+// then found nothing and she called the right first answer wrong).
+func lookedAt(s, what string) string {
+	r := []rune(s)
+	if len(r) <= 80 {
+		if what == "the quoted text" {
+			return "the quoted text " + s
+		}
+		return s
+	}
+	return fmt.Sprintf("%s (%d characters, starting %q; take it from the question in full, not from here)", what, len(r), string(r[:12])+"…")
 }
 
 // lettersMostly is text of letters and spaces (with a little punctuation): what a classical cipher's output looks like.

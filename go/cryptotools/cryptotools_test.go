@@ -241,6 +241,20 @@ func TestIdentifyFindsTheStageOneCiphers(t *testing.T) {
 	}
 }
 
+// A long string in the question is never shown cut in the prefetch: she copied the cut one into a tool call.
+func TestPrefetchNeverShowsALongStringCut(t *testing.T) {
+	col, _ := Columnar("THESPAREKEYISUNDERTHEBLUEFLOWERPOTBYTHEBACKDOOROFTHECOTTAGESOLETYOURSELFINANDFEEDTHECATBEFORENOON", "garden", false)
+	p := Prefetch("This is a columnar transposition and the key word is lost: \"" + col + "\". What does it say?")
+	if !strings.Contains(p, "a string in the question (97 characters, starting \""+col[:12]+"…\"; take it from the question in full") ||
+		strings.Contains(p, col[:80]) || strings.Contains(p, "more characters]") || !strings.Contains(p, "FLOWERPOT") {
+		t.Fatal(p)
+	}
+	// a short one is still shown as it is
+	if p := Prefetch("What is 48656c6c6f20776f726c64 here?"); !strings.Contains(p, "Looked at 48656c6c6f20776f726c64:") {
+		t.Fatal(p)
+	}
+}
+
 // Every crack shows its work, so she can say how it fell from what was computed.
 func TestCrackOutputShowsTheWork(t *testing.T) {
 	vig, _ := Vigenere(prose, "lemon", false)
