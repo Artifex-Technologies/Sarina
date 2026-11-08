@@ -16,7 +16,9 @@ limbo_validate decompile "limbo-decompile disasm    sample.bin 0x401136"
 limbo_validate decompile "limbo-decompile decompile sample.bin 0x401136 0x4012a0"
 ```
 
-`triage` and `functions`/`disasm` use radare2 and take seconds to a minute.
+`triage` and `functions`/`disasm` use radare2 and take seconds to a minute. `triage` ends with "strings worth a rule": the
+sample's web and onion addresses, IP addresses, startup and hiding places, shell commands, mining pools and wallets, ransom
+words and long encoded blobs, the candidates Sarina drafts a YARA rule from (a person approves it).
 `decompile` uses Ghidra headless; every call boots a fresh guest and re-analyses the
 file, so ask for several functions in one call (up to 8) and use addresses from
 `functions`. The packaged skill `static-analysis` (operator-invoked) walks the model
