@@ -17,6 +17,7 @@ type Candidate struct {
 	Score    int // 0-100: how well the evidence fits
 	Evidence string
 	Preview  string // a decoding, when one makes sense
+	Work     string // for a cipher cracked here: how it fell (howItFell), so she can say how without making a method up
 }
 
 var (
@@ -129,8 +130,11 @@ func Identify(s string) ([]Candidate, Stats) {
 	t := strings.TrimSpace(s)
 	var cs []Candidate
 	add := func(what string, score int, evidence, preview string) {
-		cs = append(cs, Candidate{what, score, evidence, preview})
+		cs = append(cs, Candidate{What: what, Score: score, Evidence: evidence, Preview: preview})
 	}
+	// worked attaches the "How it fell" lines to the candidate just added (night 5 reruns, 2026-11-08: answering from this line
+	// alone she said a columnar transposition fell to Kasiski and per-column Caesar shifts, a method nothing here used)
+	worked := func(cipher, perLength string) { cs[len(cs)-1].Work = howItFell(t, cipher, perLength) }
 	if t == "" {
 		return cs, st
 	}
@@ -293,28 +297,43 @@ func Identify(s string) ([]Candidate, Stats) {
 				// at most, since the columnar search grows with the text
 				small := st.Letters <= 3000
 				var aff, bf, ak, tr []Guess
+				var akPer, colPer string
 				if small && st.Letters >= 20 {
 					aff = CrackAffine(t)
 				}
 				if small && ic < 0.05 && st.Letters >= 40 {
-					bf, ak = CrackBeaufort(t, 16), CrackAutokey(t, 12)
+					bf = CrackBeaufort(t, 16)
+					ak, akPer = crackAutokey(t, 12)
 				}
 				chi := ChiSquared(t)
 				transposed := ic >= 0.055 && st.Letters >= 30 && chi < 100 // the letters are English already: only their order changed
 				if small && transposed {
-					tr = append(CrackRailFence(t, 10), CrackColumnar(t, 8)...)
+					col, per := crackColumnar(t, 8)
+					rails := CrackRailFence(t, 10)
+					for i := range rails {
+						rails[i].Note += " (rail fence)"
+					}
+					tr, colPer = append(rails, col...), per
 					sort.SliceStable(tr, func(i, j int) bool { return readable(tr[i].Text, 0.4) && !readable(tr[j].Text, 0.4) })
 				}
 				if gs := CrackVigenere(t, 16); len(gs) > 0 && WordRatio(gs[0].Text) >= 0.25 {
 					add("a Vigenère cipher, key "+strings.ToUpper(gs[0].Key), 80, fmt.Sprintf("letters with index of coincidence %.3f (English 0.066, random 0.038); %s", ic, gs[0].Note), TruncateText(gs[0].Text, 200))
 				} else if len(bf) > 0 && readable(bf[0].Text, 0.4) {
 					add("a Beaufort cipher, key "+strings.ToUpper(bf[0].Key), 80, fmt.Sprintf("letters with index of coincidence %.3f (English 0.066, random 0.038); %s", ic, bf[0].Note), TruncateText(bf[0].Text, 200))
+					worked("beaufort", "")
 				} else if len(ak) > 0 && readable(ak[0].Text, 0.4) {
 					add("an autokey cipher, primer "+strings.ToUpper(ak[0].Key), 80, fmt.Sprintf("letters with index of coincidence %.3f (English 0.066, random 0.038), and no repeating key; %s", ic, ak[0].Note), TruncateText(ak[0].Text, 200))
+					worked("autokey", akPer)
 				} else if len(aff) > 0 && aff[0].Key != "a=1, b=0" && readable(aff[0].Text, 0.4) {
 					add("an affine cipher, key "+aff[0].Key, 85, "all 312 keys tried, each decoding's letter frequencies compared with English; the best: "+aff[0].Note, TruncateText(aff[0].Text, 200))
+					worked("affine", "")
 				} else if len(tr) > 0 && tr[0].Text != t && readable(tr[0].Text, 0.4) {
 					add("a transposition, key "+tr[0].Key, 80, fmt.Sprintf("the letters' own frequencies are English (chi-squared %.0f), only their order is changed; %s", chi, tr[0].Note), TruncateText(tr[0].Text, 200))
+					if strings.HasSuffix(tr[0].Note, "(rail fence)") {
+						worked("railfence", "")
+					} else {
+						worked("columnar", colPer)
+					}
 				} else if ic < 0.05 && st.Letters >= 40 {
 					add("a polyalphabetic cipher (Vigenère-like) or random letters", 50, fmt.Sprintf("flat letter frequencies: index of coincidence %.3f (English 0.066); the Vigenère, Beaufort and autokey crackers found no readable key", ic), "")
 				} else if transposed && st.Letters >= 60 && !strings.ContainsAny(t, " \n") {

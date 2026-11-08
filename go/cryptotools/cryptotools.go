@@ -249,6 +249,9 @@ func IdentifyReport(s, src string) string {
 		if c.Preview != "" {
 			fmt.Fprintf(&b, "\n   -> %s", strings.ReplaceAll(c.Preview, "\n", "\n   "))
 		}
+		if c.Work != "" {
+			fmt.Fprintf(&b, "\n   %s", strings.ReplaceAll(strings.TrimRight(c.Work, "\n"), "\n", "\n   "))
+		}
 		b.WriteString("\n")
 	}
 	b.WriteString(st.Describe() + ".\n")

@@ -199,16 +199,24 @@ func TestIdentifyFindsTheStageOneCiphers(t *testing.T) {
 	bf, _ := Beaufort("the signal fire will be lit on the north tower when the ships are seen, then ride to the castle and warn the king before the gates close at dusk", "falcon")
 	ak, _ := Autokey("send the letters to the old lighthouse on the hill and wait there until the keeper comes back with the boat", "storm", false)
 	col, _ := Columnar("THESPAREKEYISUNDERTHEBLUEFLOWERPOTBYTHEBACKDOOROFTHECOTTAGESOLETYOURSELFINANDFEEDTHECAT", "garden", false)
-	for _, c := range []struct{ text, what, preview string }{
-		{aff, "an affine cipher, key a=7, b=3", "behind the clock"},
-		{bf, "a Beaufort cipher, key FALCON", "north tower"},
-		{ak, "an autokey cipher, primer STORM", "lighthouse"},
-		{col, "a transposition, key 4 1 6 2 3 5", "FLOWERPOT"},
+	for _, c := range []struct{ text, what, preview, work string }{
+		{aff, "an affine cipher, key a=7, b=3", "behind the clock", "Letter frequencies"},
+		{bf, "a Beaufort cipher, key FALCON", "north tower", "Kasiski:"},
+		{ak, "an autokey cipher, primer STORM", "lighthouse", "per primer length"},
+		{col, "a transposition, key 4 1 6 2 3 5", "FLOWERPOT", "Every column order"},
 	} {
 		cs, _ := Identify(c.text)
-		if len(cs) == 0 || cs[0].What != c.what || !strings.Contains(cs[0].Preview, c.preview) {
+		if len(cs) == 0 || cs[0].What != c.what || !strings.Contains(cs[0].Preview, c.preview) || !strings.Contains(cs[0].Work, c.work) {
 			t.Errorf("%q: %+v", c.text, cs)
 		}
+		// the report she reads carries the work under the decoding
+		if r := IdentifyReport(c.text, "string"); !strings.Contains(r, "\n   How it fell") {
+			t.Errorf("no work in the report: %s", r)
+		}
+	}
+	// a Caesar line is unchanged (no work block): its cases passed before this, and stay as measured
+	if cs, _ := Identify(Caesar("we leave the city tonight and meet the others at the harbour", 9)); len(cs) == 0 || cs[0].Work != "" {
+		t.Errorf("caesar: %+v", cs)
 	}
 	// prose in another language, or full of rare words, is not called a transposition
 	for _, s := range []string{"Je ne sais pas pourquoi elle est partie ce matin sans rien dire a personne",

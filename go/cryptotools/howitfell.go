@@ -37,7 +37,7 @@ func howItFell(text, cipher, perLength string) string {
 	case "columnar", "railfence":
 		fmt.Fprintf(&b, "- Chi-squared of the ciphertext's own letters against English: %.0f. A transposition only moves letters, so their counts stay English.\n", ChiSquared(ls))
 		if perLength != "" {
-			fmt.Fprintf(&b, "- Every column order of each key length was tried; best common letter pairs per letter (plus the share of common words when there are spaces) per key length: %s.\n", perLength)
+			fmt.Fprintf(&b, "- Every column order of each key length was tried and scored by common letter pairs per letter plus the share of letters in common words (and of common words, when there are spaces); the best score per key length: %s.\n", perLength)
 		}
 	}
 	return b.String()
