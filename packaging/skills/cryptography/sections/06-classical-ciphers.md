@@ -6,7 +6,7 @@ Caesar (ROT-N): shift every letter by N. 26 possibilities: try them all and scor
 one has the lowest chi-squared and readable words. ROT13 is the shift 13, its own inverse. Atbash mirrors the alphabet (a-z, b-y).
 
 Affine: each letter x becomes a*x+b (mod 26); a must be coprime with 26 (1 3 5 7 9 11 15 17 19 21 23 25), so there are only 312 keys
-and the cracker tries them all, like Caesar (a=1 is a Caesar shift). crypto_classic cipher "affine", key "a,b" (for example "5,8").
+and the cracker tries them all, like Caesar (a=1 is a Caesar shift). crypto_classic cipher "affine", key = the two numbers "a,b"; to break one, crack=true.
 
 Monoalphabetic substitution: each letter replaced by a fixed other letter (26! keys, far too many to try). Broken by frequency
 analysis: in English e, t, a, o, i, n are the most common letters, th, he, in, er the most common pairs, "the" the most common word;
@@ -33,8 +33,9 @@ rail counts and scores the words that appear.
 
 Columnar transposition: the text is written in rows as wide as the key word and read off column by column, in the alphabetical order
 of the key's letters (no padding: the last row may be short). The cracker tries every column order for key lengths 2 to 8 and scores
-common letter pairs (and words, when the text has spaces); it finds the order, written as the rank of each column ("6 3 2 4 1 5"),
-not the key word, since any word with letters in that order gives the same cipher. On short text without spaces the message can come
+common letter pairs (and words, when the text has spaces); it finds the order (printed as the rank of each column), not the key
+word, since any word with letters in that order gives the same cipher. To break one, use crack=true; give a key only when the owner
+gave you one. On short text without spaces the message can come
 out rotated (a few letters of its end first); the tool says when that can happen. crypto_classic cipher "columnar", key = a word or
 the ranks.
 
