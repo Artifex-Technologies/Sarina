@@ -629,7 +629,8 @@ func columnar(rs []rune, order []int, decode bool) string {
 }
 
 // CrackColumnar tries every column order of every key length 2..maxWidth (at most 8: 8! = 40,320 orders) and scores each decoding by
-// its common English letter pairs and triples, and by its words when the text has spaces. Best guess first.
+// its common English letter pairs and triples, and by its words when the text has spaces; the best orders of each length are then
+// scored again by how much of their letters common words cover, which reads text without spaces. Best guess first.
 func CrackColumnar(s string, maxWidth int) []Guess {
 	gs, _ := crackColumnar(s, maxWidth)
 	return gs
@@ -649,6 +650,11 @@ func crackColumnar(s string, maxWidth int) ([]Guess, string) {
 		}
 		return f
 	}
+	type cand struct {
+		f     float64
+		order []int
+	}
+	const keep = 30 // the orders of one length scored again by word cover
 	var gs []Guess
 	var per []string
 	for w := 2; w <= maxWidth && w*2 <= len(rs); w++ {
@@ -656,20 +662,33 @@ func crackColumnar(s string, maxWidth int) ([]Guess, string) {
 		for i := range perm {
 			perm[i] = i
 		}
-		best := math.Inf(-1)
-		var bestOrder []int
+		var top []cand // best first
 		permutations(perm, func(p []int) {
-			if f := fit(columnar(rs, p, true)); f > best {
-				best, bestOrder = f, append(bestOrder[:0], p...)
+			f := fit(columnar(rs, p, true))
+			if len(top) == keep && f <= top[keep-1].f {
+				return
+			}
+			i := sort.Search(len(top), func(i int) bool { return top[i].f < f })
+			top = append(top, cand{})
+			copy(top[i+1:], top[i:])
+			top[i] = cand{f, append([]int(nil), p...)}
+			if len(top) > keep {
+				top = top[:keep]
 			}
 		})
-		t := columnar(rs, bestOrder, true)
-		note := fmt.Sprintf("key length %d, %.2f common letter pairs per letter", w, ngramRate(t))
+		best := cand{f: math.Inf(-1)}
+		for _, c := range top {
+			if f := c.f + wordCover(lowerLetters(columnar(rs, c.order, true))); f > best.f {
+				best = cand{f, c.order}
+			}
+		}
+		t := columnar(rs, best.order, true)
+		note := fmt.Sprintf("key length %d, %.2f common letter pairs per letter, %.0f%% of the letters in common words", w, ngramRate(t), 100*wordCover(lowerLetters(t)))
 		if spaced {
 			note += fmt.Sprintf(", %.0f%% common words", 100*WordRatio(t))
 		}
-		gs = append(gs, Guess{Key: columnRanks(bestOrder), Text: t, Score: best, Note: note})
-		per = append(per, fmt.Sprintf("%d %.2f", w, best))
+		gs = append(gs, Guess{Key: columnRanks(best.order), Text: t, Score: best.f, Note: note})
+		per = append(per, fmt.Sprintf("%d %.2f", w, best.f))
 	}
 	sort.SliceStable(gs, func(i, j int) bool { return gs[i].Score > gs[j].Score })
 	if len(gs) > 3 {
@@ -766,12 +785,30 @@ func ngramRate(s string) float64 {
 	return float64(hits) / float64(n)
 }
 
-// readsAsEnglish: common words, or for text without spaces, common letter pairs.
+// wordCover is the share of the letters (a..z only) that common English words of two or more letters cover when the text is split
+// into words the best way: it reads text written without spaces.
+func wordCover(ls string) float64 {
+	if ls == "" {
+		return 0
+	}
+	best := make([]int, len(ls)+1) // best[i]: most letters of ls[:i] covered
+	for i := 1; i <= len(ls); i++ {
+		best[i] = best[i-1]
+		for l := 2; l <= 12 && l <= i; l++ {
+			if commonWords[ls[i-l:i]] && best[i-l]+l > best[i] {
+				best[i] = best[i-l] + l
+			}
+		}
+	}
+	return float64(best[len(ls)]) / float64(len(ls))
+}
+
+// readsAsEnglish: common words, or for text without spaces, common letter pairs or letters covered by common words.
 func readsAsEnglish(s string) bool {
 	if strings.ContainsAny(strings.TrimSpace(s), " \n") {
 		return WordRatio(s) >= 0.2
 	}
-	return ngramRate(s) >= 0.7
+	return ngramRate(s) >= 0.7 || wordCover(lowerLetters(s)) >= 0.5
 }
 
 // CrackSubstitution hill-climbs the key (swapping two letters at a time, several restarts) towards English letter, bigram and trigram

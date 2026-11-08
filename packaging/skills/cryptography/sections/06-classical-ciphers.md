@@ -34,7 +34,8 @@ rail counts and scores the words that appear.
 Columnar transposition: the text is written in rows as wide as the key word and read off column by column, in the alphabetical order
 of the key's letters (no padding: the last row may be short). The cracker tries every column order for key lengths 2 to 8 and scores
 common letter pairs (and words, when the text has spaces); it finds the order, written as the rank of each column ("6 3 2 4 1 5"),
-not the key word, since any word with letters in that order gives the same cipher. crypto_classic cipher "columnar", key = a word or
+not the key word, since any word with letters in that order gives the same cipher. On short text without spaces the message can come
+out rotated (a few letters of its end first); the tool says when that can happen. crypto_classic cipher "columnar", key = a word or
 the ranks.
 
 XOR with a short key: each byte XORed with a repeating key. A single-byte key is brute-forced (256 tries); a longer key's length is

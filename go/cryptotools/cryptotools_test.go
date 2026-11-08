@@ -172,6 +172,24 @@ func TestStageOneCrackers(t *testing.T) {
 	if readsAsEnglish(col2) {
 		t.Fatal("the transposed letters do not read as English")
 	}
+	for _, key := range []string{"zebras", "lantern", "abc", "dbca", "windows"} {
+		c, _ := Columnar(plain, key, false)
+		if gs := CrackColumnar(c, 8); gs[0].Text != plain {
+			t.Fatalf("columnar crack with %s: %+v", key, gs[0])
+		}
+	}
+	// short and without spaces, the message can come out rotated (it did with the key cipher on these 59 letters); the answer says so
+	short := "THESPAREKEYISUNDERTHEBLUEFLOWERPOTBYTHEBACKDOOROFTHECOTTAGE"
+	c, _ := Columnar(short, "cipher", false)
+	if out, _ := Classic(c, "columnar", "", false, true); !strings.Contains(out, "read it as a circle") || !strings.Contains(out, "SPAREKEY") {
+		t.Fatal(out)
+	}
+	if out, _ := Classic(col2, "columnar", "", false, true); strings.Contains(out, "read it as a circle") {
+		t.Fatal("90 letters are not short: " + out)
+	}
+	if wordCover("") != 0 || wordCover("thekeyisunder") < 0.99 || wordCover("xqzjvkwpqxzj") > 0 {
+		t.Fatal("word cover")
+	}
 }
 
 // Every crack shows its work, so she can say how it fell from what was computed.

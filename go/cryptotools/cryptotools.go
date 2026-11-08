@@ -337,7 +337,11 @@ func Classic(text, cipher, key string, decode, crack bool) (string, error) {
 	case "columnar":
 		if crack {
 			gs, per := crackColumnar(text, 8)
-			return guesses(gs, "columnar transposition (key = the rank of each column)") + work(per), nil
+			out := guesses(gs, "columnar transposition (key = the rank of each column)")
+			if !strings.ContainsAny(strings.TrimSpace(text), " \n") && len(lowerLetters(text)) < 80 {
+				out += "The text is short and has no spaces: an order that shows the message rotated (a few letters of its end first) can score as well as the right one; if the best guess starts or ends mid-word, read it as a circle.\n"
+			}
+			return out + work(per), nil
 		}
 		order, err := columnOrder(key)
 		if err != nil {
