@@ -13,6 +13,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -86,8 +87,11 @@ func TestPNGLSBEmbedFindDiff(t *testing.T) {
 	if !strings.Contains(rep, "NO readable LSB payload") || strings.Contains(rep, "FOUND") {
 		t.Fatal(rep)
 	}
-	if strings.Contains(rep, "exiftool was run") || strings.Contains(rep, "binwalk was run") {
-		t.Fatal("no helper is installed here, so none may be reported as run: " + rep)
+	// a helper that is not installed is never reported as run (an installed one is run, so this test passes either way)
+	for _, h := range []string{"exiftool", "binwalk"} {
+		if _, err := exec.LookPath(h); err != nil && strings.Contains(rep, h+" was run") {
+			t.Fatal(h + " is not installed here, so it may not be reported as run: " + rep)
+		}
 	}
 	// an image too small for the payload
 	if _, err := Embed(noisyImage(2, 2, 1), []byte("too long for four pixels")); err == nil {
