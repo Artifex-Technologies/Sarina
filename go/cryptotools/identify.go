@@ -288,12 +288,41 @@ func Identify(s string) ([]Candidate, Stats) {
 				add("Atbash (mirrored alphabet)", 85, fmt.Sprintf("%.0f%% common words after mirroring", 100*WordRatio(at)), TruncateText(at, 200))
 			} else {
 				ic := IndexOfCoincidence(t)
+				// the stage 1 crackers too (eval crypto-beaufort, 2026-11-07: this line said only that the Vigenère cracker found
+				// nothing, and she answered from it with a made-up plaintext instead of calling crypto_classic); a few thousand letters
+				// at most, since the columnar search grows with the text
+				small := st.Letters <= 3000
+				var aff, bf, ak, tr []Guess
+				if small && st.Letters >= 20 {
+					aff = CrackAffine(t)
+				}
+				if small && ic < 0.05 && st.Letters >= 40 {
+					bf, ak = CrackBeaufort(t, 16), CrackAutokey(t, 12)
+				}
+				chi := ChiSquared(t)
+				transposed := ic >= 0.055 && st.Letters >= 30 && chi < 100 // the letters are English already: only their order changed
+				if small && transposed {
+					tr = append(CrackRailFence(t, 10), CrackColumnar(t, 8)...)
+					sort.SliceStable(tr, func(i, j int) bool { return readable(tr[i].Text, 0.4) && !readable(tr[j].Text, 0.4) })
+				}
 				if gs := CrackVigenere(t, 16); len(gs) > 0 && WordRatio(gs[0].Text) >= 0.25 {
 					add("a Vigenère cipher, key "+strings.ToUpper(gs[0].Key), 80, fmt.Sprintf("letters with index of coincidence %.3f (English 0.066, random 0.038); %s", ic, gs[0].Note), TruncateText(gs[0].Text, 200))
+				} else if len(bf) > 0 && readable(bf[0].Text, 0.4) {
+					add("a Beaufort cipher, key "+strings.ToUpper(bf[0].Key), 80, fmt.Sprintf("letters with index of coincidence %.3f (English 0.066, random 0.038); %s", ic, bf[0].Note), TruncateText(bf[0].Text, 200))
+				} else if len(ak) > 0 && readable(ak[0].Text, 0.4) {
+					add("an autokey cipher, primer "+strings.ToUpper(ak[0].Key), 80, fmt.Sprintf("letters with index of coincidence %.3f (English 0.066, random 0.038), and no repeating key; %s", ic, ak[0].Note), TruncateText(ak[0].Text, 200))
+				} else if len(aff) > 0 && aff[0].Key != "a=1, b=0" && readable(aff[0].Text, 0.4) {
+					add("an affine cipher, key "+aff[0].Key, 85, "all 312 keys tried, each decoding's letter frequencies compared with English; the best: "+aff[0].Note, TruncateText(aff[0].Text, 200))
+				} else if len(tr) > 0 && tr[0].Text != t && readable(tr[0].Text, 0.4) {
+					add("a transposition, key "+tr[0].Key, 80, fmt.Sprintf("the letters' own frequencies are English (chi-squared %.0f), only their order is changed; %s", chi, tr[0].Note), TruncateText(tr[0].Text, 200))
 				} else if ic < 0.05 && st.Letters >= 40 {
-					add("a polyalphabetic cipher (Vigenère-like) or random letters", 50, fmt.Sprintf("flat letter frequencies: index of coincidence %.3f (English 0.066); the Vigenère cracker found no readable key", ic), "")
+					add("a polyalphabetic cipher (Vigenère-like) or random letters", 50, fmt.Sprintf("flat letter frequencies: index of coincidence %.3f (English 0.066); the Vigenère, Beaufort and autokey crackers found no readable key", ic), "")
+				} else if transposed && st.Letters >= 60 && !strings.ContainsAny(t, " \n") {
+					// a block of letters: with spaces it is more often prose in another language or full of rare words, which the
+					// substitution line below has always covered
+					add("a transposition (letters moved, not replaced)", 55, fmt.Sprintf("the letters' own frequencies are English (chi-squared %.0f, index of coincidence %.3f) but no English words; the rail fence and columnar crackers (key lengths up to 8) found no readable order", chi, ic), "")
 				} else if ic >= 0.055 && st.Letters >= 60 {
-					add("a monoalphabetic substitution", 55, fmt.Sprintf("English-like letter spread (index of coincidence %.3f) but no English words: each letter replaced by another; crypto_classic with cipher substitution and crack tries it", ic), "")
+					add("a monoalphabetic substitution", 55, fmt.Sprintf("English-like letter spread (index of coincidence %.3f) but no English words, and no affine key reads: each letter replaced by another; crypto_classic with cipher substitution and crack tries it", ic), "")
 				} else if best(cs) < 50 {
 					// only when nothing better was found: next to a real reading this line is noise
 					add("letters, not English: a cipher, another language or a name", 30, fmt.Sprintf("%.0f%% common English words, index of coincidence %.3f", 100*WordRatio(t), ic), "")
@@ -306,6 +335,15 @@ func Identify(s string) ([]Candidate, Stats) {
 	}
 	sort.SliceStable(cs, func(i, j int) bool { return cs[i].Score > cs[j].Score })
 	return cs, st
+}
+
+// readable: a decoding that reads as English, by its common words (at least this share) or, for text without spaces, its letter pairs
+// and the letters common words cover.
+func readable(t string, words float64) bool {
+	if strings.ContainsAny(strings.TrimSpace(t), " \n") {
+		return WordRatio(t) >= words
+	}
+	return readsAsEnglish(t)
 }
 
 // crackXOR tries every single-byte key and, for longer data, repeating keys of 2 to 8 bytes (key length by the Hamming distance

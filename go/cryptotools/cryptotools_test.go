@@ -192,6 +192,47 @@ func TestStageOneCrackers(t *testing.T) {
 	}
 }
 
+// crypto_identify (and so the prefetch) cracks the stage 1 ciphers itself, the way it does Vigenère (eval crypto-beaufort and
+// crypto-autokey, 2026-11-07: its line said only "the Vigenère cracker found no readable key", and she answered from it without a tool)
+func TestIdentifyFindsTheStageOneCiphers(t *testing.T) {
+	aff, _ := Affine("the treasure map is hidden behind the clock in the library, meet me there at noon", 7, 3, false)
+	bf, _ := Beaufort("the signal fire will be lit on the north tower when the ships are seen, then ride to the castle and warn the king before the gates close at dusk", "falcon")
+	ak, _ := Autokey("send the letters to the old lighthouse on the hill and wait there until the keeper comes back with the boat", "storm", false)
+	col, _ := Columnar("THESPAREKEYISUNDERTHEBLUEFLOWERPOTBYTHEBACKDOOROFTHECOTTAGESOLETYOURSELFINANDFEEDTHECAT", "garden", false)
+	for _, c := range []struct{ text, what, preview string }{
+		{aff, "an affine cipher, key a=7, b=3", "behind the clock"},
+		{bf, "a Beaufort cipher, key FALCON", "north tower"},
+		{ak, "an autokey cipher, primer STORM", "lighthouse"},
+		{col, "a transposition, key 4 1 6 2 3 5", "FLOWERPOT"},
+	} {
+		cs, _ := Identify(c.text)
+		if len(cs) == 0 || cs[0].What != c.what || !strings.Contains(cs[0].Preview, c.preview) {
+			t.Errorf("%q: %+v", c.text, cs)
+		}
+	}
+	// prose in another language, or full of rare words, is not called a transposition
+	for _, s := range []string{"Je ne sais pas pourquoi elle est partie ce matin sans rien dire a personne",
+		"Kubernetes ingress controllers terminate TLS before proxying upstream workloads"} {
+		if cs, _ := Identify(s); len(cs) > 0 && strings.Contains(cs[0].What, "transposition") {
+			t.Errorf("%q called %s", s, cs[0].What)
+		}
+	}
+	// a block of letters whose order no cracker restores is still named for what its letters show
+	rs := []rune(strings.Repeat("THEKEYISUNDERTHEMAT", 4))
+	for i := range rs {
+		j := (i*7 + 3) % len(rs)
+		rs[i], rs[j] = rs[j], rs[i]
+	}
+	found := false
+	cs, _ := Identify(string(rs))
+	for _, c := range cs {
+		found = found || strings.Contains(c.What, "transposition")
+	}
+	if !found {
+		t.Errorf("scrambled block: %+v", cs)
+	}
+}
+
 // Every crack shows its work, so she can say how it fell from what was computed.
 func TestCrackOutputShowsTheWork(t *testing.T) {
 	vig, _ := Vigenere(prose, "lemon", false)
