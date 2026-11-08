@@ -87,6 +87,138 @@ func TestCrackers(t *testing.T) {
 	}
 }
 
+// E14 stage 1 part A: affine, Beaufort, autokey and columnar transposition, with known answers worked by hand or from the standard
+// textbook examples, and crackers that recover the key from the shared test prose.
+func TestStageOneCiphersKnownAnswers(t *testing.T) {
+	if got, err := Affine("AFFINECIPHER", 5, 8, false); err != nil || got != "IHHWVCSWFRCP" {
+		t.Fatalf("affine: %q %v", got, err)
+	}
+	if got, _ := Affine("IHHWVCSWFRCP", 5, 8, true); got != "AFFINECIPHER" {
+		t.Fatalf("affine decode: %q", got)
+	}
+	if _, err := Affine("x", 13, 1, false); err == nil {
+		t.Fatal("a = 13 shares a factor with 26 and must be refused")
+	}
+	for _, k := range []string{"5,8", "5 8", "a=5, b=8"} {
+		if a, b, err := parseAffineKey(k); err != nil || a != 5 || b != 8 {
+			t.Fatalf("affine key %q: %d %d %v", k, a, b, err)
+		}
+	}
+	if _, _, err := parseAffineKey("5"); err == nil {
+		t.Fatal("an affine key needs two numbers")
+	}
+	// Beaufort, by hand: K-H=3 D, E-E=0 A, Y-L=13 N, K-L=-1 Z, E-O=-10 Q
+	if got, err := Beaufort("HELLO", "KEY"); err != nil || got != "DANZQ" {
+		t.Fatalf("beaufort: %q %v", got, err)
+	}
+	if got, _ := Beaufort("DANZQ", "key"); got != "HELLO" {
+		t.Fatalf("beaufort is its own inverse: %q", got)
+	}
+	if got, _ := Beaufort("DEFENDTHEEASTWALLOFTHECASTLE", "FORTIFICATION"); got != "CKMPVCPVWPIWUJOGIUAPVWRIWUUK" {
+		t.Fatalf("beaufort, the textbook example: %q", got)
+	}
+	// autokey: the key stream is QUEENLY then the plaintext (a t t a c ...)
+	if got, err := Autokey("attackatdawn", "QUEENLY", false); err != nil || got != "qnxepvytwtwp" {
+		t.Fatalf("autokey: %q %v", got, err)
+	}
+	if got, _ := Autokey("Qnxe pvyt, wtwp!", "queenly", true); got != "Atta ckat, dawn!" {
+		t.Fatalf("autokey decode keeps case and punctuation: %q", got)
+	}
+	if _, err := Autokey("x", "123", false); err == nil {
+		t.Fatal("an autokey primer needs a letter")
+	}
+	// columnar, irregular (no padding): ZEBRAS reads the columns A B E R S Z, i.e. ranks 6 3 2 4 1 5
+	for _, key := range []string{"ZEBRAS", "632415", "6 3 2 4 1 5"} {
+		if got, err := Columnar("WEAREDISCOVEREDFLEEATONCE", key, false); err != nil || got != "EVLNACDTESEAROFODEECWIREE" {
+			t.Fatalf("columnar with %q: %q %v", key, got, err)
+		}
+	}
+	if got, _ := Columnar("EVLNACDTESEAROFODEECWIREE", "zebras", true); got != "WEAREDISCOVEREDFLEEATONCE" {
+		t.Fatalf("columnar decode: %q", got)
+	}
+	if order, _ := columnOrder("zebras"); columnRanks(order) != "6 3 2 4 1 5" {
+		t.Fatalf("ranks: %v", order)
+	}
+	for _, bad := range []string{"a", "1 1 2", "1 2 4", ""} {
+		if _, err := Columnar("hello", bad, false); err == nil {
+			t.Fatalf("columnar key %q must be refused", bad)
+		}
+	}
+}
+
+func TestStageOneCrackers(t *testing.T) {
+	aff, _ := Affine(prose, 5, 8, false)
+	if gs := CrackAffine(aff); gs[0].Key != "a=5, b=8" || !strings.HasPrefix(gs[0].Text, "Attack at dawn") {
+		t.Fatalf("affine crack: %+v", gs[0])
+	}
+	bf, _ := Beaufort(prose, "lemon")
+	if gs := CrackBeaufort(bf, 16); len(gs) == 0 || gs[0].Key != "lemon" || gs[0].Text != prose {
+		t.Fatalf("beaufort crack: %+v", gs)
+	}
+	ak, _ := Autokey(prose, "queenly", false)
+	if gs := CrackAutokey(ak, 12); len(gs) == 0 || gs[0].Key != "queenly" || gs[0].Text != prose {
+		t.Fatalf("autokey crack: %+v", gs)
+	}
+	col, _ := Columnar(prose, "zebras", false)
+	if gs := CrackColumnar(col, 8); len(gs) == 0 || gs[0].Key != "6 3 2 4 1 5" || gs[0].Text != prose {
+		t.Fatalf("columnar crack: %+v", gs)
+	}
+	// no spaces to find words by: the letter pairs decide
+	plain := strings.ToUpper(lowerLetters(prose)[:90])
+	col2, _ := Columnar(plain, "cipher", false)
+	if gs := CrackColumnar(col2, 8); len(gs) == 0 || gs[0].Text != plain || !readsAsEnglish(gs[0].Text) {
+		t.Fatalf("columnar crack without spaces: %+v", gs)
+	}
+	if readsAsEnglish(col2) {
+		t.Fatal("the transposed letters do not read as English")
+	}
+}
+
+// Every crack shows its work, so she can say how it fell from what was computed.
+func TestCrackOutputShowsTheWork(t *testing.T) {
+	vig, _ := Vigenere(prose, "lemon", false)
+	out, err := Classic(vig, "vigenere", "", false, true)
+	if err != nil || !strings.Contains(out, "How it fell") || !strings.Contains(out, "Kasiski:") || !strings.Contains(out, "Factors the distances share most: 5 (") ||
+		!strings.Contains(out, "Index of coincidence per key length") || !strings.Contains(out, "5 0.087") || !strings.Contains(out, "Letter frequencies") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	bf, _ := Beaufort(prose, "lemon")
+	if out, _ := Classic(bf, "beaufort", "", false, true); !strings.Contains(out, "key lemon") || !strings.Contains(out, "Kasiski:") {
+		t.Fatal(out)
+	}
+	ak, _ := Autokey(prose, "queenly", false)
+	if out, _ := Classic(ak, "autokey", "", false, true); !strings.Contains(out, "key queenly") || !strings.Contains(out, "does not repeat") || !strings.Contains(out, "per primer length") {
+		t.Fatal(out)
+	}
+	col, _ := Columnar(prose, "zebras", false)
+	if out, _ := Classic(col, "columnar", "", false, true); !strings.Contains(out, "key 6 3 2 4 1 5") || !strings.Contains(out, "only moves letters") || !strings.Contains(out, "per key length: 2 ") {
+		t.Fatal(out)
+	}
+	aff, _ := Affine(prose, 5, 8, false)
+	if out, _ := Classic(aff, "affine", "", false, true); !strings.Contains(out, "key a=5, b=8") || !strings.Contains(out, "English-like, so one alphabet") || strings.Contains(out, "Kasiski") {
+		t.Fatal(out)
+	}
+	if out, _ := Classic("IHHWVCSWFRCP", "affine", "5,8", true, false); !strings.Contains(out, "AFFINECIPHER") {
+		t.Fatal(out)
+	}
+	if out, _ := Classic("HELLO", "beaufort", "KEY", false, false); !strings.Contains(out, "DANZQ") {
+		t.Fatal(out)
+	}
+	if out, _ := Classic("attackatdawn", "autokey", "queenly", false, false); !strings.Contains(out, "qnxepvytwtwp") {
+		t.Fatal(out)
+	}
+	if out, _ := Classic("WEAREDISCOVEREDFLEEATONCE", "columnar", "ZEBRAS", false, false); !strings.Contains(out, "EVLNACDTESEAROFODEECWIREE") || !strings.Contains(out, "6 3 2 4 1 5") {
+		t.Fatal(out)
+	}
+	if _, err := Classic("hello", "affine", "13,2", false, false); err == nil {
+		t.Fatal("affine a=13 must be refused")
+	}
+	// a text with no repeating trigram says so instead of inventing distances
+	if k := kasiski("abcdefghij", 16); !strings.Contains(k, "no trigram repeats") {
+		t.Fatal(k)
+	}
+}
+
 func TestDecoders(t *testing.T) {
 	cases := map[string][2]string{
 		"hex":     {"48656c6c6f20776f726c64", "Hello world"},

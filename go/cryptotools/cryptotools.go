@@ -136,10 +136,10 @@ func Tools() []tools.Tool {
 			Class: tools.ClassReadOnly,
 			Spec: llm.ToolSpec{
 				Name:        "crypto_classic",
-				Description: "Classical ciphers, computed: encode or decode with caesar (key = shift), rot13, atbash, vigenere (key = word), railfence (key = rails), substitution (key = 26-letter alphabet); or crack=true to find the key (caesar, vigenere, railfence, substitution) scored against English.",
+				Description: "Classical ciphers, computed: encode or decode with caesar (key = shift), rot13, atbash, affine (key = a,b), vigenere, beaufort, autokey (key = word), railfence (key = rails), columnar (key = word or column order), substitution (key = 26-letter alphabet); or crack=true to find the key, scored against English, with the work shown (frequencies, index of coincidence, Kasiski).",
 				Parameters: map[string]any{"type": "object", "required": []string{"text", "cipher"}, "properties": map[string]any{
 					"text":   map[string]any{"type": "string"},
-					"cipher": map[string]any{"type": "string", "enum": []string{"caesar", "rot13", "atbash", "vigenere", "railfence", "substitution"}},
+					"cipher": map[string]any{"type": "string", "enum": []string{"caesar", "rot13", "atbash", "affine", "vigenere", "beaufort", "autokey", "railfence", "columnar", "substitution"}},
 					"key":    map[string]any{"type": "string", "description": "The key (a number for caesar and railfence)."},
 					"decode": map[string]any{"type": "boolean", "description": "true to decode with the key (default: encode)."},
 					"crack":  map[string]any{"type": "boolean", "description": "true to find the key without knowing it."},
@@ -270,15 +270,16 @@ func Classic(text, cipher, key string, decode, crack bool) (string, error) {
 		for i, g := range gs {
 			fmt.Fprintf(&sb, "%d. key %s (%s):\n   %s\n", i+1, g.Key, g.Note, strings.ReplaceAll(TruncateText(g.Text, 600), "\n", "\n   "))
 		}
-		if WordRatio(gs[0].Text) < 0.2 {
+		if !readsAsEnglish(gs[0].Text) {
 			sb.WriteString("None of these reads as English (few common words): the cipher is probably something else, or the language is not English.\n")
 		}
 		return sb.String()
 	}
+	work := func(perLength string) string { return howItFell(text, cipher, perLength) }
 	switch cipher {
 	case "caesar":
 		if crack {
-			return guesses(CrackCaesar(text), "Caesar"), nil
+			return guesses(CrackCaesar(text), "Caesar") + work(""), nil
 		}
 		var n int
 		if _, err := fmt.Sscan(key, &n); err != nil {
@@ -294,16 +295,59 @@ func Classic(text, cipher, key string, decode, crack bool) (string, error) {
 		fmt.Fprintf(&b, "Atbash:\n%s", Atbash(text))
 	case "vigenere":
 		if crack {
-			return guesses(CrackVigenere(text, 16), "Vigenère"), nil
+			return guesses(CrackVigenere(text, 16), "Vigenère") + work(""), nil
 		}
 		out, err := Vigenere(text, key, decode)
 		if err != nil {
 			return "", err
 		}
 		fmt.Fprintf(&b, "Vigenère with key %s (%s):\n%s", strings.ToUpper(key), map[bool]string{true: "decoded", false: "encoded"}[decode], out)
+	case "affine":
+		if crack {
+			return guesses(CrackAffine(text), "affine") + work(""), nil
+		}
+		a, k, err := parseAffineKey(key)
+		if err != nil {
+			return "", err
+		}
+		out, err := Affine(text, a, k, decode)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, "Affine with a=%d, b=%d (%s):\n%s", a, k, map[bool]string{true: "decoded", false: "encoded"}[decode], out)
+	case "beaufort":
+		if crack {
+			return guesses(CrackBeaufort(text, 16), "Beaufort") + work(""), nil
+		}
+		out, err := Beaufort(text, key)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, "Beaufort with key %s (encoding and decoding are the same operation):\n%s", strings.ToUpper(key), out)
+	case "autokey":
+		if crack {
+			gs, per := crackAutokey(text, 12)
+			return guesses(gs, "autokey") + work(per), nil
+		}
+		out, err := Autokey(text, key, decode)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, "Autokey with primer %s (%s):\n%s", strings.ToUpper(key), map[bool]string{true: "decoded", false: "encoded"}[decode], out)
+	case "columnar":
+		if crack {
+			gs, per := crackColumnar(text, 8)
+			return guesses(gs, "columnar transposition (key = the rank of each column)") + work(per), nil
+		}
+		order, err := columnOrder(key)
+		if err != nil {
+			return "", err
+		}
+		out, _ := Columnar(text, key, decode)
+		fmt.Fprintf(&b, "Columnar transposition with key %s, column ranks %s (%s):\n%s", key, columnRanks(order), map[bool]string{true: "decoded", false: "encoded"}[decode], out)
 	case "railfence":
 		if crack {
-			return guesses(CrackRailFence(text, 10), "rail fence"), nil
+			return guesses(CrackRailFence(text, 10), "rail fence") + work(""), nil
 		}
 		var n int
 		if _, err := fmt.Sscan(key, &n); err != nil {
@@ -319,9 +363,9 @@ func Classic(text, cipher, key string, decode, crack bool) (string, error) {
 			g := CrackSubstitution(text, 6)
 			fmt.Fprintf(&b, "Substitution guess (%s). Cipher alphabet for plain a..z: %s\n%s", g.Note, strings.ToUpper(g.Key), TruncateText(g.Text, 1500))
 			if WordRatio(g.Text) < 0.2 {
-				b.WriteString("\nThis does not read as English: the hill-climb did not find the key (too little text, or not a simple substitution). Letter frequencies, most common first: " + letterOrder(text))
+				b.WriteString("\nThis does not read as English: the hill-climb did not find the key (too little text, or not a simple substitution).")
 			}
-			return b.String(), nil
+			return b.String() + "\n" + work(""), nil
 		}
 		out, err := Substitution(text, key, decode)
 		if err != nil {
