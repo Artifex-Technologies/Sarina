@@ -4,8 +4,8 @@
 
 A local AI assistant that runs on your own computer: a helper and companion for
 [Labyrinth OS](https://github.com/Artifex-Technologies/Labyrinth_OS) (a gaming-focused system based on CachyOS,
-with its own desktop, Yggdrasil) and for Chymaera OS (the security edition, to be renamed
-Niflheim OS). She talks to any OpenAI-compatible model server (Ollama by default; vLLM, LiteLLM,
+with its own desktop, Yggdrasil) and for [LykanOS](https://github.com/Artifex-Technologies/LykanOS) (the security
+edition, formerly Chymaera OS and Niflheim OS). She talks to any OpenAI-compatible model server (Ollama by default; vLLM, LiteLLM,
 llama.cpp), calls tools, keeps sessions and notes on disk, and can move to a bigger machine or to Claude
 when the local model is not enough. The core is one static Go binary.
 
@@ -239,7 +239,7 @@ shell tools.
 | --- | --- | --- |
 | `Labyrinth_OS` | the gaming-focused OS (CachyOS base) | packages her (optional), voice, crash helper, daily check-up |
 | `Yggdrasil` | the desktop (panel, Fylgja, Settings, Agora, Minos, compositor) | Super+S, Settings > Sarina's agents |
-| `Chymaera_OS` | the security edition, to be renamed Niflheim OS | hosts her for security work |
+| `LykanOS` | the security edition (formerly Chymaera OS, then Niflheim OS) | hosts her for security work |
 | `Heimdall` | the security watcher | watches her sessions, reviews what she keeps, signs her behaviour files, can contain her; she reads its findings |
 | `Limbo` | disposable virtual machines | where her validation runs and agents execute |
 | `Argus_App`, `Argus_Firmware` | Flipper Zero desktop console and firmware (formerly Chymaera Zero) | read-only advisories, local control API |

@@ -1,6 +1,6 @@
 # Sarina's voice in her own package (plan, 2026-11-07)
 
-Decided 2026-11-07: Sarina is part of Niflheim OS too, so her voice must not depend on Labyrinth's image. Planned, not built. I
+Decided 2026-11-07: Sarina is part of LykanOS (then LykanOS OS) too, so her voice must not depend on Labyrinth's image. Planned, not built. I
 want to test it myself right after it is done, because Super+S is how I talk to her every day. On hold (2026-11-07): I cannot
 test Super+S for a while (how its sound would work over the stream to my iPad is unclear), so it is
 not built until I can.
@@ -23,7 +23,7 @@ live only in Labyrinth's image (`Labyrinth_OS/profile/airootfs/usr/local/bin`):
 | `labyrinth-sarina-checkup` | the daily check-up |
 | `labyrinth-sarina-voice-setup`, `labyrinth-sarina` | first-run setup and the launcher |
 
-On Niflheim Yggdrasil therefore shows Sarina as an assistant, but Super+S has nothing behind it.
+On LykanOS Yggdrasil therefore shows Sarina as an assistant, but Super+S has nothing behind it.
 
 ## The plan
 
@@ -39,12 +39,12 @@ On Niflheim Yggdrasil therefore shows Sarina as an assistant, but Super+S has no
    second package `sarina-voice-git` from the same recipe. A second package keeps Sarina light where nobody talks to her; I
    lean that way.
 4. **Integration file:** `sarina.integration.conf` names the new programs. Labyrinth's image stops shipping its copies
-   (`profile/airootfs/usr/local/bin`), and installs the package instead; Niflheim's package list gains it.
+   (`profile/airootfs/usr/local/bin`), and installs the package instead; LykanOS's package list gains it.
 5. **Test with me there:** on my PC, the package installed over the image's copies (the copies in `/usr/local/bin` win on
    `PATH`, so they are taken away in the same step), then Super+S: a question, an answer spoken, a joke she remembers, the
    Settings > Assistant switches, the daily reflect timer. Only then the Labyrinth image change and the ISO.
 
 ## Not in this step
 
-Her tool access on Niflheim (all the security tools once she is ready) is a separate plan: Heimdall needs its rules for each
-BlackArch tool first (Niflheim's docs/DESKTOP.md, "Heimdall and the firewall").
+Her tool access on LykanOS (all the security tools once she is ready) is a separate plan: Heimdall needs its rules for each
+BlackArch tool first (LykanOS's docs/DESKTOP.md, "Heimdall and the firewall").

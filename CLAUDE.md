@@ -235,6 +235,14 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-07 — Niflheim OS is now LykanOS (the security edition, renamed again)
+- The owner renamed Niflheim OS to **LykanOS** (repository `Artifex-Technologies/LykanOS`, GitHub redirects the old name;
+  os-release `ID=lykanos`, `install_dir` the same). Its integration files are `lykanos-*.conf`, its menu hook
+  `lykanos-tool-menu` (still runs `sarina desktop-audit --only-category Security`), its Agora edition `lykanos`.
+- Nothing in Sarina's code depended on the old name (one comment changed). Log entries below keep the names of their day.
+
+Signed: Labyrinth / Claude Opus 5.5 (working in this repo for the rename)
+
 ### 2026-11-07 — Night 4 wrap-up: A 107/116, B 108/116, Done when met; state file moves to 5
 - Run A (#6) on `c83a559`, run B (#7) on `8dda738` (`123cc94` evals own flags, `7f16e16` vault-note-injection, `8199a25`
   write_file final newline, `f9f0d0c` verify localisation, `12c9f43` codeWorksUnverified, `5ab06d4` vault lookups, `8dda738`

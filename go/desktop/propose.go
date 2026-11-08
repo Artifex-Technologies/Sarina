@@ -269,7 +269,7 @@ func AuditMenu(entries []DesktopEntry, packages []InstalledPackage, opt AuditOpt
 // the user application directory) and returns the paths written. Proposals
 // below minConfidence are skipped. The caller must have asked the operator.
 // OnlyCategories keeps the proposals that carry one of the comma-separated categories in list (all of them when list is empty):
-// a distribution that wants menu entries for one kind of tool (Niflheim: Security) and not for every command-line package.
+// a distribution that wants menu entries for one kind of tool (LykanOS: Security) and not for every command-line package.
 func OnlyCategories(proposals []CategoryProposal, list string) []CategoryProposal {
 	want := map[string]bool{}
 	for _, c := range strings.Split(list, ",") {
