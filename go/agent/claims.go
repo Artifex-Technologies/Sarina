@@ -300,8 +300,10 @@ var toolClaimRE = regexp.MustCompile(`(?i)\b(the (reverse[- ]engineering |analys
 
 // claimsToolWork reports an answer that describes tool work ("I checked", "the tool showed") in a task where no tool ran: the answer is made up.
 func claimsToolWork(answer, prompt string, msgs []session.Message) bool {
-	// a spoken question can arrive with the system's report or her guide notes already looked up and placed in it: that is evidence too
-	if strings.Contains(prompt, "already looked up for you") || strings.Contains(prompt, "From your guides") {
+	// a spoken question can arrive with the system's report or her guide notes already looked up and placed in it: that is evidence too;
+	// so is crypto_identify's result placed in a crypto question (crypto-autokey 2026-11-08, and Caesar, Vigenère, columnar before it)
+	if strings.Contains(prompt, "already looked up for you") || strings.Contains(prompt, "From your guides") ||
+		strings.Contains(prompt, "Already computed for you (crypto_identify") {
 		return false
 	}
 	for _, m := range msgs {

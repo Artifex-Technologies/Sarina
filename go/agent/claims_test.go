@@ -104,6 +104,17 @@ func TestClaimsToolWork(t *testing.T) {
 	if claimsToolWork("Paris is the capital of France.", "p", nil) || claimsToolWork("I checked: memory is fine.", "What the computer reports right now (read-only, already looked up for you", nil) {
 		t.Fatal("ordinary answers must pass")
 	}
+	// crypto-autokey, 2026-11-08: a right answer made from the crypto_identify result placed in her question was sent back as
+	// "you used no tool"; she then decoded again with the primer she had been given and lost how it fell
+	cryptoPrompt := "Already computed for you (crypto_identify on what the question contains; call the crypto tools for anything else):\n\n" +
+		"1. an autokey cipher, primer STORM (fit 80/100).\n\nYou are looking at something cryptographic for the owner."
+	if claimsToolWork("The text is an autokey cipher with primer \"STORM\" (chi-squared 23 for length 5).\nEvidence: The tool identified it as autokey with primer STORM (fit 80/100).", cryptoPrompt, nil) {
+		t.Fatal("the prefetched crypto_identify result is tool work")
+	}
+	// still caught without anything looked up (missing-file, 2026-11-04)
+	if !claimsToolWork("The file `docs/DOES_NOT_EXIST.md` does not exist. I checked the `docs/` directory and did not find this file.", "Summarize docs/DOES_NOT_EXIST.md.", nil) {
+		t.Fatal("made-up checking without a prefetch must be caught")
+	}
 }
 
 func TestTaskInsteadOfFile(t *testing.T) {
