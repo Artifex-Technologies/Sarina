@@ -235,6 +235,23 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-09 — Day session: the owner's answers to the night 5 questions, applied before night 6
+- Owner (answers-for-claude.txt, 2026-11-09): all seven yes. `ladder-applied-2` y: tier 2 stays applied; he takes access back
+  only if it is detrimental, never because the numbers dip.
+- `carry-on-advice`: `go/agent/claims.go` `closingAdvice`. After an answer that already holds something (80 characters before
+  the sentence), a tool named in a sentence that only checks the result again ("to verify / confirm / reproduce") or makes it
+  depend on a condition ("if it's encoded", "if needed") is advice, not a skipped step: no nudge. Still nudged: a planned step
+  ("Next step: Run `stego_clean agent.go` to remove the marks"), "check if X is encoded (use crypto_identify)", and a reply that is
+  only advice. Unit test from the six real sentences in the night 5 notes. Not rerun 3x on the card (the owner is using it);
+  tonight's run A is the first number on it.
+- Eval wording (`evals/run_evals.py`): `_SHOW_WORK` also counts chi-squared, letter pairs, column order; crypto-aes-no-key
+  accepts "the plaintext is hidden/unknown" (and its must_not no longer catches that sentence); crypto-jwt-not-verified accepts
+  "requires the secret (key)"; crypto-hash-file accepts "has the expected"; missing-file accepts "does not appear to exist".
+- Not changed: stego case (c) (the second answer replacing the first after a "check if" nudge) and wm-clean's file-changed
+  send-back, both in the night 5 notes.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-09 — Night 5 repeat wrap-up: A 113/120, B 111/120, crypto 20/20, Done when met; state file moves to 6
 - Run A on `73c238e`, run B on `0a2478f` (`51d3ff5` stego_inspect scans a folder for inspect/text too, `0a2478f` the crypto
   prefetch counts as tool work in claimsToolWork). Reports in Labyrinth_OS `d39eaa0`; plan section 6 rows `bace261`.
