@@ -65,14 +65,16 @@ func Tools() []tools.Tool {
 				}
 				return Watermarks(t).Describe() + evidenceNote, map[string]any{"action": "stego_text"}, nil
 			}
-			if action == "watermark" {
-				if path == "" {
-					t, _ := a["text"].(string)
-					if t == "" {
-						return "", nil, fmt.Errorf("give text or a path")
-					}
-					return Watermarks(t).Describe() + evidenceNote, map[string]any{"action": "stego_watermark"}, nil
+			if action == "watermark" && path == "" {
+				t, _ := a["text"].(string)
+				if t == "" {
+					return "", nil, fmt.Errorf("give text or a path")
 				}
+				return Watermarks(t).Describe() + evidenceNote, map[string]any{"action": "stego_watermark"}, nil
+			}
+			// a folder has no one-file report; the folder-wide watermark scan is the check that reads one ("scan this whole folder"
+			// sent inspect "." and she stopped at "not a regular file", eval wm-folder)
+			if path != "" && (action == "inspect" || action == "text" || action == "watermark") {
 				if dir, ok := folderIn(path, tc); ok {
 					return ScanFolder(dir, 2000) + evidenceNote, map[string]any{"action": "stego_watermark", "path": path}, nil
 				}

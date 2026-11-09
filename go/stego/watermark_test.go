@@ -2,6 +2,7 @@ package stego
 
 import (
 	"bytes"
+	"context"
 	"image"
 	"image/color"
 	"image/png"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Artifex-Technologies/Sarina/go/tools"
 )
 
 // what a compromised agent could leave in code: an instruction in tag characters, a message in variation selectors, a look-alike letter
@@ -110,5 +113,41 @@ func TestAFolderScanFindsTheMarkedFile(t *testing.T) {
 	r := ScanFolder(dir, 100)
 	if !strings.Contains(r, "2 text files") || !strings.Contains(r, "1 with marks") || !strings.Contains(r, filepath.Join("sub", "bad.go")) {
 		t.Fatalf("%s", r)
+	}
+}
+
+// eval wm-folder: "Scan this whole folder" made her call stego_inspect with path "." and the default action; the answer was
+// ". is not a regular file", and she stopped. A folder gets the folder-wide scan whatever the reading action.
+func TestInspectOnAFolderScansIt(t *testing.T) {
+	t.Setenv("SARINA_CRYPTO", "on")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "clean.go"), []byte("package ok\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "agent.go"), []byte(markedCode()), 0o644)
+	var inspect tools.Tool
+	for _, tl := range Tools() {
+		if tl.Spec.Name == "stego_inspect" {
+			inspect = tl
+		}
+	}
+	if inspect.Handler == nil {
+		t.Fatal("no stego_inspect")
+	}
+	tc := &tools.Context{Root: dir}
+	for _, action := range []string{"", "inspect", "text", "watermark"} {
+		out, meta, err := inspect.Handler(context.Background(), map[string]any{"action": action, "path": "."}, tc)
+		if err != nil {
+			t.Fatalf("action %q: %v", action, err)
+		}
+		if !strings.Contains(out, "2 text files") || !strings.Contains(out, "1 with marks") || !strings.Contains(out, "== agent.go") ||
+			meta["action"] != "stego_watermark" {
+			t.Fatalf("action %q: %s %v", action, out, meta)
+		}
+	}
+	if _, _, err := inspect.Handler(context.Background(), map[string]any{"action": "lsb", "path": "."}, tc); err == nil ||
+		!strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("lsb on a folder: %v", err)
+	}
+	if _, _, err := inspect.Handler(context.Background(), map[string]any{"action": "inspect"}, tc); err == nil {
+		t.Fatal("no path was read as the workspace")
 	}
 }
