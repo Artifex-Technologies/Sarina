@@ -1331,12 +1331,44 @@ func toolNamedNotCalled(answer string, msgs []session.Message, offered []string)
 		}
 		re := suggestToolRE(name)
 		for _, loc := range re.FindAllStringIndex(answer, -1) {
-			if !conditionalRE.MatchString(sentenceAround(answer, loc[0], loc[1])) {
-				return name
+			s := sentenceAround(answer, loc[0], loc[1])
+			if conditionalRE.MatchString(s) || closingAdvice(answer, loc[0], s) {
+				continue
 			}
+			return name
 		}
 	}
 	return ""
+}
+
+// verifyAdviceRE is a sentence whose purpose is checking a result already given ("... to verify", "to reproduce the decryption").
+var verifyAdviceRE = regexp.MustCompile(`(?i)\bto (verify|confirm|reproduce|double[- ]?check|cross[- ]?check|validate)\b`)
+
+// ifWordRE finds "if" and the word before it, so "check if" / "see if" (what a step would find out) can be told from a condition.
+var ifWordRE = regexp.MustCompile(`(?i)(\w+)?\W*\bif\b`)
+
+// closingAdvice is a tool named in advice after an answer that already holds the result: a sentence that only checks it again
+// ("Use crypto_classic with cipher "autokey" and key "STORM" to verify.") or makes the tool depend on a condition ("Use
+// crypto_identify on the payload if it's encoded"). Owner's yes 2026-11-09 (carry-on-advice): nights 4-5 had 58 such nudges,
+// and the second answer dropped the first one's result (stego-lsb-payload, stego-zero-width, stego-appended-zip, wm-folder).
+// "Check if X is encoded (use crypto_identify)" is not a condition and still counts as a step. Something has to have been
+// answered before the sentence (80 characters), so a reply that is only the advice still gets the nudge.
+func closingAdvice(answer string, at int, sentence string) bool {
+	start := strings.LastIndexAny(answer[:at], ".!?\n") + 1
+	if len(strings.TrimSpace(answer[:start])) < 80 {
+		return false
+	}
+	if verifyAdviceRE.MatchString(sentence) {
+		return true
+	}
+	for _, m := range ifWordRE.FindAllStringSubmatch(sentence, -1) {
+		switch strings.ToLower(m[1]) {
+		case "check", "see", "test", "determine", "know", "tell", "whether", "verify", "confirm", "find", "out":
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 // sentenceAround is the sentence (or line) holding answer[i:j].

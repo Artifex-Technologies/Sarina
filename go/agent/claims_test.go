@@ -752,6 +752,37 @@ func TestAFailingTestAfterACodeChangeIsStillUnfinished(t *testing.T) {
 	}
 }
 
+// Nights 4-5 (2026-11-07/08), the real closing sentences after a complete answer: advice, not a skipped step (carry-on-advice,
+// owner's yes 2026-11-09).
+func TestAdviceAfterACompleteAnswerIsNotNudged(t *testing.T) {
+	offered := []string{"crypto_identify", "crypto_classic", "stego_clean", "stego_inspect"}
+	done := "The password is flag{lsb_payload_77}, hidden in the least significant bits of the image (rgb order, 1 bit per channel).\n\n"
+	for name, tail := range map[string]string{
+		"if it's encoded (stego-lsb-payload)": "**Next step:** Use `crypto_identify` on the payload if it's encoded, or report the flag as found.",
+		"to confirm (stego-zero-width)":       "The payload might be encoded (e.g., base64) — use `crypto_identify` on \"meet at dawn\" to confirm.",
+		"to reproduce (columnar)":             "Use `crypto_classic` with `cipher=columnar` and `crack=true` to reproduce the decryption process.",
+		"to verify (autokey)":                 "Use `crypto_classic` with cipher \"autokey\" and key \"STORM\" to verify.",
+		"if encrypted":                        "If encrypted, use `crypto_identify` on the text.",
+		"if needed":                           "Use `crypto_identify` on the text if needed.",
+	} {
+		if got := toolNamedNotCalled(done+tail, nil, offered); got != "" {
+			t.Errorf("%s: nudged for %s", name, got)
+		}
+	}
+	// the real catch stays (wm-clean: asked to remove the marks, the cleaning only named)
+	if toolNamedNotCalled(done+"Next step: Run `stego_clean agent.go` to remove the marks.", nil, offered) != "stego_clean" {
+		t.Error("a planned step after an answer was let go")
+	}
+	// "check if" is what the step finds out, not a condition
+	if toolNamedNotCalled(done+"Next step: check if it is encoded (use `crypto_identify` on it).", nil, offered) != "crypto_identify" {
+		t.Error("a check-if step was taken for a condition")
+	}
+	// with no answer before it, advice is all there is: still nudged
+	if toolNamedNotCalled("Use `crypto_identify` on the text to confirm.", nil, offered) != "crypto_identify" {
+		t.Error("a reply that is only advice was let go")
+	}
+}
+
 // Night 2 (2026-11-04), the real sentences: none of these is a skipped step.
 func TestToolNamesInPathsAdviceAndOffersAreNotNudged(t *testing.T) {
 	offered := []string{"agent", "read_file", "crypto_hash", "stego_clean"}
