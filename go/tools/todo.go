@@ -775,9 +775,8 @@ func taskUpdate() Tool {
 		Requires: PermWrite, Class: ClassMutating,
 		Spec: llm.ToolSpec{
 			Name:        "task_update",
-			Description: "Change the given fields of a to-do task (the rest stay). status: in_progress starts it (blocked instead while a blocked_by task is unfinished); " +
-				"completed finishes it and releases tasks waiting only on it; cancelled and blocked record the reason. " +
-				"add_blocked_by / remove_blocked_by edit dependencies; blocked_by replaces the list; an unknown dependency id is reported, not blocking.",
+			Description: "Change the given fields of a to-do task (the rest stay). completed releases tasks waiting on it; blocked and cancelled take a reason. " +
+				"blocked_by replaces the dependencies, add_blocked_by / remove_blocked_by edit them; an unknown dependency id does not block.",
 			Parameters: obj(map[string]any{
 				"task_id":           taskIDProp(),
 				"title":             prop("string", "", "minLength", 1),
@@ -985,9 +984,8 @@ func updatePlan() Tool {
 		Requires: PermWrite, Class: ClassMutating,
 		Spec: llm.ToolSpec{
 			Name:        "update_plan",
-			Description: "Replace the plan with the given steps; mirrors them into the to-do list unless sync_tasks is false. " +
-				"The to-do list is merged by id and never emptied: tasks that are not steps stay (removed only with prune_tasks, and only if an earlier plan created them). " +
-				"clear=true empties the plan instead of giving items; it leaves the to-do list alone unless prune_tasks=true, which then removes the tasks plans created.",
+			Description: "Replace the plan with the given steps, mirrored into the to-do list by id unless sync_tasks is false; other tasks stay. " +
+				"clear=true empties the plan; prune_tasks also removes tasks earlier plans made.",
 			Parameters: obj(map[string]any{
 				"items": map[string]any{
 					"type": "array",

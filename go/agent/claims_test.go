@@ -1033,3 +1033,41 @@ func TestCodeWorksUnverifiedHearsAReportedFailure(t *testing.T) {
 		}
 	}
 }
+
+// The run A session of code-fix-failing-test (2026-11-09): list_dir, read_file calc.go, then the fix described and nothing changed.
+// Before anything ran the tests she is sent to check_code; once check_code or a change ran, or when check_code is not offered, not.
+func TestUnreproducedFailure(t *testing.T) {
+	prompt := "go test fails in this folder. Fix the bug in the code so the test passes. Do not change the test file. Say what was wrong."
+	call := func(name string) session.Message {
+		return session.Message{Role: "assistant", ToolCalls: []llm.WireToolCall{{Function: llm.FunctionCall{Name: name, Arguments: "{}"}}}}
+	}
+	read := []session.Message{call("list_dir"), {Role: "tool", Content: "file\tcalc.go\nfile\tcalc_test.go\nfile\tgo.mod"},
+		call("read_file"), {Role: "tool", Content: "package calc\n\n// Add returns the sum of a and b.\nfunc Add(a, b int) int {\n\treturn a - b\n}\n"}}
+	offered := []string{"read_file", "list_dir", "write_file", "edit_file", "check_code"}
+	if !unreproducedFailure(prompt, read, offered) {
+		t.Fatal("a fix described before anything ran the tests must be sent to check_code")
+	}
+	if !unreproducedFailure("python3 -m unittest fails in this folder. Fix slug.py so the tests pass, without changing test_slug.py, and say what was wrong.", read, offered) {
+		t.Fatal("code-python-fix's prompt says a test fails too")
+	}
+	for name, msgs := range map[string][]session.Message{
+		"check_code ran": append(read[:4:4], call("check_code"), session.Message{Role: "tool", Content: "check_code .: CHECK FAILED (tests"}),
+		"an edit ran":    append(read[:4:4], call("edit_file"), session.Message{Role: "tool", Content: "Edited calc.go"}),
+	} {
+		if unreproducedFailure(prompt, msgs, offered) {
+			t.Fatalf("%s: no nudge wanted", name)
+		}
+	}
+	if unreproducedFailure(prompt, read, []string{"read_file", "list_dir"}) {
+		t.Fatal("check_code not offered (a read-only session): no nudge")
+	}
+	for _, p := range []string{
+		"I wrote the Trachtenberg rule for 11 as a Python function in rule11.py. Can you test it for me and tell me if it's right?",
+		"Add a function Reverse(s string) string to text.go and a test for it in text_test.go.",
+		"Write count_lines.py: if the file does not exist, print an error and exit with status 1.",
+	} {
+		if unreproducedFailure(p, read, offered) {
+			t.Fatalf("no test said to fail: %q", p)
+		}
+	}
+}

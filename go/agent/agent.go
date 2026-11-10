@@ -592,6 +592,15 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					r.segments = nil
 					continue
 				}
+				// reproduce before edit: the fix is made after the failure is seen, not from the code's look (plan Day 6)
+				if !sentNudges["check_code"] && unreproducedFailure(prompt, sess.Messages[min(msgStart, len(sess.Messages)):], a.offeredTools()) {
+					nudges++
+					sentNudges["check_code"] = true
+					sess.Append(session.Message{Role: "user", MessageID: fmt.Sprintf("continue_%d", turn), Content: unreproducedFailureText})
+					r.emit(event{"type": "continue_nudge", "turn_index": turn})
+					r.segments = nil
+					continue
+				}
 				// code explained from its name or first line is a step not done, not a wrong claim: it asks for a read or a decompile,
 				// and the one claim send-back stays free for inventedCode on the rewrite (eval find-function, 2026-10-26: this one spent
 				// it, and the made-up function in the rewrite went out unchecked)

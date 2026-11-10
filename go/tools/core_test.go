@@ -92,7 +92,7 @@ func (e *env) exists(rel string) bool {
 
 func TestEveryToolDeclaresItsPermission(t *testing.T) {
 	want := map[string]Permission{
-		"write_file": PermWrite, "edit_file": PermWrite,
+		"write_file": PermWrite, "edit_file": PermWrite, "check_code": PermWrite,
 		"task_create": PermWrite, "task_update": PermWrite,
 		"todo_write": PermWrite, "update_plan": PermWrite,
 		"bash": PermShell, "TaskStop": PermShell,

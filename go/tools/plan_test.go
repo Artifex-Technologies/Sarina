@@ -14,7 +14,7 @@ func TestEveryToolHasAnExplicitPlanModeClass(t *testing.T) {
 		"read_file": ClassReadOnly, "list_dir": ClassReadOnly, "glob_search": ClassReadOnly, "grep_search": ClassReadOnly, "git_read": ClassReadOnly,
 		"TaskOutput": ClassReadOnly, "task_list": ClassReadOnly,
 		"plan_get":   ClassReadOnly,
-		"write_file": ClassMutating, "edit_file": ClassMutating, "bash": ClassMutating, "TaskStop": ClassMutating,
+		"write_file": ClassMutating, "edit_file": ClassMutating, "check_code": ClassMutating, "bash": ClassMutating, "TaskStop": ClassMutating,
 		"task_create": ClassMutating, "task_update": ClassMutating,
 		"todo_write": ClassMutating, "update_plan": ClassMutating,
 		"enter_plan_mode": ClassPlanControl, "exit_plan_mode": ClassPlanControl,

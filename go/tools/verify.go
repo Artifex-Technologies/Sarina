@@ -31,10 +31,15 @@ var cargoManifestRE = regexp.MustCompile(`(?m)^\[package\]`)
 // verifyCode checks the changed file. It returns a line for the tool's answer and the metadata keys verify (ok|failed|skipped),
 // verify_tests (true when tests ran and passed) and verify_output.
 func verifyCode(ctx context.Context, path string, tc *Context) (string, map[string]any) {
+	tests, trusted, sandbox := verifyMode(tc, os.Getenv, haveBwrap())
+	return verifyRun(ctx, path, tc, tests, trusted, sandbox, "shell commands are off in this session")
+}
+
+// verifyRun runs the checks for path in the given mode; noTests is why tests did not run when tests is false.
+func verifyRun(ctx context.Context, path string, tc *Context, tests, trusted, sandbox bool, noTests string) (string, map[string]any) {
 	md := map[string]any{"verify": "skipped"}
 	ext := strings.ToLower(filepath.Ext(path))
 	dir := filepath.Dir(path)
-	tests, trusted, sandbox := verifyMode(tc, os.Getenv, haveBwrap())
 	var steps [][]string
 	var label, failKey string
 	testFrom := 1 // the steps from this one on run her code (the tests); the ones before only build or check syntax
@@ -205,7 +210,7 @@ func verifyCode(ctx context.Context, path string, tc *Context) (string, map[stri
 		note += " (The tests ran in a sandbox: a copy of the project, no network.)"
 	}
 	if !tests && (ext == ".go" || ext == ".rs" || ext == ".py") {
-		note += " Tests were not run (shell commands are off in this session): do not say the tests pass."
+		note += " Tests were not run (" + noTests + "): do not say the tests pass."
 	}
 	if o := strings.TrimSpace(out.String()); o != "" {
 		note += "\n" + o

@@ -1236,6 +1236,28 @@ func fixPendingAfterFailedCheck(answer string, history []map[string]any) string 
 	return last
 }
 
+// testFailsRE is a task that says a test fails ("go test fails in this folder", "python3 -m unittest fails", "the failing test").
+var testFailsRE = regexp.MustCompile(`(?i)\b(tests?|unittest|pytest)\b[^.\n]{0,40}\b(fails?|failing|failed)\b|\bfailing tests?\b`)
+
+// unreproducedFailure is an answer to a task that says a test fails, given before anything ran the tests: no check_code, and no
+// change whose check would have run them (plan Day 6, reproduce before edit; eval code-fix-failing-test, 2026-11-09: she read
+// calc.go, described the fix and changed nothing). Only when check_code is offered.
+func unreproducedFailure(prompt string, msgs []session.Message, offered []string) bool {
+	if !slices.Contains(offered, "check_code") || !testFailsRE.MatchString(prompt) {
+		return false
+	}
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			if n := c.Function.Name; n == "check_code" || fileWriteTools[n] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+const unreproducedFailureText = "Carry on: the task says a test fails, and nothing has run it yet. Run check_code on the package first to see the failure and the code it points at, then make the fix with edit_file."
+
 func fixPendingText(file string) string {
 	return "Carry on: the check after your last change to " + file + " failed, and you have described the fix without making it. Make it now with edit_file, then answer with what the check said."
 }
