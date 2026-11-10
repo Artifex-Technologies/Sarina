@@ -189,7 +189,14 @@ func verifyRun(ctx context.Context, path string, tc *Context, tests, trusted, sa
 					st.mu.Unlock()
 				}
 			}
-			return fmt.Sprintf("\nCHECK FAILED (%s, %s):\n%s%s%s\nFix this before you answer; do not say the code works.", what, strings.Join(step, " "), head, clipText(clipLines(text, 40), 3000), tail), md
+			advice := "Fix this before you answer; do not say the code works."
+			if what == "tests" && ownTestOnOthersCode(stateOf(tc), path) {
+				// owner's yes 2026-11-10 (tt-own-test-fails): her new test failing on code she did not write is a finding, not a
+				// licence to change that code (tt-code-test: she edited the owner's rule11.py until her own test passed)
+				advice = "Your test fails on the code it tests: report it (what fails, and whether the test or the code looks wrong); change that code only if you were asked to fix it."
+				md["verify_own_test"] = true
+			}
+			return fmt.Sprintf("\nCHECK FAILED (%s, %s):\n%s%s%s\n%s", what, strings.Join(step, " "), head, clipText(clipLines(text, 40), 3000), tail, advice), md
 		}
 		if i >= testFrom {
 			md["verify_tests"] = true
@@ -410,4 +417,32 @@ func vetOnly(ctx context.Context, tc *Context, dir, path string, step []string, 
 	}
 	md["verify"] = "ok"
 	return fmt.Sprintf("\nCheck passed: the build (%s). Tests were not run (%s): do not say the tests pass.", strings.Join(step, " "), why), md
+}
+
+// testFileRE is a file that holds tests rather than the code they test.
+var testFileRE = regexp.MustCompile(`(^test_.*\.py$|_test\.(py|go)$|\.(test|spec)\.(js|ts|mjs)$|^tests?\.rs$)`)
+
+// ownTestOnOthersCode: path is a test file she created in this session, and she has created or edited no other (non-test)
+// file in its folder, so a failure is about code she did not write.
+func ownTestOnOthersCode(st *fileState, path string) bool {
+	if !testFileRE.MatchString(filepath.Base(path)) {
+		return false
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if !st.authored[path] {
+		return false
+	}
+	dir := filepath.Dir(path)
+	for p := range st.authored {
+		if filepath.Dir(p) == dir && !testFileRE.MatchString(filepath.Base(p)) {
+			return false
+		}
+	}
+	for p, n := range st.edits {
+		if n > 0 && filepath.Dir(p) == dir && !testFileRE.MatchString(filepath.Base(p)) {
+			return false
+		}
+	}
+	return true
 }
