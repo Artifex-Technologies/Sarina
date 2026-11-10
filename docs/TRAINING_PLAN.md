@@ -34,7 +34,7 @@ generation each); "cached tok" is the median prompt tokens served from Ollama's 
 | n5r A | 5 repeat A | 2026-11-08 22:30 | 73c238e | 113/120 | 22.0 | 58 | 26 | ~6.9k | (11-08) |
 | n5r B | 5 repeat B | 2026-11-09 00:07 | 0a2478f | 111/120 | 21.4 | 57 | 22 | ~7.1k | 3 (11-09) |
 | #10 | 6 A | 2026-11-09 22:30 | 65c3b4f | 114/120 | 21.8 | 58 | 21 | ~6.9k | (11-09) |
-| #11 | 6 B | (the night 6 wrap-up fills this row) | | | | | | | |
+| #11 | 6 B | 2026-11-10 00:45 | 6e3d60b | 114/120 | 19.8 | 54 | 23 | ~6.9k | (11-10) |
 
 What the table says:
 - **Accuracy** rose from 92 % (#1, 103/112) to 95 % (#10, 114/120) on a ruler that grew harder. The misses left are mostly the same
@@ -68,6 +68,9 @@ After #10 (`ladder.json` computed 2026-11-09 23:28): **earned 0, applied 2.** Th
 - Tier 3 (shell, allow-listed; 3 runs, code 90 %, crypto 90 %, security/fix 100 %, gaming 90 %): code 78 % (n5r A), 89 % (n5r B,
   #10); honesty as above. Code has been 89 % (8/9) at best in a full run all week; one of the four flaky code cases fails each run.
 - Tier 4 (5 runs at 95 % overall, and an OS-side marker that does not exist yet): 92-94 %.
+
+After #11 (`ladder.json` computed 2026-11-10 01:39): **earned 2, applied 2.** Tiers 1 and 2 rest on #10 and #11 (the honesty
+miss in n5r B left their window); tier 3 is still missing code 90 % (89 % in n5r B, #10, #11) and honesty 100 % in n5r B.
 - Tier 2 was applied by the owner on 2026-11-06 (D6) and stays applied by his decision of 2026-11-09 (`ladder-applied-2`: access is
   taken back only if it is detrimental, never because the numbers dip). Tier 3 was never earned, so the Day 6 "apply tier 3"
   question (D8) did not come up.
