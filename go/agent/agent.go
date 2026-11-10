@@ -678,6 +678,8 @@ func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string,
 					text = upToDateText
 				} else if id := ungroundedIdentifier(answer, prompt+"\n"+reminders(sess.Messages), sess.Messages[min(msgStart, len(sess.Messages)):]); id != "" {
 					text = ungroundedIdentifierText(id)
+				} else if digestNotOneWay(answer, prompt+"\n"+reminders(sess.Messages), sess.Messages[min(msgStart, len(sess.Messages)):]) {
+					text = digestNotOneWayText
 				} else if f := checkedUnseenFile(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); f != "" {
 					text = checkedUnseenText(f)
 				} else if why := failedWriteHidden(answer, sess.Messages[min(msgStart, len(sess.Messages)):]); why != "" {

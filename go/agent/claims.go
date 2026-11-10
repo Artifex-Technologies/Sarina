@@ -565,6 +565,26 @@ func ungroundedIdentifier(answer, prompt string, msgs []session.Message) string 
 	return ""
 }
 
+var (
+	// digestFirstRE is crypto_identify's report (a call, or the crypto prefetch in the prompt) with a hex digest as its first candidate
+	digestFirstRE = regexp.MustCompile(`\b1\. a hex digest: `)
+	hashWordRE    = regexp.MustCompile(`(?i)\b(hash|hashes|digest|sha-?\d+|md5)\b`)
+	oneWayRE      = regexp.MustCompile(`(?i)(one[- ]way|irreversible|not reversible|unrecoverable|(cannot|can'?t|can ?not) (be )?(reversed|recovered|derived|determined|known|decrypted|decoded|reverse|recover|derive|decrypt|decode)|no (way|means) (to|of) |(says|reveals|tells( you)?|contains) nothing about|does(n'?t| not) (say|contain|reveal|encode))`)
+	// compareRE is an answer that reports a comparison (crypto-hash-file: "matches the expected value"): the question was not what the
+	// digest says
+	compareRE = regexp.MustCompile(`(?i)\b(match(es|ed)?|the same|identical|equal)\b`)
+)
+
+// digestNotOneWay is an answer about a hash that crypto_identify reported first (a hex digest) which never says a hash is one-way
+// (plan Day 6 step 3, eval crypto-hash-says: 2026-11-04 10:41 she offered to compare a candidate and never said the digest cannot be
+// read back). An answer that reports a comparison is left alone.
+func digestNotOneWay(answer, prompt string, msgs []session.Message) bool {
+	ev, _ := evidenceOf(prompt, msgs)
+	return digestFirstRE.MatchString(ev) && hashWordRE.MatchString(answer) && !oneWayRE.MatchString(answer) && !compareRE.MatchString(answer)
+}
+
+const digestNotOneWayText = "Check before you finish: crypto_identify found a hash here, and your answer does not say what a hash cannot give. Write your whole answer again, complete: keep what the tools showed, and say plainly that a hash is one-way: it cannot be reversed to its input, only compared against the hash of a candidate. Do not talk about this check."
+
 func ungroundedIdentifierText(id string) string {
 	return "Check before you finish: your answer gives \"" + id + "\", but no tool output in this task and nothing in the question contains it. Such a value is read, never worked out: if you did not see it, do not state it. Write your whole answer again, complete, using only values you saw, or look it up with your tools first. Do not talk about this check."
 }

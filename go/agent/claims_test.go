@@ -1071,3 +1071,44 @@ func TestUnreproducedFailure(t *testing.T) {
 		}
 	}
 }
+
+// crypto-hash-says (plan Day 6 step 3): the answers are real ones from the reports. The 2026-11-04 10:41 FAIL never said a digest is
+// one-way; the passing answers each say it one way or another; crypto-hash-file reports a comparison and is left alone; a hex string
+// crypto_identify read as text first is no digest.
+func TestDigestNotOneWay(t *testing.T) {
+	const prefetch = "Already computed for you (crypto_identify on what the question contains; call the crypto tools for anything else):\n\n" +
+		"Looked at a string in the question (64 characters):\nWhat the string looks like, most likely first:\n" +
+		"1. a hex digest: SHA-256, SHA3-256, BLAKE2s-256 or a Keccak-256 (Ethereum) hash (fit 85/100). Evidence: 64 hex digits = 256 bits.\n" +
+		"   -> a hash is one-way: it says nothing about its input; it can be compared against the hash of a candidate (crypto_hash with expected)\n"
+	prompt := prefetch + "\nWhat does this hash say? e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	fail := "The `crypto_hash` tool requires input data to hash. Since no text or file path was provided, it cannot compute the hash. To proceed, supply the text you want to hash (e.g., an empty string) or a file path, and I’ll compare its SHA-256 hash to `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`."
+	if !digestNotOneWay(fail, prompt, nil) {
+		t.Fatal("the 11-04 FAIL answer must be sent back")
+	}
+	// the same report from a crypto_identify call instead of the prefetch (tool output is JSON-escaped)
+	called := []session.Message{{Role: "tool", Name: "crypto_identify", Content: `{"tool":"crypto_identify","ok":true,"content":"What the string looks like, most likely first:\n1. a hex digest: SHA-256, SHA3-256, BLAKE2s-256 or a Keccak-256 (Ethereum) hash (fit 85/100)."}`}}
+	if !digestNotOneWay(fail, "What does this hash say? e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", called) {
+		t.Fatal("a crypto_identify call's report counts as well as the prefetch")
+	}
+	for _, ok := range []string{
+		"**Content**: Nothing; hashes are one-way.",
+		"**What cannot be known**: The original input cannot be reversed from this hash.",
+		"**Content**: It represents the fixed-size output of hashing some input data. Without a candidate input to compare (via `crypto_hash` with `expected`), the original data cannot be determined.",
+		"**What cannot be known**: The input data is unrecoverable from the hash alone.",
+		"**Content/result**: The digest itself; it encodes the input’s data uniquely but reveals nothing about the input.",
+		"**Content/result**: It is a fixed-size digest of some input data. The hash itself contains no information about the original input. The original input cannot be reversed from this hash.",
+		// crypto-hash-file (2026-11-09 run A): a comparison, no one-way sentence, rightly
+		"The SHA-256 hash of notes.txt matches the expected value:  \n`69deeb309a959015045fa534e33ea9f7770e9bf26824d6ac2e8d99a82a04ca2b`  \n\nIts MD5 hash is:  \n`1068a76328ff51a3f890300605df7eb7`  \n\nNo further action needed unless you have additional questions.",
+	} {
+		if digestNotOneWay(ok, prompt, nil) {
+			t.Fatalf("sent back: %q", ok)
+		}
+	}
+	hexText := "What the string looks like, most likely first:\n1. hex-encoded text (fit 92/100). Evidence: every character is a hex digit and the bytes read as text.\n   -> Hello, World! He\n2. a hex digest: MD5, NTLM, LM or MD4 (all 128 bits) (fit 85/100)."
+	if digestNotOneWay("It is hex-encoded text, not a hash or an MD5 digest: it reads \"Hello, World! He\".", hexText, nil) {
+		t.Fatal("hex text first: no digest to explain")
+	}
+	if digestNotOneWay("The capital of France is Paris.", prompt, nil) {
+		t.Fatal("an answer about something else")
+	}
+}
