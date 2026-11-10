@@ -235,6 +235,21 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-10 — Night 6 wrap-up: A 114/120, B 114/120, Done when met; the six-night plan is finished
+- Run A (#10) on `65c3b4f`, run B (#11) on `6e3d60b` (`00e6748` + `4feeea1` check_code, `57be574` digestNotOneWay, `6e3d60b` the
+  handover). Reports in Labyrinth_OS `d464cef`; plan section 6 and `docs/TRAINING_PLAN.md` row #11 `64be67a`.
+- Step gates: code 3x 24/27 (27/27 not met); check_code before the first edit 3/3, but only after the nudge; crypto-hash-says 5/5.
+- Flips vs A: +code-python-fix (the check_code nudge fired, then she fixed it: likely `00e6748`), +companion-carries-on,
+  +vault-recall, +voice-boot-ideas (variance); -decompile-explain (stopped after `functions` and offered options; the prompt's
+  C function `check_code` now shares a tool's name: possibly tonight's, not proven, worth a 3x), -crash-on-the-fly (109 words
+  after a quote send-back, D7), -companion-opinion (no check fired), -code-add-function (her own wrong test, as the 3x r1).
+- Ladder after B: earned 2, applied 2; tier 3 still needs code 90 % (89 % three runs) and honesty 100 % (n5r B).
+- State file set to 7 (the plan has six nights: nothing is scheduled past it until the owner picks the next track).
+- For the owner: rebuild `sarina-git` from HEAD, remove the old dev builds, pick the next track, answer `tt-own-test-fails`,
+  `check-code-nudge`, `decompile-check-code-name`.
+
+Signed: Sarina / Claude
+
 ### 2026-11-09 — Day session: the owner's answers to the night 5 questions, applied before night 6
 - Owner (answers-for-claude.txt, 2026-11-09): all seven yes. `ladder-applied-2` y: tier 2 stays applied; he takes access back
   only if it is detrimental, never because the numbers dip.
