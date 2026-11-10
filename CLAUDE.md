@@ -235,6 +235,15 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-10 — tt-own-test-fails: measured 3x, kept
+- Owner's yes (answers file): `a2a11e0` (verify.go `ownTestOnOthersCode`) tells her, when her own new test fails on code she
+  did not write, to report it and change that code only if asked. `--only tt-code-test` 3x on a2a11e0 (card idle): PASS, FAIL,
+  PASS (97 s, 173 s, 70 s). Before: failing in every run since 10-26 (nights 4-6, runs A and B). The FAIL got the new message,
+  then edited rule11.py anyway (after that edit the folder holds code she changed, so the old "Fix this" followed). Kept.
+- Owner also kept the check_code reminder (`check-code-nudge` y) and turned the night timer off (the six nights are done).
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-10 — Night 6 wrap-up: A 114/120, B 114/120, Done when met; the six-night plan is finished
 - Run A (#10) on `65c3b4f`, run B (#11) on `6e3d60b` (`00e6748` + `4feeea1` check_code, `57be574` digestNotOneWay, `6e3d60b` the
   handover). Reports in Labyrinth_OS `d464cef`; plan section 6 and `docs/TRAINING_PLAN.md` row #11 `64be67a`.
