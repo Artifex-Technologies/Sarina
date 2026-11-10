@@ -303,8 +303,8 @@ Signed: Sarina / Claude
 
 Signed: Sarina / Claude
 
-### 2026-11-07 — Niflheim OS is now LykanOS (the security edition, renamed again)
-- The owner renamed Niflheim OS to **LykanOS** (repository `Artifex-Technologies/LykanOS`, GitHub redirects the old name;
+### 2026-11-07 — Chymaera OS is now LykanOS (the security edition, renamed)
+- The owner renamed Chymaera OS to **LykanOS** (repository `Artifex-Technologies/LykanOS`, GitHub redirects the old name;
   os-release `ID=lykanos`, `install_dir` the same). Its integration files are `lykanos-*.conf`, its menu hook
   `lykanos-tool-menu` (still runs `sarina desktop-audit --only-category Security`), its Agora edition `lykanos`.
 - Nothing in Sarina's code depended on the old name (one comment changed). Log entries below keep the names of their day.

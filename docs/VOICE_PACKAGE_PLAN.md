@@ -1,6 +1,6 @@
 # Sarina's voice in her own package (plan, 2026-11-07)
 
-Decided 2026-11-07: Sarina is part of LykanOS (then Niflheim OS) too, so her voice must not depend on Labyrinth's image. Planned, not built. I
+Decided 2026-11-07: Sarina is part of LykanOS too, so her voice must not depend on Labyrinth's image. Planned, not built. I
 want to test it myself right after it is done, because Super+S is how I talk to her every day. On hold (2026-11-07): I cannot
 test Super+S for a while (how its sound would work over the stream to my iPad is unclear), so it is
 not built until I can.
