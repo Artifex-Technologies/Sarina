@@ -86,8 +86,8 @@ func TestCheckCodeRefusals(t *testing.T) {
 		{filepath.Join(outside, "x.go"), "outside the workspace"},
 		{"../" + filepath.Base(outside) + "/x.go", "outside the workspace"},
 		{"notes.txt", "none of them"},
-		{".", "no Go, Python"},
-		{"missing.go", "cannot access"},
+		{".", "writes nothing: write the code with write_file first"},
+		{"missing.go", "missing.go does not exist. check_code only checks files that exist and writes nothing"},
 	} {
 		r := reg.Execute(t.Context(), "check_code", map[string]any{"path": c.path}, tc)
 		if r.OK || !strings.Contains(r.Content, c.want) {
@@ -130,7 +130,14 @@ func TestCodeFileIn(t *testing.T) {
 		t.Fatalf("code before its test: %s", got)
 	}
 	mod := t.TempDir()
-	writeCheckFiles(t, mod, map[string]string{"go.mod": "module m\n"})
+	writeCheckFiles(t, mod, map[string]string{"go.mod": "module m\n", "three.txt": "1\n2\n3\n"})
+	// night 6 code-go-package: an empty module checked as ./... failed with "matched no packages", and she called check_code again
+	// instead of writing the files
+	if got := codeFileIn(mod); got != "" {
+		t.Fatalf("a module with no Go file yet has nothing to check: %s", got)
+	}
+	os.MkdirAll(filepath.Join(mod, "stack"), 0o755)
+	writeCheckFiles(t, filepath.Join(mod, "stack"), map[string]string{"stack.go": "package stack\n"})
 	if got := codeFileIn(mod); got != filepath.Join(mod, "doc.go") {
 		t.Fatalf("a module root stands for its packages: %s", got)
 	}

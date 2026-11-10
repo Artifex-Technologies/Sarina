@@ -25,13 +25,18 @@ func CheckCode() Tool {
 		Requires: PermWrite, Class: ClassMutating,
 		Spec: llm.ToolSpec{
 			Name:        "check_code",
-			Description: "Build a code file or folder and run its tests in a sandbox; shows the first failure and the code it points at. Run it on failing code before you edit.",
+			Description: "Build an existing code file or folder and run its tests in a sandbox; shows the first failure and the code it points at. Run it on failing code before you edit.",
 			Parameters:  obj(map[string]any{"path": prop("string", "", "minLength", 1)}, "path"),
 		},
 		Handler: func(ctx context.Context, args map[string]any, tc *Context) (string, map[string]any, error) {
 			given := argStr(args, "path")
 			path, err := ResolveInRoot(tc.Root, given)
 			if err != nil {
+				if p, e := ResolveForWrite(tc.Root, given); e == nil {
+					if _, e := os.Lstat(p); os.IsNotExist(e) {
+						return "", nil, fmt.Errorf("%s does not exist. check_code only checks files that exist and writes nothing: write it with write_file first", given)
+					}
+				}
 				return "", nil, err
 			}
 			if err := secretGuard(given, path, "check"); err != nil {
@@ -47,7 +52,7 @@ func CheckCode() Tool {
 			file := path
 			if info.IsDir() {
 				if file = codeFileIn(path); file == "" {
-					return "", nil, fmt.Errorf("%s has no Go, Python, Rust, shell or JavaScript file directly in it; give the file or the package folder", given)
+					return "", nil, fmt.Errorf("%s has no Go, Python, Rust, shell or JavaScript file in it. check_code only checks files that exist and writes nothing: write the code with write_file first, or give the package folder", given)
 				}
 			}
 			sandbox := haveBwrap() && os.Getenv("SARINA_SANDBOX_TESTS") != "off"
@@ -88,11 +93,31 @@ func codeFileIn(dir string) string {
 		if test != "" {
 			return filepath.Join(dir, test)
 		}
-		if ext == ".go" {
+		if ext == ".go" && hasGoBelow(dir) {
 			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 				return filepath.Join(dir, "doc.go") // need not exist: the Go check reads only its folder
 			}
 		}
 	}
 	return ""
+}
+
+// hasGoBelow says whether a module root holds any Go file: an empty one is code not written yet, and "./... matched no packages" sent
+// her back to check_code instead of write_file (night 6 code-go-package: the code was in her reply, never in a file).
+func hasGoBelow(dir string) bool {
+	found := false
+	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() && p != dir && (strings.HasPrefix(d.Name(), ".") || d.Name() == "node_modules" || d.Name() == "vendor") {
+			return filepath.SkipDir
+		}
+		if !d.IsDir() && strings.HasSuffix(d.Name(), ".go") {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
 }
