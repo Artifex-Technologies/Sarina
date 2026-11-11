@@ -279,10 +279,10 @@ docs/ECOSYSTEM.md cross-repo contract
 docs/PROVENANCE.md licensing audit and rewrite progress
 docs/AGENT_FORGE.md, docs/MEMORY_AND_TRAINING_PLAN.md   the agent forge, and memory, routing and training
 evals/            capability evals (run_evals.py)
-tools/training/   review sheet and export of her answers for fine-tuning
+tools/training/   review sheet and export of Sarina's answers for fine-tuning
+tools/voice_clone/  the tools that train Sarina's own voice (their tests are in tests/)
 packaging/arch/   Arch package, systemd unit, env template
 packaging/voice/  sarina-voice (Rust): the spoken-question programs, side-by-side tests with the Python
-sarina/, tests/   legacy original Python modules (reference; superseded by go/ and python/)
 ```
 
 ## License

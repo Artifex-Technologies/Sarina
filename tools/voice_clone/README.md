@@ -3,8 +3,8 @@
 Produces one artifact: a fine-tuned Piper voice model (`.onnx` +
 `.onnx.json`) that sounds like the reference recording(s) in `samples/`.
 That file is then handed to `sarina voice-chat --tts-model` unmodified — see
-`sarina/voice/tts.py`. Nothing here is imported by `sarina/`, and none of it
-ships as part of the installed package or the Arch build.
+`python/sarina_helpers/sarina_helpers/tts.py`. Nothing here is imported by
+Sarina, and none of it ships as part of the installed package or the Arch build.
 
 **Privacy**: a voice recording and a voice-clone model are both personal
 biometric-like data. `samples/`, `corpus/`, `checkpoints/`, and any
@@ -24,7 +24,7 @@ repo's `.gitignore`). Don't commit them unless you've decided to on purpose.
    existing medium-quality Piper checkpoint (much faster than training from
    scratch).
 3. The finished checkpoint is exported to Piper's runtime `.onnx` format —
-   the same format every other Piper voice uses, so nothing in `sarina/`
+   the same format every other Piper voice uses, so nothing in Sarina
    needs to change.
 
 ## 1. Set up the environment

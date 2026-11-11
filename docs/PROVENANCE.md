@@ -69,6 +69,21 @@ as reference (`chymaera/` console, firmware, fleet and limbo client, `memory_*`,
 `voice/*`, `analysis_cache.py`, `sentry_governance.py`); all 234 remaining Python
 tests pass. They can go once the Go side has been used in the field.
 
+## Legacy Python removed (2026-11-11)
+
+The rest went in an audit for dead code (dead code is a security risk; git history
+keeps everything): what was left of `sarina/` (the console, firmware, fleet, launch,
+usage and Limbo clients, `memory_*`, `voice/*`, `analysis_cache.py`,
+`sentry_governance.py`), the tests that covered it, `blackarch_compat/` (pentest
+tooling belongs in LykanOS) and the top-level `pyproject.toml` that packaged them.
+Nothing installed any of it: the Arch package builds only `go/` and
+`python/sarina_helpers`. The one live user, `tools/voice_clone/build_corpus.py`, now
+takes its Piper wrapper from `python/sarina_helpers` (the same code). The Python
+left in the tree is `python/sarina_helpers`, `evals/`, `tools/training/`,
+`tools/voice_clone/` (my voice-training tools; their tests stay in `tests/`) and the
+side-by-side tests in `packaging/voice/tests/`. The tables below describe the tree
+as I audited it in October, so most files they name are gone.
+
 ## Re-audit after the rewrite (2026-10-05)
 
 Method: every 10-word sequence in the current files compared against upstream

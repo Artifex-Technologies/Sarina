@@ -48,7 +48,8 @@ if any of these move**. Verified present as of this commit:
 
 | Path here | Used for |
 | --- | --- |
-| `pyproject.toml` | `python -m build --wheel --no-isolation` |
+| `go/` | `go build ./cmd/sarina` (the one binary) |
+| `python/sarina_helpers/pyproject.toml` | `python -m build --wheel --no-isolation` (the optional helper) |
 | `packaging/arch/sarina-service.service` | → `/usr/lib/systemd/system/` |
 | `packaging/arch/sarina.sysusers` | → `/usr/lib/sysusers.d/sarina.conf` |
 | `packaging/arch/service.env.example` | → `/etc/sarina/` |
@@ -58,9 +59,9 @@ if any of these move**. Verified present as of this commit:
 
 | Console script | Target | Status |
 | --- | --- | --- |
-| `sarina` | `sarina.main:main` | present |
-| `sarina-gui` | `sarina.gui.__main__:main` | present |
-| `sarina-service` | `sarina.service.__main__:main` | present |
+| `sarina` | the Go binary (`go/cmd/sarina`) | present |
+| `sarina-gui` | a link to `sarina` | present |
+| `sarina-service` | a link to `sarina` | present |
 
 **Runtime dependencies must stay in sync and must exist in Arch's repos.**
 This repo declares `fastapi`, `uvicorn`, `pydantic`; the PKGBUILD declares
@@ -82,19 +83,14 @@ core is explicitly Sarina's job:
 2. ~~**Categorisation**~~ — **built, see below.**
 3. **Data analysis** — making sense of scan and capture output in place. This is
    the reason the agent is in the OS at all.
-4. **`blackarch_compat` against a real Docker daemon** — it is unit-tested only
-   and has *never* run against real Docker. It is the safety check behind (1);
-   until it has actually run, treat any category it reports as unvalidated.
+4. ~~**`blackarch_compat` against a real Docker daemon**~~ — the harness was
+   deleted from Sarina on 2026-11-11 without ever having run against real
+   Docker (git history keeps it). Pentest tooling, and any vetting of it,
+   belongs in LykanOS.
 
 5. **Crash diagnosis** and 6. **Proton VPN lifecycle** — added by the distro,
    **open, not built** (see its `CLAUDE.md`).
 7. **Agent manager** — **built**, see "Agent fleet" below.
-
-> **Correction to an earlier version of this file:** it described
-> `blackarch_compat/` as validating the distro's category selection. The distro
-> no longer installs category groups at all, so that harness now serves (1)
-> above — vetting categories *before* the agent proposes them — not the shipped
-> package list.
 
 Do not add tools to the distro's `packages.x86_64` to work around the gap; that
 re-creates the problem the categories caused.
@@ -196,7 +192,7 @@ but that was read from source, not observed.
 The firmware project set the boundary: *"anything that writes to hardware should
 stay behind explicit human approval for now."* Sarina honours it.
 
-**Implemented** in `sarina/chymaera/firmware.py`:
+**Implemented** in `go/chymaera/firmware`:
 
 | Command | What it does |
 | --- | --- |
@@ -312,7 +308,7 @@ as a natural thing for `chymaera-merge-report` to notice, not yet implemented.
 **The App owns this contract.** Its spec is
 [`docs/SARINA_API.md`](https://github.com/Artifex-Technologies/Argus_App/blob/main/docs/SARINA_API.md),
 implemented in `backend/chymaera/sarina/sarinaserver.cpp`. Sarina implements the
-client half in `sarina/chymaera/console.py` and does not extend the protocol.
+client half in `go/chymaera/console` and does not extend the protocol.
 
 | Aspect | Value |
 | --- | --- |
@@ -348,7 +344,7 @@ fault or the app's.
 
 ### Capture analysis — Sarina reading, not extending
 
-`sarina chymaera-analyze` (`sarina/chymaera/analysis.py`) pulls records via
+`sarina chymaera-analyze` (`go/chymaera/analysis`) pulls records via
 `capture.list()` and works only with the `meta` JSON field the App already
 attaches to each one — it does not parse `.nfc`/`.sub` files itself, and never
 will; that parsing is the App's job (§4's boundary). Statistical analysis
@@ -412,8 +408,7 @@ No call site outside `go/guard` consults it.
 
 **Renamed 2026-10-10:** the variable was `SENTRY_REVIEW_URL`. The old name is
 still read when `HEIMDALL_REVIEW_URL` is unset, so existing deployments keep
-working; new setups should use the new name. (The legacy Python
-`sarina/sentry_governance.py` still reads only the old name.)
+working; new setups should use the new name.
 
 **Fails open on Heimdall's absence, fails closed on an actual verdict.**
 Unset `HEIMDALL_REVIEW_URL`, or an unreachable/erroring Heimdall, and
@@ -542,8 +537,8 @@ WSL, USB passthrough needs `usbipd-win`. BLE: see the pairing note in §2.
 Limbo owns this contract (`Limbo/docs/QUARANTINE.md`); Sarina conforms.
 
 Sarina uses Limbo to **validate an update or install in a disposable guest
-before the real system is touched**, and to troubleshoot. `sarina/chymaera/limbo.py`
-(stdlib only) talks to Limbo's **agent socket** (`SARINA_LIMBO_SOCKET`, normally
+before the real system is touched**, and to troubleshoot. `go/limbo`
+(standard library only) talks to Limbo's **agent socket** (`SARINA_LIMBO_SOCKET`, normally
 `/run/limbo/agent.sock`, group `limbo-agent`). Surfaces:
 
 - CLI: `sarina limbo-profiles`, `sarina limbo-validate PROFILE COMMAND...`

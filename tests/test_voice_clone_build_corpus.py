@@ -4,7 +4,7 @@ No OpenVoice, no torch, no GPU, no network: the pure glue logic
 (load_sentences, extract_target_embedding, build_corpus) is tested against
 hand-written fakes for the TextToSpeech/ToneColorConverter/get_se/average
 dependencies it injects, following this repo's own convention for testing
-optional heavy-dependency code (sarina/ml/, sarina/voice/).
+optional heavy-dependency code (python/sarina_helpers).
 """
 
 from __future__ import annotations

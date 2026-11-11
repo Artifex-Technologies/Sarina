@@ -31,8 +31,7 @@ def isolate_vocals(input_path: Path, output_path: Path, *, model: str = 'htdemuc
     vocals-only track to `output_path`.
 
     Raises RuntimeError (naming what's missing, or Demucs' own stderr on
-    failure) rather than a raw subprocess error -- same convention as
-    sarina/chymaera/firmware.py's `_git` helper.
+    failure) rather than a raw subprocess error.
     """
     demucs = shutil.which('demucs')
     if not demucs:

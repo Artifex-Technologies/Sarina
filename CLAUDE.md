@@ -15,9 +15,9 @@ network address, SSID or MAC address.
 Sarina is a **local-model agent built on the Claude Code agent architecture**.
 It runs against local, open-source models over an OpenAI-compatible API. The core
 is **Go** (`go/`, standard library only): the agent loop, the tools, the
-integration service and the GUI. The Python in `sarina/` (with its
-FastAPI/Uvicorn GUI and service) is the legacy implementation: do not extend it.
-Only the optional ML and voice helpers stay in Python (`python/sarina_helpers/`).
+integration service and the GUI. The legacy Python implementation (`sarina/`,
+with its FastAPI/Uvicorn GUI and service) was deleted on 2026-11-11; git history
+keeps it. Only the optional ML and voice helpers stay in Python (`python/sarina_helpers/`).
 
 It is one of the Artifex repos in the Artifex Ecosystem (formerly the Chymaera Ecosystem; repos renamed 2026-10-10;
 older log entries below use the old names on purpose):
@@ -58,10 +58,12 @@ Chatting needs an OpenAI-compatible backend (`OPENAI_BASE_URL`, `OPENAI_API_KEY`
 `OPENAI_MODEL`); the tests do not. Ollama's default 4096-token context is too small
 for Sarina: she needs at least 8k (16k recommended).
 
-The old Python in `sarina/` and `tests/` is the owner's earlier code, mostly
-superseded by Go ports; some of it no longer imports (`docs/PROVENANCE.md` lists
-them). Do not extend it. Optional ML and voice helpers live in
-`python/sarina_helpers/` behind a JSON-lines protocol (`go/helpers`).
+The old Python (`sarina/`, its tests, `blackarch_compat/` and the top-level
+`pyproject.toml`) was deleted on 2026-11-11: nothing installed it, and dead code is
+a security risk (`docs/PROVENANCE.md`). Optional ML and voice helpers live in
+`python/sarina_helpers/` behind a JSON-lines protocol (`go/helpers`). `tests/` now
+holds only the tests of the voice-training tools in `tools/voice_clone/`
+(`python3 -m unittest discover -s tests` from the repository root).
 
 Entry points: `sarina <command>`; the binary also answers to `sarina-gui` and
 `sarina-service` (the Arch package installs those as links).
