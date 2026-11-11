@@ -319,9 +319,10 @@ client half in `go/chymaera/console` and does not extend the protocol.
 | Request | `{"cmd": "status", "id": 7, "token": "optional"}` |
 | Response | `{"ok": true, "id": 7, ...}`; failures carry `"error"` |
 
-Commands Sarina implements, the App's v1.0 set: `ping`, `help`,
-`status`, `log.tail`, `log.add`, `session.start`, `session.end`, `capture.list`,
-`capture.import`. API v1.1 (2026-09-12) added `device.status` and
+Commands Sarina implements, from the App's v1.0 set: `ping`, `help`,
+`status`, `log.tail`, `session.start`, `capture.list`. (`log.add`,
+`session.end` and `capture.import` had client methods nothing called; they were
+removed 2026-11-11.) API v1.1 (2026-09-12) added `device.status` and
 `capture.pull`, both read-only; Sarina does not call them yet.
 
 ```bash
