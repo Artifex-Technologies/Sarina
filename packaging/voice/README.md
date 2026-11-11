@@ -36,7 +36,7 @@ program's own cost. Method and script: [How these numbers were measured](#how-th
 | check-up `--held`: a held program asked back | 54.4 ms (53.7-55.1) | 2.08 ms (1.84-2.24) | −96 %, 52.3 ms sooner | 26.1 → 3.9 MB (−85 %) |
 | voice client: one sentence (loudness read, played) | 25.7 ms (25.6-26.1) | 1.07 ms (0.99-1.15) | −96 %, 24.7 ms sooner | 13.7 → 3.8 MB (−72 %) |
 | voice client: the service has nothing to play | 23.9 ms (23.5-24.1) | 0.67 ms (0.63-0.74) | −97 %, 23.3 ms sooner | 13.3 → 3.5 MB (−74 %) |
-| **on disk** | 74 KB of scripts, plus Python | 2.3 MB for all three | **+2.3 MB** |
+| **on disk** | 74 KB of scripts, plus Python | 2.3 MB for all three | **+2.3 MB** | |
 
 - So a spoken question starts 47-73 ms sooner, and each sentence Sarina speaks through the voice service another 24 ms.
   The first measurement (2026-11-10, `tests/bench_voice.py`, under load) found 48-70 ms per question and 24 ms per sentence.
