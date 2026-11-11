@@ -60,9 +60,6 @@ func NewProcManager() *ProcManager { return &ProcManager{procs: map[string]*Back
 
 var defaultProcs = NewProcManager()
 
-// DefaultProcManager is the manager used when a context carries none.
-func DefaultProcManager() *ProcManager { return defaultProcs }
-
 func procManager(tc *Context) *ProcManager {
 	runtimesMu.Lock()
 	defer runtimesMu.Unlock()

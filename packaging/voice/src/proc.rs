@@ -69,14 +69,6 @@ pub fn run_inherit(argv: &[String], env: Option<&Env>) -> Result<i32, RunErr> {
     Ok(returncode(st))
 }
 
-/// subprocess.run(argv, stdout=DEVNULL, stderr=DEVNULL)
-pub fn run_quiet(argv: &[String]) -> Result<i32, RunErr> {
-    let mut c = command(argv, None, None);
-    c.stdout(Stdio::null()).stderr(Stdio::null());
-    let st = c.status().map_err(|_| RunErr::Os)?;
-    Ok(returncode(st))
-}
-
 enum Ev {
     Out(Vec<u8>),
     Err(Vec<u8>),

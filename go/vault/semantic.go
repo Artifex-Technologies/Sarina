@@ -310,19 +310,6 @@ func SemanticHits(v *Vault, notes []Note, query string, limit int, emb Embedder)
 	return out, nil
 }
 
-func firstLine(body string) string {
-	for _, l := range strings.Split(body, "\n") {
-		l = strings.TrimSpace(l)
-		if l != "" && !strings.HasPrefix(l, "#") {
-			if r := []rune(l); len(r) > 200 {
-				return string(r[:200]) + "…"
-			}
-			return l
-		}
-	}
-	return ""
-}
-
 // Merge joins keyword hits and meaning hits by reciprocal rank (the same way Search joins its own strategies), keeping every reason.
 func Merge(keyword, meaning []Hit, limit int) []Hit {
 	type acc struct {

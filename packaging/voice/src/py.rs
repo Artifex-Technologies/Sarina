@@ -45,11 +45,6 @@ pub fn lstrip_chars<'a>(s: &'a str, chars: &str) -> &'a str {
     s.trim_start_matches(|c| chars.contains(c))
 }
 
-/// str.strip(chars)
-pub fn strip_chars<'a>(s: &'a str, chars: &str) -> &'a str {
-    s.trim_matches(|c| chars.contains(c))
-}
-
 /// str.split() with no argument.
 pub fn split_ws(s: &str) -> Vec<&str> {
     s.split(is_space).filter(|x| !x.is_empty()).collect()

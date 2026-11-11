@@ -34,11 +34,6 @@ type AnthropicClient struct {
 	RetryDelay time.Duration
 }
 
-// NewAnthropicClient returns a client for cfg.
-func NewAnthropicClient(cfg config.ModelConfig) *AnthropicClient {
-	return &AnthropicClient{Config: cfg}
-}
-
 func (c *AnthropicClient) base() string {
 	b := strings.TrimRight(c.Config.BaseURL, "/")
 	if b == "" {

@@ -200,7 +200,7 @@ func objects(v any) []map[string]any {
 	return out
 }
 
-// Commands: exactly those in the app's SARINA_API.md.
+// Commands: the ones Sarina uses, as named in the app's SARINA_API.md.
 
 func (c *Client) Ping() (map[string]any, error)   { return c.Request("ping", nil) }
 func (c *Client) Status() (map[string]any, error) { return c.Request("status", nil) }
@@ -222,16 +222,6 @@ func (c *Client) LogTail(limit int) ([]map[string]any, error) {
 	return objects(r["entries"]), nil
 }
 
-// LogAdd appends a log line; an empty severity is omitted.
-func (c *Client) LogAdd(message, severity string) error {
-	p := map[string]any{"message": message}
-	if severity != "" {
-		p["severity"] = severity
-	}
-	_, err := c.Request("log.add", p)
-	return err
-}
-
 // SessionStart returns the sessionId the console reports (nil if absent).
 // An empty notes string is omitted.
 func (c *Client) SessionStart(name, notes string) (any, error) {
@@ -246,25 +236,12 @@ func (c *Client) SessionStart(name, notes string) (any, error) {
 	return r["sessionId"], nil
 }
 
-func (c *Client) SessionEnd() error {
-	_, err := c.Request("session.end", nil)
-	return err
-}
-
 func (c *Client) CaptureList(limit int) ([]map[string]any, error) {
 	r, err := c.Request("capture.list", map[string]any{"limit": limit})
 	if err != nil {
 		return nil, err
 	}
 	return objects(r["captures"]), nil
-}
-
-func (c *Client) CaptureImport(path string) (any, error) {
-	r, err := c.Request("capture.import", map[string]any{"path": path})
-	if err != nil {
-		return nil, err
-	}
-	return r["summary"], nil
 }
 
 // RenderStatus renders a console status summary for humans.

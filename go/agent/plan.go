@@ -229,19 +229,6 @@ func (a *Agent) onPlanAction(r *run, action string, planArg any, res *tools.Resu
 // made before Resume applies to the right state. Resume does this itself.
 func (a *Agent) AdoptPlan(s *session.Session) { a.setPlan(s.Plan(), nil) }
 
-// lookTools are the read-only tools offered now, apart from the to-do and plan bookkeeping: what "you can look" refers to.
-func (a *Agent) lookTools() []string {
-	var out []string
-	for _, n := range a.registry.Names() {
-		t, _ := a.registry.Get(n)
-		if t.Class != tools.ClassReadOnly || strings.HasPrefix(n, "task_") || strings.HasPrefix(n, "plan_") || n == "TaskOutput" {
-			continue
-		}
-		out = append(out, n)
-	}
-	return out
-}
-
 // offeredTools are all the tools offered now (the file-changing ones too), apart from the to-do and plan bookkeeping: naming only
 // the read-only ones told her that edit_file "does not exist here" (eval code-python-fix, 2026-10-26).
 func (a *Agent) offeredTools() []string {
@@ -255,4 +242,3 @@ func (a *Agent) offeredTools() []string {
 	}
 	return out
 }
-

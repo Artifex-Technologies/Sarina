@@ -96,9 +96,6 @@ func NewManager(cfg *Config, o Options) *Manager {
 	return m
 }
 
-// Servers is the number of configured servers.
-func (m *Manager) Servers() int { return len(m.servers) }
-
 // Connect starts every server, runs the handshake and lists its tools. A
 // server that fails is recorded in Problems and skipped.
 func (m *Manager) Connect(ctx context.Context) {
