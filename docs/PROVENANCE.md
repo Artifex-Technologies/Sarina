@@ -74,8 +74,9 @@ tests pass. They can go once the Go side has been used in the field.
 The rest went in an audit for dead code (dead code is a security risk; git history
 keeps everything): what was left of `sarina/` (the console, firmware, fleet, launch,
 usage and Limbo clients, `memory_*`, `voice/*`, `analysis_cache.py`,
-`sentry_governance.py`), the tests that covered it, `blackarch_compat/` (pentest
-tooling belongs in LykanOS) and the top-level `pyproject.toml` that packaged them.
+`sentry_governance.py`), the tests that covered it, and the top-level `pyproject.toml`
+that packaged them. `blackarch_compat/` was deleted too and put back the same day:
+LykanOS's contract names it as the check Sarina owes before suggesting tool categories.
 Nothing installed any of it: the Arch package builds only `go/` and
 `python/sarina_helpers`. The one live user, `tools/voice_clone/build_corpus.py`, now
 takes its Piper wrapper from `python/sarina_helpers` (the same code). The Python

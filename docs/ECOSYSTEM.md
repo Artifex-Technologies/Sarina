@@ -83,10 +83,11 @@ core is explicitly Sarina's job:
 2. ~~**Categorisation**~~ — **built, see below.**
 3. **Data analysis** — making sense of scan and capture output in place. This is
    the reason the agent is in the OS at all.
-4. ~~**`blackarch_compat` against a real Docker daemon**~~ — the harness was
-   deleted from Sarina on 2026-11-11 without ever having run against real
-   Docker (git history keeps it). Pentest tooling, and any vetting of it,
-   belongs in LykanOS.
+4. **`blackarch_compat` against a real Docker daemon** — it is unit-tested only
+   and has *never* run against real Docker. It is the safety check behind (1);
+   until it has actually run, treat any category it reports as unvalidated.
+   (The 2026-11-11 dead-code clean-up deleted it by mistake and put it back the
+   same day: LykanOS's contract names it as Sarina's to provide.)
 
 5. **Crash diagnosis** and 6. **Proton VPN lifecycle** — added by the distro,
    **open, not built** (see its `CLAUDE.md`).

@@ -58,11 +58,11 @@ Chatting needs an OpenAI-compatible backend (`OPENAI_BASE_URL`, `OPENAI_API_KEY`
 `OPENAI_MODEL`); the tests do not. Ollama's default 4096-token context is too small
 for Sarina: she needs at least 8k (16k recommended).
 
-The old Python (`sarina/`, its tests, `blackarch_compat/` and the top-level
+The old Python (`sarina/`, its tests and the top-level
 `pyproject.toml`) was deleted on 2026-11-11: nothing installed it, and dead code is
 a security risk (`docs/PROVENANCE.md`). Optional ML and voice helpers live in
 `python/sarina_helpers/` behind a JSON-lines protocol (`go/helpers`). `tests/` now
-holds only the tests of the voice-training tools in `tools/voice_clone/`
+holds only the tests of the voice-training tools in `tools/voice_clone/` and of `blackarch_compat/`
 (`python3 -m unittest discover -s tests` from the repository root).
 
 Entry points: `sarina <command>`; the binary also answers to `sarina-gui` and
