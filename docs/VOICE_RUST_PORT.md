@@ -56,7 +56,8 @@ release build, median of 40, on my PC under load):
 | the voice client, per spoken sentence | 24.3 ms | 0.6 ms | 24 ms |
 
 So a spoken question with a three-sentence answer saves about 50-70 ms before she starts and about 24 ms per sentence spoken
-through Chatterbox.
+through Chatterbox. Measured again on 2026-11-11 with CPU, memory and more cases (`tests/bench_port.py`): 47-73 ms per
+question, 24 ms per sentence; the tables are in [packaging/voice/README.md](../packaging/voice/README.md#why-rust-measured).
 
 `sarina` is still started as often as before (route, vault-search, chat; system-status, daily-report and crash-detail with
 `SARINA_SYSTEM=on`), because each start gives an answer the next step depends on, and merging them would change answers:

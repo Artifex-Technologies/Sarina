@@ -254,6 +254,21 @@ The integration contract, ports and rules are in [docs/ECOSYSTEM.md](docs/ECOSYS
 the `sarina-gui` / `sarina-service` symlinks, the optional helper wheel, the
 systemd unit, sysusers and env template. See its README.
 
+## Why Rust: measured
+
+Sarina's spoken-question programs, Python in Labyrinth's image until now, are ported to one Rust binary,
+[`sarina-voice`](packaging/voice/README.md). Measured on my desktop, old against new on the same input (2026-11-11; a minus
+is a gain):
+
+| Program | Was | Measured | Details |
+| --- | --- | --- | --- |
+| `labyrinth-ask-sarina` (Super+S) | Python | a spoken question 52-80 ms → 4.2-7.1 ms (−91 to −92 %, 48-73 ms sooner), 19-30 MB → 5.7-6.3 MB | [sarina-voice](packaging/voice/README.md#why-rust-measured) |
+| `labyrinth-sarina-checkup` | Python | 54-57 ms → 2.1-3.6 ms (−94 to −96 %), 26 MB → 4-5 MB | [sarina-voice](packaging/voice/README.md#why-rust-measured) |
+| `labyrinth-sarina-speak-voiced` (per spoken sentence) | Python | 24-26 ms → 0.7-1.1 ms (−96 to −97 %), 13-14 MB → 3.5-3.8 MB | [sarina-voice](packaging/voice/README.md#why-rust-measured) |
+
+Every case gave the same output in both. **Worse in Rust:** the size on disk (2.3 MB against 74 KB of scripts; Python stays
+installed for the voice service either way).
+
 ## Repository map
 
 ```text
@@ -266,6 +281,7 @@ docs/AGENT_FORGE.md, docs/MEMORY_AND_TRAINING_PLAN.md   the agent forge, and mem
 evals/            capability evals (run_evals.py)
 tools/training/   review sheet and export of her answers for fine-tuning
 packaging/arch/   Arch package, systemd unit, env template
+packaging/voice/  sarina-voice (Rust): the spoken-question programs, side-by-side tests with the Python
 sarina/, tests/   legacy original Python modules (reference; superseded by go/ and python/)
 ```
 
