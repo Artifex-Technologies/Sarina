@@ -87,9 +87,11 @@ card) now runs while the vault is searched. It takes about 2 ms, so that is what
 ## The switch (branch `voice-rust-switch` in Labyrinth_OS)
 
 Nothing I use changes until I switch. On that branch `sarina-git` also builds and installs `/usr/bin/sarina-voice`, and the
-image's three files in `/usr/local/bin` are links to it. On my PC (Sarina's main already has the crate):
+image's three files in `/usr/local/bin` are links to it. On my PC (`sarina-git` builds from the local Sarina checkout's `main`,
+so that has to be pulled first):
 
 ```
+cd ~/Documents/Github/Sarina && git switch main && git pull --ff-only
 cd ~/Documents/Github/Labyrinth_OS && git fetch && git switch voice-rust-switch
 cd packages/pkgbuilds/sarina-git && makepkg -sfi
 sudo mkdir -p /usr/local/lib/labyrinth/python-voice
