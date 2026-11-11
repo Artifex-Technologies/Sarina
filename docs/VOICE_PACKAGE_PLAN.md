@@ -5,6 +5,10 @@ want to test it myself right after it is done, because Super+S is how I talk to 
 test Super+S for a while (how its sound would work over the stream to my iPad is unclear), so it is
 not built until I can.
 
+**Status 2026-11-10:** the conversation, the check-up and the voice client are ported to Rust in `packaging/voice/`
+(`sarina-voice`, one binary under the old names), side by side with the Python in tests; the switch is on Labyrinth's branch
+`voice-rust-switch` until I have tried Super+S with it. See `docs/VOICE_RUST_PORT.md`. The moves below are still to do.
+
 ## Why
 
 The `sarina-git` package (Labyrinth's recipe, `Labyrinth_OS/packages/pkgbuilds/sarina-git`) installs Sarina, her service, her

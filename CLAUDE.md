@@ -100,6 +100,7 @@ go/
   notes/ NOTES.md    design notes and status for the Go core
 python/sarina_helpers/   optional ML and voice helper
 packaging/arch/      source of truth for the distro's systemd unit + sysusers + PKGBUILD
+packaging/voice/     sarina-voice (Rust): labyrinth-ask-sarina, the check-up, the voice client; side-by-side tests with the Python
 docs/ECOSYSTEM.md    cross-repo integration contract
 docs/spec/           the clean-room behaviour specs the Go core was written from
 ```
@@ -234,6 +235,21 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-11-10 — The spoken-question programs in Rust (`packaging/voice`, `sarina-voice`); the switch waits on a Labyrinth branch
+- `labyrinth-ask-sarina`, `labyrinth-sarina-checkup` and `labyrinth-sarina-speak-voiced` (Labyrinth's image, Python) ported to one
+  Rust binary that answers to their names: same command lines, files, environment, output and exit status. `labyrinth-voiced`
+  and Chatterbox stay Python; the shell scripts are not ported (reasons in `docs/VOICE_RUST_PORT.md`).
+- `packaging/voice/tests`: the Labyrinth tests of these programs carried over (with the ten that never ran) plus program-level,
+  check-up (Heimdall stood in, in its own network namespace) and voice-client cases and generated texts: 72 tests, Python and
+  Rust byte for byte the same. Saved per spoken question about 50-70 ms, per spoken sentence about 24 ms; `sarina` starts the
+  same number of times (why: the doc).
+- **For Labyrinth's board:** branch `voice-rust-switch` builds `sarina-voice` in `sarina-git` (CONTRACT: makedepends `cargo`) and
+  makes the image's three files links to `/usr/bin/sarina-voice`. Not on main until the owner has tried Super+S with it.
+- Not 1:1 (all in the doc): a crash prints one line, not a traceback; `-h` at 80 columns; children's environment in sorted order;
+  http:// only without proxies; `sarina.env` read once per run; rare text (lone surrogates, non-UTF-8 bytes in a typed question).
+
+Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-10 — tt-own-test-fails: measured 3x, kept
 - Owner's yes (answers file): `a2a11e0` (verify.go `ownTestOnOthersCode`) tells her, when her own new test fails on code she
