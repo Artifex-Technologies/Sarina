@@ -7,10 +7,11 @@ there is a manual step described below.
 
 Contents:
 
-- `PKGBUILD` — builds the single static Go binary (`go/cmd/sarina`) and
-  installs it as `/usr/bin/sarina`, with `sarina-gui` and `sarina-service`
-  as symlinks (the binary picks its command from the name it was started
-  as). Also builds and installs the optional ML/voice helper wheel
+- `PKGBUILD` — builds the Rust build (`rust/`, `sarina-rs`) and the Go build
+  (`go/cmd/sarina`): the Rust one is `/usr/bin/sarina`, with `sarina-gui` and
+  `sarina-service` as symlinks (the command comes from the name it was started
+  as); it runs the commands ported to it and hands every other one to the Go
+  build at `/usr/lib/sarina/sarina` (docs/RUST_PORT.md "The switch"). Also builds and installs the optional ML/voice helper wheel
   (`python/sarina_helpers`), which only matters if `python` and the
   `ml`/`voice` dependencies are present.
 - `sarina-service.service` — systemd unit for `sarina service`, the

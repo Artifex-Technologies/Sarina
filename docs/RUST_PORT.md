@@ -17,7 +17,7 @@ equal.
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); next runkit, service, cli chat/resume, gui |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); not packaged |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); not packaged |
 
 ## Inventory
 
@@ -160,7 +160,7 @@ before anything with side effects is attempted:
 
 Limbo's way: one Rust binary, `sarina-rs`, installed as `/usr/bin/sarina` (and its `sarina-service`, `sarina-gui` names);
 the commands it has ported it runs itself, **every other command is handed unchanged to the Go build** at
-`/usr/lib/sarina/sarina-go` (or `$SARINA_GO_BINARY`), with the containment check first in both. A command line that is
+`/usr/lib/sarina/sarina` (or `$SARINA_GO_BINARY`), with the containment check first in both. A command line that is
 not UTF-8 goes to Go. Session files, the vault and every state file are shared, in the same formats, so going back is
 reinstalling the previous package. `sarina-service.service` is switched by the package (as Limbo's), once its
 differential run shows no difference. Commands move from Go to Rust one at a time; the Go build is dropped when nothing
@@ -179,7 +179,13 @@ reaches it any more (dead code is a risk).
 3. **The hand-over is an `execve`, not a child**: the Go build replaces the process, so its exit status, signals, stdio,
    working folder and environment are exactly the caller's, and nothing of the Rust process stays around. `argv[0]` is
    passed as it came (Go's alias rule then sees `sarina-service` itself) and the arguments unchanged. The program is
-   `$SARINA_GO_BINARY` when set to an absolute path, else `/usr/lib/sarina/sarina-go`; it is never searched for on PATH.
+   `$SARINA_GO_BINARY` when set to an absolute path, else `/usr/lib/sarina/sarina`; it is never searched for on PATH.
+   The file is called `sarina`, not `sarina-go` (changed 2026-11-12 before anything was installed): after the `execve`
+   the process's name (`/proc/PID/comm`) and executable are the Go build's, and Heimdall recognises Sarina's processes by
+   the name `sarina`: the grant gate refuses a decision with a `sarina`/`sarina-service` ancestor (exe base name, else
+   argv[0]), the network source treats commands below a `sarina` process (comm) as the agent's, containment finds
+   `sarina`/`sarina-*` processes. With `sarina-go` the first two would no longer see a Go-run Sarina (the GUI started as
+   `sarina-gui`, for one, would pass the grant gate's check).
    A missing Go build is exit 127 with "sarina: <command> is not in the Rust build yet, and the Go build (<path>) is
    missing".
 4. **The order commands move in**: first those without a model, each already proved (memory-status,
@@ -195,7 +201,7 @@ reaches it any more (dead code is a risk).
    ported", exit 2) instead of being handed to Go, so a case can never pass by running Go twice.
 6. **Packaging** (`packaging/arch/PKGBUILD`, and Labyrinth's `sarina-git`; CONTRACT: cargo is already a makedepend for
    the voice programs): both builds; `/usr/bin/sarina` is sarina-rs, `sarina-gui` and `sarina-service` are links to it,
-   the Go build is `/usr/lib/sarina/sarina-go`. `sarina-service.service` stays `ExecStart=/usr/bin/sarina-service`: until
+   the Go build is `/usr/lib/sarina/sarina`. `sarina-service.service` stays `ExecStart=/usr/bin/sarina-service`: until
    `service` is ported that is one extra exec at start (about a millisecond). Going back is the previous package.
 
 ## The proof plan

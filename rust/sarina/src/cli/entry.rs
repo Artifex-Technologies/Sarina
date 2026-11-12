@@ -25,8 +25,11 @@ pub fn contained_message(why: &str) -> String {
     format!("sarina: Heimdall has contained me ({why}). The owner releases me in Settings > Security, or: sudo heimdalld contain release\n")
 }
 
-/// Where the Go build is installed.
-pub const GO_BUILD: &str = "/usr/lib/sarina/sarina-go";
+/// Where the Go build is installed. Its file name is `sarina` on purpose: after the hand-over the process's name (comm)
+/// and executable are the Go build's, and Heimdall knows Sarina's processes by the name `sarina` (the grant gate's
+/// ancestry check, the agent-descendant rule for her shell commands, containment). Named anything else, a Go-run Sarina
+/// would drop out of those checks.
+pub const GO_BUILD: &str = "/usr/lib/sarina/sarina";
 
 /// The Go build every command not ported yet goes to: `$SARINA_GO_BINARY` when it is an absolute path, else
 /// [`GO_BUILD`]. It is never looked up on PATH.

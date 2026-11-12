@@ -3,9 +3,12 @@
 # Source of truth for the Arch/AUR package. See packaging/arch/README.md
 # for how to build/install locally and how to publish this to the AUR.
 #
-# Sarina's core is a single static Go binary (go/cmd/sarina). It answers to
-# three names: `sarina`, `sarina-gui` and `sarina-service` (the last two are
-# symlinks; the binary picks its command from the name it was started as).
+# Sarina's core is two builds of one program (docs/RUST_PORT.md "The switch"): the Rust
+# build (rust/, sarina-rs) is /usr/bin/sarina and answers to three names, `sarina`,
+# `sarina-gui` and `sarina-service` (the last two are symlinks; the command comes from
+# the name it was started as). It runs the commands ported to it and hands every other
+# one, unchanged, to the Go build (go/cmd/sarina) by execve. The Go build is
+# /usr/lib/sarina/sarina: named sarina so that Heimdall still knows the process as Sarina.
 # The optional ML/voice helper is a small separate Python package
 # (python/sarina_helpers) installed alongside.
 #
@@ -29,7 +32,7 @@ optdepends=(
   'piper-tts: text-to-speech for `sarina voice-chat` (AUR, not yet packaged)'
   'claude-code: hand off tasks to the real Claude Code CLI when local resources are insufficient'
 )
-makedepends=('go' 'python-build' 'python-installer' 'python-wheel' 'python-setuptools')
+makedepends=('go' 'cargo' 'python-build' 'python-installer' 'python-wheel' 'python-setuptools')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/Artifex-Technologies/Sarina/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
@@ -38,6 +41,9 @@ build() {
   export CGO_ENABLED=0 GOFLAGS="-trimpath -mod=readonly -modcacherw"
   go build -ldflags "-s -w" -o sarina ./cmd/sarina
 
+  cd ../rust
+  cargo build --release --locked --bin sarina-rs --target-dir "$srcdir/target"
+
   cd ../python/sarina_helpers
   python -m build --wheel --no-isolation
 }
@@ -45,7 +51,8 @@ build() {
 package() {
   cd "Sarina-$pkgver"
 
-  install -Dm755 go/sarina "$pkgdir/usr/bin/sarina"
+  install -Dm755 "$srcdir/target/release/sarina-rs" "$pkgdir/usr/bin/sarina"
+  install -Dm755 go/sarina "$pkgdir/usr/lib/sarina/sarina"
   ln -s sarina "$pkgdir/usr/bin/sarina-gui"
   ln -s sarina "$pkgdir/usr/bin/sarina-service"
 
