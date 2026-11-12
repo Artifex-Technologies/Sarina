@@ -238,6 +238,25 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (evening, 2) — Rust port: packaging for the switch; chat, resume, runkit in Rust; two Go fixes
+- **Packaging** (CONTRACT, on Labyrinth's board): sarina-git builds both builds on Labyrinth's branch `sarina-rs-switch`
+  (not on main: its publish builds main, so merging is the switch). `/usr/bin/sarina` becomes sarina-rs, the Go build moves
+  to `/usr/lib/sarina/sarina` (named `sarina` so Heimdall still knows the process: the grant gate, the agent-descendant
+  rule, containment all go by that name), sarina-voice unchanged. Built without root: the installed package's file list
+  plus `usr/lib/sarina/sarina`. Sarina's own `packaging/arch/PKGBUILD` the same (`options=('!lto')`: ring).
+- **Go fixes (live code), in Go and Rust both, each with a test that failed before:** a named pipe planted under a session
+  file's name hung resume, session-migrate and the model's session_search tool (and the notes the same), and any size was
+  read (`45d306d`: bounded regular files); the scrubber on everything the service and GUI send out missed secret-named
+  keys in JSON, so tool-call arguments like `{"password":"..."}` left as they were (now `{"password":"[REDACTED]"}`).
+- Ported and proved: chat, resume, skill and memory-review (`rust/sarina/src/cli/chat.rs`; 94 cases in the CLI
+  differential against a scripted model, Ctrl-C included; not moved yet: they run in Rust only under `SARINA_RS_TRY`),
+  runkit (the service's and GUI's shared builder, result and scrubber). The differential: 289 cases, no difference.
+- **For Heimdall's board (nothing to change now):** after the switch a Go-run Sarina's executable is
+  `/usr/lib/sarina/sarina` (comm `sarina`); Labyrinth's file-integrity template lists it, an existing
+  `/etc/heimdall/config.json` needs it added by hand.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (afternoon, 2) — Rust port: the commands without a model run in sarina-rs; a CLI differential proves them
 - `rust/parity/cli-differential.py` runs the Go build and `sarina-rs` on the same command lines, environment and made-up
   home and workspace, with a scripted Limbo agent socket and a loopback stand-in for model endpoints and Heimdall's review

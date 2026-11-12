@@ -250,7 +250,10 @@ func ScrubValue(v any, scrub func(string) string) any { return scrubValue(v, scr
 
 var (
 	bearerRe = regexp.MustCompile(`(?i)\b(bearer)\s+[A-Za-z0-9._~+/=\-]{12,}`)
-	assignRe = regexp.MustCompile(`(?i)\b([A-Za-z0-9_]*(?:api[_-]?key|secret|token|passw(?:or)?d)[A-Za-z0-9_]*)(\s*[=:]\s*)("[^"\s]{6,}"|'[^'\s]{6,}'|[^\s"',;]{6,})`)
+	// a secret-named key in JSON ("api_key": "...", the form tool-call arguments take): the value is replaced inside its
+	// quotes, so the arguments stay JSON. assignRe never matched it: the key's closing quote stands before the colon.
+	jsonAssignRe = regexp.MustCompile(`(?i)("[A-Za-z0-9_]*(?:api[_-]?key|secret|token|passw(?:or)?d)[A-Za-z0-9_]*"\s*:\s*)"(?:[^"\\]|\\.){6,}"`)
+	assignRe     = regexp.MustCompile(`(?i)\b([A-Za-z0-9_]*(?:api[_-]?key|secret|token|passw(?:or)?d)[A-Za-z0-9_]*)(\s*[=:]\s*)("[^"\s]{6,}"|'[^'\s]{6,}'|[^\s"',;]{6,})`)
 )
 
 // Scrubber returns a function that removes secrets from text: the literal
@@ -269,6 +272,7 @@ func Scrubber(literals ...string) func(string) string {
 		}
 		s = session.Redact(s)
 		s = bearerRe.ReplaceAllString(s, "$1 [REDACTED]")
+		s = jsonAssignRe.ReplaceAllString(s, `$1"[REDACTED]"`)
 		s = assignRe.ReplaceAllString(s, "$1$2[REDACTED]")
 		return s
 	}

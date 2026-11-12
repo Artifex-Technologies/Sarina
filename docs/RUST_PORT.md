@@ -277,6 +277,7 @@ reaches it any more (dead code is a risk).
 | `cli/chatopts.rs`, `goflag.rs` (float flags with Go's `%v` and range rules, the flags given) | `cli/chat.go`'s `newOpts` (every flag, its order and usage) and `opts.build`: a fresh run, a stored session (given flags only; permissions only widen), another account's session (server, permissions, folders, escalation from this run), the access tier, budgets, the context switches, the schema file, the allowlist | `chatopts.json` | 37 |
 | `cli/chat.rs` | `cli/chat.go` (`opts.agent`, `conversation`, `report`, the event printing, `runTurn` with Ctrl-C), `slash.go` (/help), `plancmd.go` (/plan, `askPlanDecision`), `skillcmd.go` (skill list, skill run, /skill), `tiercmd.go` (`tierRouter`, `stdinConfirm`, `linesConfirm`, /tier), `memorycmd.go` (memory-review, the review when a conversation ends), `owner_unix.go`; the default tools in the Go build's order with `sarina_doctor` run in the Go build | the CLI differential's chat cases (scripted model) | 94 cases |
 | `session/readfile.rs` | `session/readfile.go` (new 2026-11-12): a session file or a session's notes as a bounded regular file; `Load`, `LoadByID` | Go's tests, `tests/session_reads.rs` | 1 each |
+| `runkit.rs` | `runkit`: `Scrubber` (literals, the redactor's shapes, bearer tokens, secret-named JSON keys, key=value), `Entry`, `Transcript`, `Result` as the service and the GUI send them; `Build` from plain settings (allowlists, policy, compute tiers, the claude CLI escalation, sub-agents, prompt options), each built agent run once against the same scripted model as Go's | `runkit.json`, `runkitbuild.json` | 17 + 11 (every request body) |
 | `agent/run.rs` (`Options.confirm`, `set_confirm`), `tools/registry.rs` (`Confirm`, `Context.confirm`) | `agent.Options.Confirm`, `SetConfirm`, `tools.RuntimeOperatorConfirm`: the per-call operator question (council_ask's channel), not the Approver; sub-agents get the parent's | Go's `TestSetConfirmAddsOnlyItsOwnRuntimeKey`, as a unit test | 1 |
 | `bin/sarina-rs.rs`, `cli/entry.rs` | `cmd/sarina/main.go`: the names it answers to (`aliasCommand`), Heimdall's lock first (the built Go program run with a made-up lock under each name and command line: which are refused, the message, exit 3), and the hand-over to the Go build by execve: the arguments unchanged (bytes that are not UTF-8 too), the environment, the folder, the exit status, the caller's SIGPIPE (ignored or not); a missing Go build (127) | `entry.json` | 41, and 9 hand-over checks |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
@@ -701,6 +702,13 @@ Fifth session of 2026-11-12 (evening): packaging and chat.
 - **Go fix, in Go and Rust, each with a Go test that failed before**: a named pipe under a session file's name hung
   resume, session-migrate and the session_search tool, and the notes the same; any size was read. Now a bounded regular
   file (`session.ReadFile`, 64 MiB; notes 1 MiB; `45d306d`).
+- **Go fix, in Go and Rust, with a Go test that failed before**: the scrubber the service and the GUI put on everything
+  they send out never matched a secret-named key in JSON (`{"password":"..."}`, the form tool-call arguments take): the
+  key's closing quote stands before the colon. Now replaced inside its quotes, so the arguments stay JSON
+  (`TestScrubberJSONKeys`).
+- **runkit in Rust** (`runkit.rs`): the scrubber, the transcript and result as both servers send them, and Build, proved
+  on `runkit.json` and `runkitbuild.json` (every request each built agent sends a scripted model; a mutation that drops
+  the policy's deny-list fails it).
 - **chat, resume, skill, memory-review in Rust** (`cli/chatopts.rs`, `cli/chat.rs`; `chatopts.json` 37 cases), proved by
   the CLI differential's chat cases ("The chat cases" above). Not moved: they run in Rust only under `SARINA_RS_TRY`.
 - Two CI timing flakes in fixtures fixed (MCP's long lines `a9b0b6d`, the helper stand-ins `9f5adb4`).
@@ -710,9 +718,8 @@ Next, in this order:
 1. **Move chat, resume, skill, memory-review** (from `cli::proving` to `cli::ported`) once the owner has run the switch
    package (Labyrinth's branch) and used the moved commands for a while; `needs_go` keeps handing the optional tool sets to
    Go until they are ported (step 5). Owner steps for the switch: the board entry on Labyrinth's TEAM_BOARD (2026-11-12).
-2. **runkit** (Go's `runkit`: Build from plain settings, the result and transcript as the service and GUI send them, the
-   secret scrubber), then `service` after a differential run of both services on the same requests (the always-on unit;
-   a loopback model as here), then `gui`.
+2. **service** on `runkit::build` after a differential run of both services on the same requests (the always-on unit; a
+   loopback model as here; `runkit::result_json` and `scrubber` are what it answers with), then `gui`.
 3. Doctor (last of the core): its check-up, so `sarina_doctor` stops running in the Go build.
 
 Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself

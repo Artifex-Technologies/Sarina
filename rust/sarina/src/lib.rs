@@ -34,6 +34,7 @@ pub mod mcp;
 pub mod memory;
 pub mod policy;
 pub mod pyfmt;
+pub mod runkit;
 pub mod session;
 pub mod sessionsearch;
 pub mod shellparse;
