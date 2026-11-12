@@ -232,7 +232,10 @@ pub fn held_check(c: &Checkup, held: Option<Vec<Value>>, broken: Option<Vec<(Str
             }
             let Some(hit) = hit else { continue };
             let sha = e.get("sha256").ok_or_else(|| Crash::new("KeyError: 'sha256'"))?;
-            let req = json::obj(vec![("release_if_proven", sha.clone()), ("why", json::s(&format!("{}, and it runs {}, which Heimdall holds", what, hit)))]);
+            let req = json::obj(vec![
+                ("release_if_proven", sha.clone()),
+                ("why", json::s(&format!("{}, and it runs {}, which Heimdall holds", what, hit))),
+            ]);
             let short = match sha {
                 Value::Str(s) => py::take(s, 12).to_string(),
                 Value::Arr(a) => Value::Arr(a.iter().take(12).cloned().collect()).py_str(),

@@ -73,10 +73,9 @@ impl Value {
             Value::Float(f) => py::float_repr(*f),
             Value::Str(s) => py::str_repr(s),
             Value::Arr(a) => format!("[{}]", a.iter().map(|v| v.py_repr()).collect::<Vec<_>>().join(", ")),
-            Value::Obj(o) => format!(
-                "{{{}}}",
-                o.iter().map(|(k, v)| format!("{}: {}", py::str_repr(k), v.py_repr())).collect::<Vec<_>>().join(", ")
-            ),
+            Value::Obj(o) => {
+                format!("{{{}}}", o.iter().map(|(k, v)| format!("{}: {}", py::str_repr(k), v.py_repr())).collect::<Vec<_>>().join(", "))
+            }
         }
     }
 }

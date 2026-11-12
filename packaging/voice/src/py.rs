@@ -137,9 +137,7 @@ pub struct Env {
 
 impl Env {
     pub fn from_process() -> Env {
-        let vars = std::env::vars_os()
-            .map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned()))
-            .collect();
+        let vars = std::env::vars_os().map(|(k, v)| (k.to_string_lossy().into_owned(), v.to_string_lossy().into_owned())).collect();
         Env { vars }
     }
 
@@ -215,9 +213,7 @@ pub fn getpid() -> u32 {
 
 /// os.getcwd()
 pub fn getcwd() -> PyResult<String> {
-    std::env::current_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|e| Crash::new(format!("FileNotFoundError: {}", e)))
+    std::env::current_dir().map(|p| p.to_string_lossy().into_owned()).map_err(|e| Crash::new(format!("FileNotFoundError: {}", e)))
 }
 
 // ---- paths (posixpath)

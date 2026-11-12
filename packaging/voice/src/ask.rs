@@ -329,7 +329,10 @@ pub fn recent_crash(question: &str) -> PyResult<String> {
     Ok(mine.first().cloned().unwrap_or_default())
 }
 
-rx!(R_GENERAL, r"(?i)\b(?:how(?:'s| is| are|s)?|is|are|was) (?:the |my |this )?(?:system|computer|pc|machine|everything|things|it|all)\b|\b(?:status|check[- ]?up|health check)\b");
+rx!(
+    R_GENERAL,
+    r"(?i)\b(?:how(?:'s| is| are|s)?|is|are|was) (?:the |my |this )?(?:system|computer|pc|machine|everything|things|it|all)\b|\b(?:status|check[- ]?up|health check)\b"
+);
 rx!(R_GAME_EXE, r"(?i)steam|wine|proton|\.exe");
 
 /// What the computer reports about the given topics (at most two), as text to place before the question; empty when none.
@@ -498,7 +501,10 @@ pub fn spoken(question: &str) -> String {
     s(py::strip(&q))
 }
 
-rx!(R_ACTION, r"(?i)\b(?:sudo|pacman|yay|systemctl|delete|remove|uninstall|install|update|upgrade|rename|kill|restart|reboot|shut ?down|format|wipe|empty the)\b");
+rx!(
+    R_ACTION,
+    r"(?i)\b(?:sudo|pacman|yay|systemctl|delete|remove|uninstall|install|update|upgrade|rename|kill|restart|reboot|shut ?down|format|wipe|empty the)\b"
+);
 
 pub fn about_the_computer(topics: &[String], said: &str) -> bool {
     topics.iter().any(|t| t != "chat") || hit(&R_ACTION, said)
@@ -519,7 +525,10 @@ pub fn daypart(now: &LocalTime) -> &'static str {
     }
 }
 
-rx!(R_SECRET, r"(?i)(?:password|passphrase|pass code|passcode|pin code|api key|token|secret|private key|credit card|\b[A-Za-z0-9+/_-]{32,}\b)");
+rx!(
+    R_SECRET,
+    r"(?i)(?:password|passphrase|pass code|passcode|pin code|api key|token|secret|private key|credit card|\b[A-Za-z0-9+/_-]{32,}\b)"
+);
 rx!(R_CONTROL, r"[\x00-\x1f\x7f\x{202a}-\x{202e}\x{2066}-\x{2069}]");
 
 /// Control and direction characters made spaces, stripped, at most n characters.
@@ -569,7 +578,8 @@ pub fn recall(question: &str, vault: &str, env: &Env) -> PyResult<Vec<String>> {
 
 pub fn tail_lines(path: &str, n: usize, prefix: &str) -> PyResult<Vec<String>> {
     let Some(text) = py::read_text_opt(path)? else { return Ok(vec![]) };
-    let all: Vec<String> = py::lines_keepends(&text).into_iter().filter(|l| l.starts_with(prefix)).map(|l| s(py::skip(py::strip(l), 2))).collect();
+    let all: Vec<String> =
+        py::lines_keepends(&text).into_iter().filter(|l| l.starts_with(prefix)).map(|l| s(py::skip(py::strip(l), 2))).collect();
     let k = all.len().saturating_sub(n);
     Ok(all[k..].to_vec())
 }
@@ -577,10 +587,23 @@ pub fn tail_lines(path: &str, n: usize, prefix: &str) -> PyResult<Vec<String>> {
 rx!(R_MEMORY_ASK, r"(?i)\b(?:remember|recall|told you|said about|mentioned|last time|that time)\b");
 rx!(R_CALLBACK, r"(?i)\b(?:remember|again|my name|funny|joke|laugh|that time|last time|the one about)\b");
 rx!(R_JOKE_ASK, r"(?i)\b(?:tell|another|got|know|have|one more)\b.*\b(?:joke|pun|riddle)s?\b|make me laugh|something funny|cheer me up");
-rx!(R_ANNOUNCE, concat!(r"(?i)^(?:ok(?:ay)?[,.]?", S!(), r"*)?(?:let me|i'?ll|i am going to|i'?m going to|i will|allow me to|give me a (?:moment|second)|one (?:moment|second)|hold on|checking|looking(?: into| at)?|let'?s (?:check|look|see))\b"));
-rx!(R_SECURITY_OFF, r"(?i)\b(?:disabl(?:e|ing)|turn(?:ing)? off|switch(?:ing)? off|stop(?:ping)?|mask(?:ing)?|remov(?:e|ing)|uninstall(?:ing)?)\b[^.\n]{0,60}\b(?:ufw|firewall|firewalld|heimdall|apparmor|selinux|keyring|freshclam|clamav|antivirus|secure boot|limbo)\b");
+rx!(
+    R_ANNOUNCE,
+    concat!(
+        r"(?i)^(?:ok(?:ay)?[,.]?",
+        S!(),
+        r"*)?(?:let me|i'?ll|i am going to|i'?m going to|i will|allow me to|give me a (?:moment|second)|one (?:moment|second)|hold on|checking|looking(?: into| at)?|let'?s (?:check|look|see))\b"
+    )
+);
+rx!(
+    R_SECURITY_OFF,
+    r"(?i)\b(?:disabl(?:e|ing)|turn(?:ing)? off|switch(?:ing)? off|stop(?:ping)?|mask(?:ing)?|remov(?:e|ing)|uninstall(?:ing)?)\b[^.\n]{0,60}\b(?:ufw|firewall|firewalld|heimdall|apparmor|selinux|keyring|freshclam|clamav|antivirus|secure boot|limbo)\b"
+);
 rx!(R_WARNED, concat!(r"(?i)\b(?:do not|don'?t|never|avoid|no need to|without|not)", S!(), r"+(?:[\p{L}\p{N}_]+", S!(), r"+){0,2}$"));
-rx!(R_OFFER, r"(?i)^(?:would you like|do you want|want me to|want help|need help|is there anything|let me know|if you (?:need|want)|i'?m (?:always )?here (?:if|for)|feel free|or is there anything|anything (?:else|i can))");
+rx!(
+    R_OFFER,
+    r"(?i)^(?:would you like|do you want|want me to|want help|need help|is there anything|let me know|if you (?:need|want)|i'?m (?:always )?here (?:if|for)|feel free|or is there anything|anything (?:else|i can))"
+);
 rx!(R_OFFER2, r"(?i)\b(?:anything (?:else|i can do|specific)|help (?:ease|you with|with (?:something|anything)))\b");
 rx!(R_HELP, r"(?i)\b(?:help|assist)\b");
 
@@ -699,10 +722,10 @@ pub const NEUTRAL: [&str; 10] = [
 ];
 
 const LEARN_STOP: &[&str] = &[
-    "their", "about", "with", "they", "them", "from", "that", "this", "when", "have", "likes", "prefers", "wants", "being", "despite", "the",
-    "and", "you", "are", "was", "for", "how", "its", "not", "but", "can", "did", "has", "had", "his", "her", "she", "him", "our", "who",
-    "why", "way", "all", "any", "one", "out", "get", "got", "too", "now", "new", "day", "see", "say", "what", "think", "doing", "your",
-    "just", "like", "some", "will", "would", "could", "should", "really", "today", "tell", "know", "want", "yes",
+    "their", "about", "with", "they", "them", "from", "that", "this", "when", "have", "likes", "prefers", "wants", "being", "despite",
+    "the", "and", "you", "are", "was", "for", "how", "its", "not", "but", "can", "did", "has", "had", "his", "her", "she", "him", "our",
+    "who", "why", "way", "all", "any", "one", "out", "get", "got", "too", "now", "new", "day", "see", "say", "what", "think", "doing",
+    "your", "just", "like", "some", "will", "would", "could", "should", "really", "today", "tell", "know", "want", "yes",
 ];
 
 rx!(R_AZ3, r"[a-z]{3,}");
@@ -871,7 +894,8 @@ pub fn relevant(ctx: &Ctx, question: &str, observations: &[String], env: &Env) -
     for m in R_AZ3.find_iter(&py::lower(&owner_name(ctx)?)) {
         stop.insert(s(m.as_str()));
     }
-    let words = |t: &str| -> HashSet<String> { R_AZ3.find_iter(&py::lower(t)).map(|m| s(m.as_str())).filter(|w| !stop.contains(w)).collect() };
+    let words =
+        |t: &str| -> HashSet<String> { R_AZ3.find_iter(&py::lower(t)).map(|m| s(m.as_str())).filter(|w| !stop.contains(w)).collect() };
     let said = words(question);
     let mut out: Vec<String> = observations.iter().filter(|o| !said.is_disjoint(&words(o))).cloned().collect();
     let cache_path = py::join_all(&[&ctx.runtime_dir(), "labyrinth-sarina", "embed-cache.json"]);
@@ -918,7 +942,8 @@ pub fn companion(ctx: &Ctx, question: &str, env: &Env, now: Option<LocalTime>) -
     let vault = s(env.get_or("SARINA_VAULT", ""));
     let mut parts: Vec<String> = vec![format!("It is {} {}, {}.", now.day_name(), daypart(&now), now.hm())];
     // sarina-tone reads its own numbers only (no model, no graphics card): it runs while the vault is searched
-    let tone = if env.get_or("LABYRINTH_TONE", "1") != "0" { Some(Pending::start(&argv(&["sarina-tone", "--pattern"]), 5.0)) } else { None };
+    let tone =
+        if env.get_or("LABYRINTH_TONE", "1") != "0" { Some(Pending::start(&argv(&["sarina-tone", "--pattern"]), 5.0)) } else { None };
     let mut vault_parts: Vec<String> = Vec::new();
     if !vault.is_empty() && py::isdir(&vault) {
         let sp = spoken(question);
@@ -1076,7 +1101,13 @@ pub fn log_talk(question: &str, answer: &str, env: &Env) -> PyResult<()> {
     }
     let vault = env.get_or("SARINA_VAULT", "");
     let q = spoken(question);
-    if vault.is_empty() || !py::isdir(vault) || test_refuses(vault, env)? || py::split_ws(&q).len() < 3 || hit(&R_SECRET, &q) || hit(&R_SECRET, answer) {
+    if vault.is_empty()
+        || !py::isdir(vault)
+        || test_refuses(vault, env)?
+        || py::split_ws(&q).len() < 3
+        || hit(&R_SECRET, &q)
+        || hit(&R_SECRET, answer)
+    {
         return Ok(());
     }
     let now = LocalTime::now();
@@ -1092,7 +1123,12 @@ pub fn log_talk(question: &str, answer: &str, env: &Env) -> PyResult<()> {
             now.year_month()
         ));
     }
-    text.push_str(&format!("- {} | they said: {} | I said: {}\n", now.ymd_hm(), plain(&q, 240), plain(&R_TAGS.replace_all(answer, ""), 240)));
+    text.push_str(&format!(
+        "- {} | they said: {} | I said: {}\n",
+        now.ymd_hm(),
+        plain(&q, 240),
+        plain(&R_TAGS.replace_all(answer, ""), 240)
+    ));
     let _ = py::append_text(&path, &text);
     Ok(())
 }
@@ -1267,7 +1303,11 @@ impl Streamer {
 
     fn take(&mut self, sentence: &str, fin: bool) -> Option<String> {
         let mut sentence = s(sentence);
-        if self.out.is_empty() && self.words == 0 && py::clen(&self.said) > 12 && py::lower(&sentence).starts_with(py::lower(&self.said).as_str()) {
+        if self.out.is_empty()
+            && self.words == 0
+            && py::clen(&self.said) > 12
+            && py::lower(&sentence).starts_with(py::lower(&self.said).as_str())
+        {
             sentence = s(py::lstrip_chars(py::skip(&sentence, py::clen(&self.said)), " .?!,"));
         }
         let sentence = clean_sentence(&sentence);
@@ -1471,7 +1511,16 @@ pub fn owner_filled(ctx: &Ctx, rules: &str) -> PyResult<String> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn command(ctx: &Ctx, question: &str, cwd: &str, write: bool, shell: bool, voice: bool, resume: Option<&str>, rules: &str) -> PyResult<Vec<String>> {
+pub fn command(
+    ctx: &Ctx,
+    question: &str,
+    cwd: &str,
+    write: bool,
+    shell: bool,
+    voice: bool,
+    resume: Option<&str>,
+    rules: &str,
+) -> PyResult<Vec<String>> {
     let mut cmd = match resume {
         Some(r) => argv(&["sarina", "resume", r, question]),
         None => argv(&["sarina", "chat", question]),
@@ -1490,7 +1539,8 @@ pub fn command(ctx: &Ctx, question: &str, cwd: &str, write: bool, shell: bool, v
         let mut tools = vec![s(VOICE_TOOLS)];
         tools.extend(extra);
         cmd.extend([s("--tools"), tools.join(","), s("--allow-write")]);
-        let persona: Vec<String> = [persona_text(ctx)?, s(SPOKEN_BRIEF), owner_filled(ctx, rules)?].into_iter().filter(|x| !x.is_empty()).collect();
+        let persona: Vec<String> =
+            [persona_text(ctx)?, s(SPOKEN_BRIEF), owner_filled(ctx, rules)?].into_iter().filter(|x| !x.is_empty()).collect();
         if !persona.is_empty() {
             cmd.extend([s("--append-system-prompt"), persona.join("\n\n")]);
         }
@@ -1676,7 +1726,10 @@ fn run(ctx: &Ctx, prog: &str, args: &[String], timing: &mut Timing) -> PyResult<
         if chat && rc == 0 && hit(&R_JOKE_ASK, &said_q) {
             let old = a_repeat(&rx::strip_tag_blocks(&out), &told_jokes(env.get_or("SARINA_VAULT", ""))?);
             if !old.is_empty() {
-                let again = format!("You told that one before ({}). Tell a different joke, a new one, about the same thing. Only the joke.", py::take(&old, 160));
+                let again = format!(
+                    "You told that one before ({}). Tell a different joke, a new one, about the same thing. Only the joke.",
+                    py::take(&old, 160)
+                );
                 let sid = match &resume {
                     Some(r) => Some(r.clone()),
                     None => new_session(ctx, &before, state.as_deref()),

@@ -56,7 +56,10 @@ fn call(f: &str, a: &[Value], streamers: &mut HashMap<i64, Streamer>, next: &mut
             w.sort();
             strs(&w)
         }
-        "plain" => json::s(&ask::plain(&arg_str(a, 0), a.get(1).and_then(|v| if let Value::Int(n) = v { n.parse().ok() } else { None }).unwrap_or(0))),
+        "plain" => json::s(&ask::plain(
+            &arg_str(a, 0),
+            a.get(1).and_then(|v| if let Value::Int(n) = v { n.parse().ok() } else { None }).unwrap_or(0),
+        )),
         "recall" => strs(&ask::recall(&arg_str(a, 0), &arg_str(a, 1), &arg_env(a, 2))?),
         "learned" => {
             let today = a.get(1).and_then(|v| v.as_str()).and_then(py::date_fromiso).unwrap_or_else(|| LocalTime::now().days());
@@ -86,7 +89,9 @@ fn call(f: &str, a: &[Value], streamers: &mut HashMap<i64, Streamer>, next: &mut
         },
         "note_laugh" => {
             let prev = match a.first() {
-                Some(Value::Arr(x)) if x.len() == 2 => Some((x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())),
+                Some(Value::Arr(x)) if x.len() == 2 => {
+                    Some((x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string()))
+                }
                 _ => None,
             };
             ask::note_laugh(prev, &arg_env(a, 1))?;
@@ -145,7 +150,9 @@ fn call(f: &str, a: &[Value], streamers: &mut HashMap<i64, Streamer>, next: &mut
                 Some(Value::Arr(x)) => Some(
                     x.iter()
                         .map(|p| match p {
-                            Value::Arr(t) if t.len() == 2 => (t[0].as_str().unwrap_or("").to_string(), t[1].as_str().unwrap_or("").to_string()),
+                            Value::Arr(t) if t.len() == 2 => {
+                                (t[0].as_str().unwrap_or("").to_string(), t[1].as_str().unwrap_or("").to_string())
+                            }
                             _ => (String::new(), String::new()),
                         })
                         .collect(),
