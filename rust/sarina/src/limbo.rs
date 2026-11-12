@@ -483,3 +483,89 @@ pub fn fuzz_answer(data: &[u8]) {
         assert!(!s.as_text().contains('\n') && !control_chars().is_match(&s.as_text()));
     }
 }
+
+// ---- the tools (Go: limbo/integration.go) --------------------------------------------------------------------------------
+
+fn tool_getenv(k: &str) -> String {
+    std::env::var(k).unwrap_or_default()
+}
+
+/// Go's `strArg`: a non-empty (not only spaces) string argument.
+fn str_arg(args: &BTreeMap<String, Any>, k: &str) -> Result<String, String> {
+    match args.get(k) {
+        Some(Any::String(s)) if !crate::gotext::trim_space(s).is_empty() => Ok(s.clone()),
+        _ => Err(format!("{k} is required and must be a non-empty string")),
+    }
+}
+
+/// Go's `clampTimeout`: timeout_seconds read leniently (default 300), clamped to 10..900 rather than refused.
+fn clamp_timeout(args: &BTreeMap<String, Any>) -> i64 {
+    let v = args.get("timeout_seconds");
+    let n = match v {
+        Some(Any::Bool(_)) => 300,
+        _ => crate::config::as_int(v).unwrap_or(300),
+    };
+    n.clamp(10, 900)
+}
+
+fn empty_with_skipped(n: usize) -> String {
+    format!("no usable validation profiles; {n} skipped as invalid")
+}
+
+/// Go's `Tools`: limbo_profiles (read-only) and limbo_validate (behind the shell permission, as bash).
+pub fn tools() -> Vec<crate::tools::registry::Tool> {
+    use crate::tools::defs::tool;
+    use crate::tools::files::fail;
+    use crate::tools::registry::{Output, ToolError};
+    let profiles = tool(
+        "limbo_profiles",
+        std::sync::Arc::new(|_, _| {
+            let l = match Client::default().describe_profiles_and_skipped(&tool_getenv) {
+                Ok(l) => l,
+                Err(e) => return fail(e.0),
+            };
+            if l.profiles.is_empty() {
+                if !l.skipped.is_empty() {
+                    let mut lines = vec![empty_with_skipped(l.skipped.len())];
+                    lines.extend(l.skipped_lines());
+                    return Output { content: lines.join("\n"), ..Output::default() };
+                }
+                return Output {
+                    content: "Limbo is reachable but has no validation profiles. A human adds them under /etc/limbo/validation/.".into(),
+                    ..Output::default()
+                };
+            }
+            let mut lines = vec!["Validation profiles:".to_owned()];
+            lines.extend(l.profiles.iter().map(|p| format!("- {}", p.as_text())));
+            lines.push("Commands run as an unprivileged user; prefix a command with sudo only where a profile says sudo=yes.".into());
+            lines.extend(l.skipped_lines());
+            Output { content: lines.join("\n"), ..Output::default() }
+        }),
+    );
+    let validate = tool(
+        "limbo_validate",
+        std::sync::Arc::new(|args, _| {
+            let (profile, command) = match (str_arg(args, "profile"), str_arg(args, "command")) {
+                (Err(e), _) | (_, Err(e)) => return fail(e),
+                (Ok(p), Ok(c)) => (p, c),
+            };
+            let run = match Client::default().validate(&profile, &command, clamp_timeout(args), &tool_getenv) {
+                Ok(r) => r,
+                Err(e) => return fail(e.0),
+            };
+            let meta = BTreeMap::from([
+                ("limbo_run_id".to_owned(), Any::String(run.run_id.clone())),
+                ("limbo_status".to_owned(), Any::String(run.status.clone())),
+                ("limbo_exit_code".to_owned(), run.exit_code.map_or(Any::Null, Any::Int)),
+                ("limbo_succeeded".to_owned(), Any::Bool(run.succeeded())),
+                ("limbo_code".to_owned(), Any::String(run.code.clone())),
+            ]);
+            if run.infrastructure_failure() {
+                // not a result of the command: an error, so it can never be taken for a test outcome
+                return Output { metadata: meta, error: Some(ToolError::Failed(run.as_text())), ..Output::default() };
+            }
+            Output { content: run.as_text(), metadata: meta, error: None }
+        }),
+    );
+    vec![profiles, validate]
+}
