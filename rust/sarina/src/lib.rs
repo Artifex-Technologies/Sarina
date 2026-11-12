@@ -6,6 +6,7 @@ pub mod fuzzing;
 pub mod goany;
 pub mod goerr;
 pub mod goflag;
+pub mod gojson;
 pub mod gopath;
 pub mod goregexp;
 pub mod gotext;

@@ -89,3 +89,25 @@ pub fn secrets(data: &[u8]) {
         assert_eq!(secret::secret_name(&name.to_ascii_uppercase()), secret);
     }
 }
+
+/// Any bytes as a JSON document (a session file, a model's or an MCP server's answer): no panic; Decode agrees with
+/// Unmarshal on a whole document; what Go's encoder writes back reads to the same value, compact and indented.
+pub fn json(data: &[u8]) {
+    use crate::gojson;
+    let whole = gojson::parse(data);
+    let (first, more) = gojson::parse_first(data);
+    let Ok(v) = whole else { return };
+    assert_eq!(first.as_ref().ok(), Some(&v), "Decode reads what Unmarshal reads");
+    assert!(!more, "nothing follows a whole document");
+    let (a, _) = gojson::to_any(&v);
+    for html in [true, false] {
+        let mut out = String::new();
+        gojson::write_any(&mut out, &a, html).expect("a decoded value always writes");
+        let (back, err) = gojson::unmarshal_any(out.as_bytes());
+        assert_eq!(err, None, "{out}");
+        assert_eq!(back, a, "{out}");
+        let (back, err) = gojson::unmarshal_any(gojson::indent(&out, "  ").as_bytes());
+        assert_eq!(err, None);
+        assert_eq!(back, a);
+    }
+}

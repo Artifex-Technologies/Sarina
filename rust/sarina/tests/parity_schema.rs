@@ -44,10 +44,10 @@ fn value(a: &Any) -> Value {
 }
 
 fn object(v: &Value) -> Option<BTreeMap<String, Any>> {
-    match any(v) {
-        Any::Object(m) => Some(m),
-        Any::Null => None,
-        other => panic!("not an object: {other:?}"),
+    match any(v).into_object() {
+        Ok(m) => Some(m),
+        Err(Any::Null) => None,
+        Err(other) => panic!("not an object: {other:?}"),
     }
 }
 

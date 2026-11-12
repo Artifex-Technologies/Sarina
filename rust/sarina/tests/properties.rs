@@ -153,7 +153,7 @@ proptest! {
     /// ValidateArgs never panics, never adds a key, and is idempotent: its own output passes unchanged.
     #[test]
     fn validate_args_is_idempotent(schema in any_schema(), args in prop::collection::btree_map("[a-f]", any_value(), 0..5)) {
-        let Any::Object(schema) = schema else { unreachable!() };
+        let Ok(schema) = schema.into_object() else { unreachable!() };
         if let Ok(out) = validate_args(Some(&schema), args.clone()) {
             prop_assert!(out.keys().all(|k| args.contains_key(k)));
             prop_assert_eq!(validate_args(Some(&schema), out.clone()), Ok(out));
@@ -168,6 +168,23 @@ proptest! {
     #[test]
     fn secrets_credential_shaped(s in "[ ~$/{}A-Za-z._=\\-]{0,12}(\\.ssh|\\.gnupg|id_rsa|key4\\.db|\\.ENV|x\\.pem)[ /'\"a-z]{0,6}(curl|nc|wget|fetch\\()?") {
         fuzzing::secrets(s.as_bytes());
+    }
+
+    #[test]
+    fn json_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::json(&data);
+    }
+
+    /// JSON-shaped bytes: the fuzz body, and every document serde_json reads (strict) reads here to the same value.
+    #[test]
+    fn json_shaped(s in "[ \\t\\n{}\\[\\],:\"a-c0-9.eE+\\-\\\\/u]{0,60}|(null|true|false|[0-9.eE+\\-]{1,12}|\"[a-z\\\\\"/btnrfu0-9]{0,10}\"|[,:\\[\\]{} ]){0,20}") {
+        fuzzing::json(s.as_bytes());
+        if let Ok(strict) = serde_json::from_str::<serde_json::Value>(&s) {
+            let (v, err) = sarina::gojson::unmarshal_any(s.as_bytes());
+            if err.is_none() {
+                prop_assert_eq!(common_any(&strict), v);
+            }
+        }
     }
 
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
@@ -199,4 +216,16 @@ fn fixture_inputs_mutated() {
         }
     }
     assert!(n > 10_000);
+}
+
+/// A serde_json value as Go's `any` (numbers as float64, as Go reads them).
+fn common_any(v: &serde_json::Value) -> Any {
+    match v {
+        serde_json::Value::Null => Any::Null,
+        serde_json::Value::Bool(b) => Any::Bool(*b),
+        serde_json::Value::Number(n) => Any::Number(n.as_f64().unwrap()),
+        serde_json::Value::String(s) => Any::String(s.clone()),
+        serde_json::Value::Array(a) => Any::Array(a.iter().map(common_any).collect()),
+        serde_json::Value::Object(m) => Any::Object(m.iter().map(|(k, x)| (k.clone(), common_any(x))).collect()),
+    }
 }

@@ -15,10 +15,7 @@ use crate::gotext::{float_v, parse_float, quote, to_lower, trim_space};
 /// two of them are wrong it names either; the port names the first in sorted order.
 pub fn validate_args(schema: Option<&BTreeMap<String, Any>>, args: BTreeMap<String, Any>) -> Result<BTreeMap<String, Any>, String> {
     let Some(schema) = schema else { return Ok(args) };
-    match validate_value(schema, Any::Object(args), "arguments")? {
-        Any::Object(m) => Ok(m),
-        _ => Ok(BTreeMap::new()),
-    }
+    Ok(validate_value(schema, Any::Object(args), "arguments")?.into_object().unwrap_or_default())
 }
 
 fn schema_map(v: Option<&Any>) -> Option<&BTreeMap<String, Any>> {
@@ -72,7 +69,7 @@ fn validate_value(schema: &BTreeMap<String, Any>, v: Any, where_: &str) -> Resul
     };
     match typ {
         "object" => {
-            let Any::Object(mut out) = v else { return Err(format!("{where_} must be an object")) };
+            let Ok(mut out) = v.into_object() else { return Err(format!("{where_} must be an object")) };
             for name in string_list(schema.get("required")) {
                 if matches!(out.get(name), None | Some(Any::Null)) {
                     return Err(format!("{} is required", qualify(where_, name)));
@@ -95,7 +92,7 @@ fn validate_value(schema: &BTreeMap<String, Any>, v: Any, where_: &str) -> Resul
             Ok(Any::Object(out))
         }
         "array" => {
-            let Any::Array(list) = v else { return Err(format!("{where_} must be an array")) };
+            let Ok(list) = v.into_array() else { return Err(format!("{where_} must be an array")) };
             let Some(items) = schema_map(schema.get("items")) else { return Ok(Any::Array(list)) };
             let mut out = Vec::with_capacity(list.len());
             for (i, x) in list.into_iter().enumerate() {
@@ -104,7 +101,7 @@ fn validate_value(schema: &BTreeMap<String, Any>, v: Any, where_: &str) -> Resul
             Ok(Any::Array(out))
         }
         "string" => {
-            let Any::String(s) = v else { return Err(format!("{where_} must be a string")) };
+            let Ok(s) = v.into_string() else { return Err(format!("{where_} must be a string")) };
             if let Some(n) = number_of(schema.get("minLength")) {
                 if (s.chars().count() as f64) < n {
                     if n == 1.0 {
