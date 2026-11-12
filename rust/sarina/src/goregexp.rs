@@ -32,6 +32,30 @@ pub fn translate(go: &str) -> Result<String, String> {
                     ('B', false) => r"(?-u:\B)".into(),
                     ('A' | 'z', false) => format!("\\{e}"),
                     ('n' | 't' | 'r' | 'f' | 'v' | 'a', _) => format!("\\{e}"),
+                    // Unicode classes by their one-letter or braced name (\pL, \p{N}): the same general categories
+                    ('p' | 'P', _) => {
+                        let name: String = if chars.peek() == Some(&'{') {
+                            chars.next();
+                            let mut n = String::new();
+                            loop {
+                                match chars.next() {
+                                    Some('}') => break,
+                                    Some(c) if c.is_ascii_alphabetic() && n.len() < 32 => n.push(c),
+                                    _ => return Err("a Unicode class name is not closed or not a name".into()),
+                                }
+                            }
+                            n
+                        } else {
+                            match chars.next() {
+                                Some(c) if c.is_ascii_alphabetic() => c.to_string(),
+                                _ => return Err("a Unicode class needs a name".into()),
+                            }
+                        };
+                        if !matches!(name.as_str(), "L" | "Lu" | "Ll" | "N" | "Nd") {
+                            return Err(format!("the Unicode class {name} is not supported"));
+                        }
+                        format!("\\{e}{{{name}}}")
+                    }
                     // Go reads \< and \> as the characters; Rust as word-start and word-end assertions
                     ('<' | '>', _) => e.to_string(),
                     (e, _) if e.is_ascii_punctuation() => format!("\\{e}"),

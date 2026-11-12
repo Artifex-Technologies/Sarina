@@ -13,8 +13,9 @@ path = "src/lib.rs"
 
 # Exact versions on purpose (the lock file pins the rest).
 [dependencies]
-# Go's regexp: \b \w \d \s are written out as Go's ASCII classes where a pattern uses them, so Unicode's Perl classes stay out
-regex = { version = "=1.12.3", default-features = false, features = ["std", "perf", "unicode-case"] }
+# Go's regexp: \b \w \d \s are written out as Go's ASCII classes where a pattern uses them, so Unicode's Perl classes stay out;
+# the general categories for Go's \p{L} and \p{N} (the agent's answer checks)
+regex = { version = "=1.12.3", default-features = false, features = ["std", "perf", "unicode-case", "unicode-gencat"] }
 # ed25519 for Heimdall's signed list of approved files (trust.rs); the same crate and version as Heimdall's mesh
 ring = { version = "=0.17.14", default-features = false }
 # sha256 of the approved files (trust.rs) and the caches' content hashes; as Heimdall and Limbo

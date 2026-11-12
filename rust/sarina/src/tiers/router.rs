@@ -168,7 +168,7 @@ fn ev(pairs: &[(&str, Any)]) -> Event {
 }
 
 /// Go's `exec.LookPath` as a yes or no.
-fn found(p: &str) -> bool {
+pub fn found(p: &str) -> bool {
     use std::os::unix::fs::PermissionsExt;
     if p.contains('/') {
         return std::fs::metadata(p).is_ok_and(|m| !m.is_dir() && m.permissions().mode() & 0o111 != 0);
