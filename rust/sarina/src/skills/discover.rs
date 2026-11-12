@@ -279,36 +279,11 @@ pub fn headerless(text: &str) -> String {
 impl Catalog {
     /// A skill by name, ignoring case (Go's strings.EqualFold).
     pub fn get(&self, name: &str) -> Option<&Skill> {
-        self.skills.iter().find(|s| equal_fold(&s.name, name))
+        self.skills.iter().find(|s| gotext::equal_fold(&s.name, name))
     }
 
     /// The skills the model may call.
     pub fn model_invocable(&self) -> Vec<&Skill> {
         self.skills.iter().filter(|s| s.model_invocable).collect()
-    }
-}
-
-/// Go's `strings.EqualFold` (Unicode simple folding).
-pub fn equal_fold(a: &str, b: &str) -> bool {
-    let fold = |c: char| -> char {
-        match c {
-            '\u{17F}' => 's',
-            '\u{212A}' => 'k',
-            c => {
-                let mut l = c.to_lowercase();
-                match (l.next(), l.next()) {
-                    (Some(x), None) => x,
-                    _ => c,
-                }
-            }
-        }
-    };
-    let (mut x, mut y) = (a.chars(), b.chars());
-    loop {
-        match (x.next(), y.next()) {
-            (None, None) => return true,
-            (Some(p), Some(q)) if fold(p) == fold(q) => {}
-            _ => return false,
-        }
     }
 }

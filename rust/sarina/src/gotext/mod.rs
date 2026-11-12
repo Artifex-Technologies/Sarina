@@ -145,6 +145,32 @@ pub fn to_valid_utf8(b: &[u8]) -> String {
     }
 }
 
+/// Go's `strings.EqualFold`: equal under Unicode simple case folding (a character's one-character lower case, and the two
+/// folds to ASCII Go has besides: U+017F long s is s, U+212A Kelvin is k).
+pub fn equal_fold(a: &str, b: &str) -> bool {
+    let fold = |c: char| -> char {
+        match c {
+            '\u{17F}' => 's',
+            '\u{212A}' => 'k',
+            c => {
+                let mut l = c.to_lowercase();
+                match (l.next(), l.next()) {
+                    (Some(x), None) => x,
+                    _ => c,
+                }
+            }
+        }
+    };
+    let (mut x, mut y) = (a.chars(), b.chars());
+    loop {
+        match (x.next(), y.next()) {
+            (None, None) => return true,
+            (Some(p), Some(q)) if fold(p) == fold(q) => {}
+            _ => return false,
+        }
+    }
+}
+
 /// Go's `unicode.IsLetter`.
 pub fn is_letter(c: char) -> bool {
     if (c as u32) < 0x80 {
