@@ -2,6 +2,9 @@
 //! public domain), which has two paths: with FMA instructions when the CPU has AVX and FMA, plain multiplies and adds
 //! otherwise, and the two can differ in the last bit. The port takes the same path on the same CPU. Rust's `f64::exp`
 //! (the C library's) is not Go's, and the vector index's levels are built from it.
+//!
+//! And Go's `math.Log` on amd64 (math/log_amd64.s, FreeBSD's method in assembly; one path), which the session search ranks
+//! with.
 
 // Go's constants as its assembly spells them (each rounds to the same float64 as Go's assembler makes of it)
 #![allow(clippy::excessive_precision, clippy::approx_constant)]
@@ -96,6 +99,47 @@ pub fn exp_with(x: f64, fma: bool) -> f64 {
         return f64::INFINITY;
     }
     r * f64::from_bits((e as u64) << 52)
+}
+
+/// Go's `math.Log` as amd64 runs it (math/log_amd64.s): the same operations in the same order, including its reading of the
+/// exponent (no special case for subnormals) and its `f1 <= sqrt(2)/2` test.
+pub fn log(x: f64) -> f64 {
+    const HSQRT2: f64 = 7.07106781186547524401e-01;
+    const LN2HI: f64 = 6.93147180369123816490e-01;
+    const LN2LO: f64 = 1.90821492927058770002e-10;
+    const L1: f64 = 6.666666666666735130e-01;
+    const L2: f64 = 3.999999999940941908e-01;
+    const L3: f64 = 2.857142874366239149e-01;
+    const L4: f64 = 2.222219843214978396e-01;
+    const L5: f64 = 1.818357216161805012e-01;
+    const L6: f64 = 1.531383769920937332e-01;
+    const L7: f64 = 1.479819860511658591e-01;
+    let bits = x.to_bits();
+    if bits & !(1u64 << 63) == 0 {
+        return f64::NEG_INFINITY;
+    }
+    if (bits as i64) < 0 {
+        return f64::from_bits(0x7FF8000000000001);
+    }
+    if bits as i64 >= 0x7FF0000000000000 {
+        return x;
+    }
+    let mut f1 = f64::from_bits((bits & 0x000F_FFFF_FFFF_FFFF) | 0.5f64.to_bits());
+    let mut k = (((bits >> 52) & 0x7FF) as i32 - 0x3FE) as f64;
+    // CMPSD's "not less than": HSqrt2 < f1 is false
+    let adj = if HSQRT2 < f1 { 0.0 } else { 1.0 };
+    k -= adj;
+    f1 *= adj + 1.0;
+    let f = f1 - 1.0;
+    let s = f / (2.0 + f);
+    let s2 = s * s;
+    let s4 = s2 * s2;
+    let t1 = s2 * ((((L7 * s4) + L5) * s4 + L3) * s4 + L1);
+    let t2 = s4 * (((L6 * s4) + L4) * s4 + L2);
+    let r = t1 + t2;
+    let hfsq = 0.5 * f * f;
+    let a = s * (hfsq + r) + k * LN2LO;
+    k * LN2HI - ((hfsq - a) - f)
 }
 
 #[cfg(test)]

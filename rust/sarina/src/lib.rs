@@ -24,6 +24,7 @@ pub mod llm;
 pub mod policy;
 pub mod pyfmt;
 pub mod session;
+pub mod sessionsearch;
 pub mod shellparse;
 pub mod testguard;
 pub mod tools;

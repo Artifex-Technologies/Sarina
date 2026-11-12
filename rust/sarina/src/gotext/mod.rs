@@ -7,6 +7,7 @@
 //! U+FFFD.
 
 mod cf;
+mod letters;
 mod parsefloat;
 mod tables;
 
@@ -114,6 +115,27 @@ pub fn lossy(b: &[u8]) -> String {
             }
         }
     }
+}
+
+/// Go's `unicode.IsLetter`.
+pub fn is_letter(c: char) -> bool {
+    if (c as u32) < 0x80 {
+        return c.is_ascii_alphabetic();
+    }
+    in_table(letters::LETTER, c)
+}
+
+/// Go's `unicode.IsDigit` (decimal digits of every script).
+pub fn is_digit(c: char) -> bool {
+    if (c as u32) < 0x80 {
+        return c.is_ascii_digit();
+    }
+    in_table(letters::DIGIT, c)
+}
+
+/// Go's `strings.Fields`: the runs of characters between Unicode spaces.
+pub fn fields(s: &str) -> Vec<&str> {
+    s.split(is_space).filter(|w| !w.is_empty()).collect()
 }
 
 /// Go's `unicode.Is(unicode.Cf, c)`: a format character (Go's table, written by go/guard's parity test).

@@ -100,3 +100,10 @@ path = "fuzz_targets/model_text.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "search_snippet"
+path = "fuzz_targets/search_snippet.rs"
+test = false
+doc = false
+bench = false

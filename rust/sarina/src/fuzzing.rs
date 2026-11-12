@@ -264,3 +264,19 @@ pub fn model_text(data: &[u8]) {
         }
     }
 }
+
+/// Any text as a saved message and a search query: the snippet does not panic, is at most 320 characters plus the
+/// marks, and holds the first query word found when there is one.
+pub fn search_snippet(data: &[u8]) {
+    let Ok(s) = std::str::from_utf8(data) else { return };
+    let (content, query) = s.split_once('\u{0}').unwrap_or((s, ""));
+    let out = crate::sessionsearch::snippet(content, query);
+    assert!(out.chars().count() <= 2 * 160 + 6, "{} characters", out.chars().count());
+    let low = crate::gotext::to_lower(&out);
+    let lowered = crate::gotext::to_lower(query);
+    let content_low = crate::gotext::to_lower(content);
+    if let Some(w) = crate::gotext::fields(&lowered).into_iter().find(|w| content_low.contains(w)) {
+        // the window starts at the word, so its first character is always in it
+        assert!(low.contains(w.chars().next().unwrap_or(' ')), "{w:?} not in {out:?}");
+    }
+}

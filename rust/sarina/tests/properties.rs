@@ -325,6 +325,11 @@ proptest! {
         let _ = std::fs::remove_dir_all(&base);
     }
 
+    #[test]
+    fn search_snippet_shaped(content in "[a-zA-Zé İı \\t\\n.!0-9\u{2028}]{0,400}", query in "[a-zA-Zé İı .!0-9]{0,12}") {
+        fuzzing::search_snippet(format!("{content}\u{0}{query}").as_bytes());
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]
