@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Artifex-Technologies/Sarina/go/internal/version"
 	"github.com/Artifex-Technologies/Sarina/go/tools"
 )
 
@@ -351,7 +352,7 @@ func (c *Client) Initialize(ctx context.Context, timeout time.Duration) error {
 	_, err := c.Call(ctx, "initialize", map[string]any{
 		"protocolVersion": ProtocolVersion,
 		"capabilities":    map[string]any{},
-		"clientInfo":      map[string]any{"name": "sarina", "version": "0.1.0"},
+		"clientInfo":      map[string]any{"name": "sarina", "version": version.Version},
 	}, timeout)
 	if err != nil {
 		return err

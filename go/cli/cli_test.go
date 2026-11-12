@@ -17,6 +17,7 @@ import (
 
 	"github.com/Artifex-Technologies/Sarina/go/agent"
 	"github.com/Artifex-Technologies/Sarina/go/config"
+	"github.com/Artifex-Technologies/Sarina/go/internal/version"
 	"github.com/Artifex-Technologies/Sarina/go/llm"
 	"github.com/Artifex-Technologies/Sarina/go/session"
 )
@@ -415,12 +416,12 @@ func TestContextManagementFlagsReachTheRuntime(t *testing.T) {
 }
 
 func TestVersionNamesTheBuild(t *testing.T) {
-	b := BuildInfo{Commit: "0123456789abcdef0123", Time: "2026-10-26T15:00:00Z", Modified: true, Go: "go1.26"}
-	if got := b.String(); got != "sarina 0123456789ab with uncommitted changes, committed 2026-10-26T15:00:00Z, go1.26" {
+	b := BuildInfo{Version: "1.2.3", Commit: "0123456789abcdef0123", Time: "2026-10-26T15:00:00Z", Modified: true, Go: "go1.26"}
+	if got := b.String(); got != "sarina 1.2.3 (commit 0123456789ab with uncommitted changes, committed 2026-10-26T15:00:00Z, go1.26)" {
 		t.Fatalf("got %q", got)
 	}
-	if ReadBuild().Commit == "" {
-		t.Fatal("a build always says something about its commit")
+	if got := ReadBuild(); got.Commit == "" || got.Version != version.Version {
+		t.Fatalf("a build always names its version and says something about its commit: %+v", got)
 	}
 }
 

@@ -4,15 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime/debug"
+
+	"github.com/Artifex-Technologies/Sarina/go/internal/version"
 )
 
 func init() {
-	Register("version", "which build this is: the commit it was built from, when, and whether the tree had changes (--json)", versionCommand)
+	Register("version", "which build this is: Sarina's version, the commit it was built from, when, and whether the tree had changes (--json)", versionCommand)
 }
 
-// BuildInfo is what the Go toolchain recorded about this binary: a build from a git checkout carries its commit, the commit's time
-// and whether uncommitted changes were built in. An eval report names it, so a result is tied to the code that produced it.
+// BuildInfo is Sarina's version (the VERSION file) and what the Go toolchain recorded about this binary: a build from a git
+// checkout carries its commit, the commit's time and whether uncommitted changes were built in. An eval report names it, so a
+// result is tied to the code that produced it.
 type BuildInfo struct {
+	Version  string `json:"version"`
 	Commit   string `json:"commit"`
 	Time     string `json:"time"`
 	Modified bool   `json:"modified"`
@@ -20,7 +24,7 @@ type BuildInfo struct {
 }
 
 func ReadBuild() BuildInfo {
-	b := BuildInfo{Commit: "unknown"}
+	b := BuildInfo{Version: version.Version, Commit: "unknown"}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return b
@@ -47,14 +51,14 @@ func (b BuildInfo) String() string {
 	if b.Modified {
 		c += " with uncommitted changes"
 	}
-	s := "sarina " + c
+	s := "sarina " + b.Version + " (commit " + c
 	if b.Time != "" {
 		s += ", committed " + b.Time
 	}
 	if b.Go != "" {
 		s += ", " + b.Go
 	}
-	return s
+	return s + ")"
 }
 
 func versionCommand(env *Env, args []string) int {
