@@ -19,7 +19,8 @@ pub const DRAFT_WITHDRAWN: &str = "\x1edraft withdrawn\x1e";
 // What a spoken question may use: reading, and her vault (the only place it may write, through the vault's own safety gate).
 pub const VOICE_TOOLS: &str = "read_file,list_dir,glob_search,grep_search,vault_search,vault_read,vault_write,system_status,crash_detail,stage_binary,reverse_engineer,crypto_identify,crypto_decode,crypto_classic,crypto_hash,crypto_modern,stego_inspect";
 
-pub const SPOKEN_BRIEF: &str = "Your answer is spoken aloud: at most three short sentences, about 60 words. Lead with the one thing to do or the answer itself; leave out alternatives and background unless asked, and offer more in a few words if there is more.";
+// One or two sentences by default (2026-11-11): details only when asked for them.
+pub const SPOKEN_BRIEF: &str = "Your answer is spoken aloud: one or two short sentences, about 30 words. Give the answer itself or the one thing to do; details, alternatives and background only when asked for them.";
 
 /// What the program reads from the process around it: os.environ as it was at start, and ~/.config/labyrinth/sarina.env.
 pub struct Ctx {
@@ -1692,7 +1693,8 @@ fn run(ctx: &Ctx, prog: &str, args: &[String], timing: &mut Timing) -> PyResult<
             question = format!("{}\n\nWhat they said: {}", pre, joined);
         }
         timing.mark("prefetch");
-        let think = py::lower(ctx.environ.truthy("LABYRINTH_VOICE_THINK").or(env.truthy("LABYRINTH_VOICE_THINK")).unwrap_or("computer"));
+        // off by default (2026-11-11): a spoken question waits for no hidden thinking; "computer" thinks only about the computer, "on" always
+        let think = py::lower(ctx.environ.truthy("LABYRINTH_VOICE_THINK").or(env.truthy("LABYRINTH_VOICE_THINK")).unwrap_or("off"));
         if think == "off" || (think == "computer" && chat && pre.is_empty()) {
             question.push_str(" /no_think");
         }

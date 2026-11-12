@@ -236,7 +236,7 @@ class Companion(ParityCase):
     def check_spoken_answers_are_asked_to_be_brief(self):
         cmd = self.m.command("How do I install Spotify?", "/tmp", voice=True)
         system = cmd[cmd.index("--append-system-prompt") + 1]
-        self.assertIn("about 60 words", system)
+        self.assertIn("one or two short sentences, about 30 words", system)
         self.assertNotIn("--append-system-prompt", self.m.command("hi", "/tmp"), "typed questions get no spoken rule")
 
     def check_the_question_said_back_is_not_spoken(self):

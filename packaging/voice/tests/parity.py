@@ -45,7 +45,15 @@ PROGRAMS = ("labyrinth-ask-sarina", "labyrinth-sarina-checkup", "labyrinth-sarin
 
 
 def have_python_originals():
-    return all(os.path.isfile(os.path.join(SCRIPTS, p)) for p in PROGRAMS)
+    """The Python scripts themselves: since the switch (Labyrinth_OS 4ecd342) the image's names are links to sarina-voice, and
+    LABYRINTH_OS_DIR must name a checkout from before it (git worktree add DIR 1c905fe)."""
+    def python(p):
+        try:
+            with open(p, "rb") as f:
+                return not os.path.islink(p) and b"python" in f.readline()
+        except OSError:
+            return False
+    return all(python(os.path.join(SCRIPTS, p)) for p in PROGRAMS)
 
 
 skip_without_originals = unittest.skipUnless(have_python_originals(), "the Python originals (Labyrinth_OS) are not next to this checkout; set LABYRINTH_OS_DIR")

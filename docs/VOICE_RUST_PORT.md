@@ -126,11 +126,28 @@ What I test after switching:
    `systemctl --user start labyrinth-sarina-checkup.service`, then today's note in `Daily/` and
    `journalctl --user -u labyrinth-sarina-checkup -u labyrinth-sarina-held` (no "Traceback").
 
+## After the switch (2026-11-11)
+
+The switch is in Labyrinth_OS main (4ecd342, branch deleted), so the Rust programs are the programs; the Python originals stay
+in Labyrinth_OS's history. The side-by-side tests (`packaging/voice/tests`) skip unless `LABYRINTH_OS_DIR` names a checkout from
+before the switch (`git worktree add DIR 1c905fe`).
+
+Found while measuring: on my PC `~/.local/bin` comes first in the desktop's PATH, and it still held a Python
+`labyrinth-ask-sarina` (and a dev `sarina`) from 2026-11-10. So Super+S ran those, not `/usr/bin/sarina-voice`: the voice test
+of 2026-11-11 tried the old ask program. They are to move to a dated backup folder (Labyrinth_OS docs/SARINA_VOICE.md, "The Rust programs").
+
+The first changes that make the Rust differ from the originals on purpose (each Python original changed the same way, the 72
+side-by-side tests pass again, except the one that checks the old wording):
+
+- **Short spoken answers.** The spoken brief asks for one or two short sentences (about 30 words): the answer itself or the
+  one thing to do, details only when asked. It was "at most three short sentences, about 60 words".
+- **No hidden thinking for a spoken question.** `LABYRINTH_VOICE_THINK` now defaults to `off` (it was `computer`). Typed
+  questions are as they were. Measured with typed questions and the voice path's `/no_think` (Labyrinth's timing log, median
+  of 5, qwen3:8b): "What is the capital of France?" 2.46 s with thinking, 0.66 s without; "Is my system healthy?" (one
+  tool) 15.3 s with thinking, 6.8 s without. In October thinking off made companion talk a little worse (A1 in the backlog);
+  the answers are short now, and `LABYRINTH_VOICE_THINK=computer` or `on` in `sarina.env` brings it back.
+
 ## Not ported yet
 
-- `labyrinth-sarina-ask` (Super+S's first step, bash) costs about 17 ms of its own per question (sed, tr, awk and grep for each
-  step). Porting it is worth it, but it leans on GNU sed and grep in the user's locale (`[[:punct:]]`, `[[:space:]]`, `tr A-Z`),
-  which needs its own side-by-side tests first.
-- `labyrinth-sarina-speak --lines` starts `python3` for every sentence when `sarina-say.json` exists (pronunciations); that
-  belongs in the same step.
-- `-warm` runs while I am still talking, and `-setting` is not on the spoken path: no gain.
+- `-warm` runs while I am still talking, and `-setting` is not on the spoken path: no gain. (`labyrinth-sarina-ask` and
+  `labyrinth-sarina-speak` are ported in Labyrinth_OS's labyrinth-tools.)
