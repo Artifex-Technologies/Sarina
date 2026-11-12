@@ -14,6 +14,7 @@ pub fn truthy(v: &Any) -> bool {
         // Go: json.Number.Float64 failing (out of range) counts as true
         Any::Num(n) => !parse_float(n).is_ok_and(|f| f == 0.0),
         Any::Number(f) => *f != 0.0,
+        Any::Int(i) => *i != 0,
         Any::Array(a) => !a.is_empty(),
         Any::Object(m) => !m.is_empty(),
     }
@@ -36,6 +37,7 @@ pub fn repr(v: &Any) -> String {
         Any::String(s) => repr_string(s),
         Any::Num(n) => n.clone(),
         Any::Number(f) => float_v(*f),
+        Any::Int(i) => i.to_string(), // Go: fmt.Sprint
         Any::Array(a) => format!("[{}]", a.iter().map(repr).collect::<Vec<_>>().join(", ")),
         Any::Object(m) => {
             format!("{{{}}}", m.iter().map(|(k, x)| format!("{}: {}", repr_string(k), repr(x))).collect::<Vec<_>>().join(", "))
@@ -53,7 +55,7 @@ pub fn type_name(v: &Any) -> &'static str {
         Any::Num(_) => "int",
         Any::Array(_) => "list",
         Any::Object(_) => "dict",
-        Any::Number(_) => "object",
+        Any::Number(_) | Any::Int(_) => "object",
     }
 }
 

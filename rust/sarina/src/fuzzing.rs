@@ -111,3 +111,19 @@ pub fn json(data: &[u8]) {
         assert_eq!(back, a);
     }
 }
+
+/// Any bytes as a session file (Heimdall reads them, `sarina resume` loads them): no panic; a file that reads is written
+/// back without the API key, and what is written reads back to the same file (one pass makes it Go's own form).
+pub fn session(data: &[u8]) {
+    use crate::session;
+    let Ok(s) = session::parse_raw(data) else { return };
+    let Ok(first) = s.marshal() else { return };
+    assert!(!first.contains("\"api_key\""));
+    assert!(first.is_ascii(), "the file is ASCII-only");
+    let again = session::parse_raw(first.as_bytes()).expect("a written file reads");
+    assert_eq!(again.marshal().as_deref(), Ok(first.as_str()));
+    let mut migrated = again.clone();
+    migrated.migrate_retired_tools();
+    let mut twice = migrated.clone();
+    assert_eq!(twice.migrate_retired_tools(), session::migrate::Migration::default(), "the migration is idempotent");
+}

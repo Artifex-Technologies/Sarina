@@ -8,6 +8,8 @@ pub enum Any {
     Null,
     Bool(bool),
     Number(f64),
+    /// an `int` that Go code put in a map (a message's revision count): never decoded, written as a decimal
+    Int(i64),
     /// a `json.Number`: the number's own text, from a decoder with UseNumber (the Chymaera ports read JSON that way)
     Num(String),
     String(String),

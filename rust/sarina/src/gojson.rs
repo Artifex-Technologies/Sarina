@@ -668,6 +668,7 @@ pub fn write_any(out: &mut String, v: &Any, html: bool) -> Result<(), Error> {
             Some(Any::Bool(b)) => out.push_str(if *b { "true" } else { "false" }),
             Some(Any::Number(f)) => write_f64(out, *f)?,
             Some(Any::Num(t)) => out.push_str(t),
+            Some(Any::Int(i)) => out.push_str(&i.to_string()),
             Some(Any::String(s)) => write_str(out, s, html),
             Some(Any::Array(items)) => {
                 out.push('[');
@@ -796,6 +797,175 @@ pub fn ascii_only(s: &str) -> String {
         for u in c.encode_utf16(&mut units) {
             let _ = write!(out, "\\u{:04x}", u);
         }
+    }
+    out
+}
+
+/// One JSON object written member by member in a fixed order, as Go's encoder writes a struct (compact; `html` as the
+/// encoder's HTML escaping). A float64 Go cannot write (NaN, an infinity) is kept as the first error, as Go stops there.
+pub struct Obj {
+    out: String,
+    first: bool,
+    html: bool,
+    err: Option<Error>,
+}
+
+impl Obj {
+    pub fn new(html: bool) -> Obj {
+        Obj { out: String::from("{"), first: true, html, err: None }
+    }
+
+    fn key(&mut self, k: &str) -> &mut String {
+        if !self.first {
+            self.out.push(',');
+        }
+        self.first = false;
+        write_str(&mut self.out, k, self.html);
+        self.out.push(':');
+        &mut self.out
+    }
+
+    pub fn str(mut self, k: &str, v: &str) -> Obj {
+        let html = self.html;
+        write_str(self.key(k), v, html);
+        self
+    }
+
+    /// `omitempty` on a string.
+    pub fn str_omit(self, k: &str, v: &str) -> Obj {
+        if v.is_empty() {
+            self
+        } else {
+            self.str(k, v)
+        }
+    }
+
+    pub fn int(mut self, k: &str, v: i64) -> Obj {
+        self.key(k).push_str(&v.to_string());
+        self
+    }
+
+    /// A `*int`: null when unset.
+    pub fn int_ptr(mut self, k: &str, v: Option<i64>) -> Obj {
+        let s = v.map_or("null".to_owned(), |n| n.to_string());
+        self.key(k).push_str(&s);
+        self
+    }
+
+    /// `omitempty` on an int.
+    pub fn int_omit(self, k: &str, v: i64) -> Obj {
+        if v == 0 {
+            self
+        } else {
+            self.int(k, v)
+        }
+    }
+
+    pub fn f64(mut self, k: &str, v: f64) -> Obj {
+        let mut s = String::new();
+        match write_f64(&mut s, v) {
+            Ok(()) => self.key(k).push_str(&s),
+            Err(e) => {
+                self.err.get_or_insert(e);
+                self.key(k).push_str("null");
+            }
+        }
+        self
+    }
+
+    /// A `*float64`: null when unset.
+    pub fn f64_ptr(self, k: &str, v: Option<f64>) -> Obj {
+        match v {
+            Some(f) => self.f64(k, f),
+            None => self.raw(k, "null"),
+        }
+    }
+
+    pub fn bool(mut self, k: &str, v: bool) -> Obj {
+        self.key(k).push_str(if v { "true" } else { "false" });
+        self
+    }
+
+    /// `omitempty` on a bool.
+    pub fn bool_omit(self, k: &str, v: bool) -> Obj {
+        if v {
+            self.bool(k, v)
+        } else {
+            self
+        }
+    }
+
+    /// A value already written as JSON (or the error that stopped it).
+    pub fn raw(mut self, k: &str, json: &str) -> Obj {
+        self.key(k).push_str(json);
+        self
+    }
+
+    /// A value written by a function that may fail as Go's encoder does.
+    pub fn with(mut self, k: &str, json: Result<String, Error>) -> Obj {
+        match json {
+            Ok(s) => self.key(k).push_str(&s),
+            Err(e) => {
+                self.err.get_or_insert(e);
+                self.key(k).push_str("null");
+            }
+        }
+        self
+    }
+
+    /// A `[]string` (never nil here: written as `[]` when empty).
+    pub fn strs(mut self, k: &str, v: &[String]) -> Obj {
+        let html = self.html;
+        let out = self.key(k);
+        out.push('[');
+        for (i, s) in v.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            write_str(out, s, html);
+        }
+        out.push(']');
+        self
+    }
+
+    pub fn end(mut self) -> Result<String, Error> {
+        if let Some(e) = self.err {
+            return Err(e);
+        }
+        self.out.push('}');
+        Ok(self.out)
+    }
+}
+
+/// `any` written as Go's encoder writes it (sorted keys), as a string.
+pub fn any_json(v: &Any, html: bool) -> Result<String, Error> {
+    let mut out = String::new();
+    write_any(&mut out, v, html)?;
+    Ok(out)
+}
+
+/// What Go's `json.Marshal` does to the JSON a `MarshalJSON` method returned when HTML escaping is on: `<`, `>` and `&`
+/// inside its strings become `<`, `>`, `&` (the rest is already compact).
+pub fn escape_html(compact: &str) -> String {
+    let mut out = String::with_capacity(compact.len());
+    let mut in_str = false;
+    let mut escaped = false;
+    for c in compact.chars() {
+        if in_str {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_str = false;
+            } else if matches!(c, '<' | '>' | '&') {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+                continue;
+            }
+        } else if c == '"' {
+            in_str = true;
+        }
+        out.push(c);
     }
     out
 }

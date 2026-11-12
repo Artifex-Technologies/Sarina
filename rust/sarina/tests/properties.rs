@@ -187,6 +187,11 @@ proptest! {
         }
     }
 
+    #[test]
+    fn session_any_bytes(data in prop::collection::vec(any::<u8>(), 0..200)) {
+        fuzzing::session(&data);
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]
@@ -228,4 +233,36 @@ fn common_any(v: &serde_json::Value) -> Any {
         serde_json::Value::Array(a) => Any::Array(a.iter().map(common_any).collect()),
         serde_json::Value::Object(m) => Any::Object(m.iter().map(|(k, x)| (k.clone(), common_any(x))).collect()),
     }
+}
+
+/// Every session file of the fixture, and the made-up one with bytes changed and values swapped, through the fuzz body.
+#[test]
+fn session_files_mutated() {
+    let cases = common::cases("session");
+    let base = common::bytes(&cases[0]["in"]["file"]);
+    for c in &cases {
+        if let Some(f) = c["in"].get("file") {
+            fuzzing::session(&common::bytes(f));
+        }
+    }
+    let swaps: [&[u8]; 8] = [b"null", b"1e400", b"\"x\"", b"[]", b"{}", b"-1", b"\"\\ud800\"", b"true"];
+    let mut n = 0;
+    for at in (0..base.len()).step_by(7) {
+        let mut m = base.clone();
+        m[at] = b"\"{}[],:0a\\ \x00\xff"[at % 13];
+        fuzzing::session(&m);
+        // a value swapped in after a colon
+        if base[at] == b':' {
+            for s in swaps {
+                let mut m = base[..=at].to_vec();
+                m.extend_from_slice(s);
+                let rest = &base[at + 1..];
+                let end = rest.iter().position(|&c| c == b',' || c == b'\n').unwrap_or(rest.len());
+                m.extend_from_slice(&rest[end..]);
+                fuzzing::session(&m);
+                n += 1;
+            }
+        }
+    }
+    assert!(n > 100, "{n}");
 }

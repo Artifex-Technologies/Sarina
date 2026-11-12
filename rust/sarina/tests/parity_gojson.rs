@@ -16,6 +16,7 @@ pub fn typed(v: &Any) -> Value {
         Any::Bool(b) => Value::Bool(*b),
         Any::Number(f) => json!({ "f": format!("{:x}", f.to_bits()) }),
         Any::Num(n) => json!({ "n": n }),
+        Any::Int(i) => json!({ "i": i.to_string() }),
         Any::String(s) => json!({ "s": common::text(s.as_bytes()) }),
         Any::Array(items) => Value::Array(items.iter().map(typed).collect()),
         Any::Object(m) => json!({ "o": m.iter().map(|(k, x)| (k.clone(), typed(x))).collect::<Map<_, _>>() }),

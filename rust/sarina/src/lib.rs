@@ -1,6 +1,7 @@
 //! Sarina's Go core (`go/`), ported to Rust piece by piece and proved against the Go code (docs/RUST_PORT.md). Each module
 //! names the Go package or file it comes from in its first line.
 
+pub mod config;
 pub mod flagx;
 pub mod fuzzing;
 pub mod goany;
@@ -10,7 +11,9 @@ pub mod gojson;
 pub mod gopath;
 pub mod goregexp;
 pub mod gotext;
+pub mod llm;
 pub mod pyfmt;
+pub mod session;
 pub mod shellparse;
 pub mod testguard;
 pub mod tools;
