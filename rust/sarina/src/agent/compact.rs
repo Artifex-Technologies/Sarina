@@ -186,7 +186,7 @@ pub fn pair_safe_cut(msgs: &[Message], prefix: usize, preserve: i64) -> usize {
 }
 
 /// Go's `compactPass`: everything between the prefix and the preserved tail folded into one digest.
-fn compact_pass(s: &mut Session, o: &ReduceOpts) -> Option<Event> {
+pub fn compact_pass(s: &mut Session, o: &ReduceOpts) -> Option<Event> {
     let prefix = protected_prefix(&s.messages);
     let cut = pair_safe_cut(&s.messages, prefix, o.preserve);
     let cand = &s.messages[prefix..cut];
