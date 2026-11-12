@@ -72,3 +72,10 @@ path = "fuzz_targets/heimdall_files.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "policy_file"
+path = "fuzz_targets/policy_file.rs"
+test = false
+doc = false
+bench = false

@@ -18,6 +18,7 @@ pub mod gotext;
 pub mod gotime;
 pub mod heimdall;
 pub mod llm;
+pub mod policy;
 pub mod pyfmt;
 pub mod session;
 pub mod shellparse;

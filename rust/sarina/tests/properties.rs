@@ -234,6 +234,22 @@ proptest! {
         fuzzing::heimdall_files(b64.as_bytes());
     }
 
+    #[test]
+    fn policy_file_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::policy_file(&data);
+    }
+
+    /// Policy-shaped workspace files: every key the policy knows, in any case and with underscores, with values of any
+    /// kind, through the fuzz body (a workspace file may only tighten).
+    #[test]
+    fn policy_file_shaped(parts in prop::collection::vec((
+        "(trusted|TRUSTED|deny_tools|denyTools|DenyToolPrefixes|safeEnv|budget|hooks|x)",
+        "(true|false|null|-?[0-9]{1,3}(\\.[0-9])?|\"[a-zA-Z_]{0,8}\"|\\[\"bash\",\" \",1\\]|\\[\"MCP__\"\\]|\\{\"(max_?)?(tool_?calls|total_?cost_?usd|session_?turns|total_?tokens)\":-?[0-9]{1,4}(\\.5)?\\})",
+    ), 0..6)) {
+        let body: Vec<String> = parts.iter().map(|(k, v)| format!("\"{k}\":{v}")).collect();
+        fuzzing::policy_file(format!("{{{}}}", body.join(",")).as_bytes());
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

@@ -162,3 +162,44 @@ pub fn heimdall_files(data: &[u8]) {
         assert!(t.nanos() < 1_000_000_000);
     }
 }
+
+/// Any bytes as a workspace policy file (repository-controlled: a prompt-injected agent can write it) after an operator
+/// file: no panic, and it only ever tightens: trust never turns on, nothing the operator denied is allowed, no limit rises
+/// or disappears, no environment variable is exported.
+pub fn policy_file(data: &[u8]) {
+    let distrusting: &[u8] = br#"{"trusted":false,"denyTools":["x"]}"#;
+    let full: &[u8] = br#"{"denyTools":["bash","Write_File"],"denyToolPrefixes":["mcp__"],"safeEnv":["PATH"],
+        "budget":{"maxToolCalls":10,"maxTotalCostUsd":1.5,"maxSessionTurns":4}}"#;
+    for operator in [full, distrusting] {
+        policy_tightens(operator, data);
+    }
+}
+
+fn policy_tightens(operator: &[u8], data: &[u8]) {
+    use crate::config::BudgetConfig;
+    use crate::policy::Policy;
+    let mut op = Policy::new();
+    op.apply_file("/op/policy.json", Ok(operator.to_vec()), true);
+    let mut both = op.clone();
+    both.apply_file("/ws/.sarina-policy.json", Ok(data.to_vec()), false);
+    assert!(!both.trusted || op.trusted);
+    assert_eq!(both.safe_env, op.safe_env);
+    for tool in ["bash", "BASH", "write_file", "mcp__x", "read_file", "x"] {
+        if !op.denied(tool).is_empty() {
+            assert!(!both.denied(tool).is_empty(), "{tool} allowed again");
+        }
+    }
+    assert!(both.deny_rules() >= op.deny_rules());
+    let start = BudgetConfig { max_tool_calls: Some(100), max_total_tokens: Some(7), ..BudgetConfig::default() };
+    let (mut a, mut b) = (start.clone(), start);
+    op.apply_budget(&mut a);
+    both.apply_budget(&mut b);
+    let le = |x: Option<i64>, y: Option<i64>| match (x, y) {
+        (Some(x), Some(y)) => x <= y,
+        (Some(_), None) => true,
+        (None, y) => y.is_none(),
+    };
+    assert!(le(b.max_tool_calls, a.max_tool_calls) && le(b.max_total_tokens, a.max_total_tokens));
+    assert!(le(b.max_session_turns, a.max_session_turns));
+    assert!(b.max_total_cost_usd.unwrap_or(f64::MAX) <= a.max_total_cost_usd.unwrap_or(f64::MAX));
+}
