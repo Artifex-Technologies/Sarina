@@ -33,6 +33,9 @@ use crate::session::{Message, OrderedMap, PlanState, Session, PLAN_ACTIVE, PLAN_
 use crate::tools::fsutil::state_dir;
 use crate::tools::registry::{Approver, Builder, Class, Confirm, Context, Output, Permission, Registry, Tool, ToolResult};
 
+/// Go's `maxNotesBytes`: a session's notes are read back up to 1 MiB.
+const MAX_NOTES_BYTES: u64 = 1 << 20;
+
 pub const STOP_MAX_TURNS: &str = "max_turns";
 pub const STOP_BUDGET_EXCEEDED: &str = "budget_exceeded";
 pub const STOP_BACKEND_ERROR: &str = "backend_error";
@@ -1735,7 +1738,9 @@ impl Agent {
     }
 
     fn read_notes(&self, id: &str) -> String {
-        std::fs::read(self.notes_path(id)).map(|b| trim_space(&gotext::lossy(&b)).to_owned()).unwrap_or_default()
+        crate::session::readfile::read_regular(self.notes_path(id).as_bytes(), MAX_NOTES_BYTES)
+            .map(|b| trim_space(&gotext::lossy(&b)).to_owned())
+            .unwrap_or_default()
     }
 
     /// Go's `charge`: a side call booked against the run.

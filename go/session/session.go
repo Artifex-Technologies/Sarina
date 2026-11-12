@@ -265,7 +265,7 @@ func LoadByID(dir, id string) (*Session, error) { return Load(Path(dir, id)) }
 // Load reads a session file, tolerating the optional/legacy fields described
 // in the format spec. A present api_key is ignored.
 func Load(path string) (*Session, error) {
-	b, err := os.ReadFile(path)
+	b, err := ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

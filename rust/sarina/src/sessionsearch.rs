@@ -81,7 +81,7 @@ fn load(dir: &str) -> Vec<Row> {
     files.sort_by_key(|f| std::cmp::Reverse(f.1));
     let mut rows = Vec::new();
     for (name, _) in files {
-        let Ok(raw) = std::fs::read(gopath::os_path(&gopath::join(&[dir.as_bytes(), &name]))) else { continue };
+        let Ok(raw) = crate::session::readfile::read_file(&gopath::join(&[dir.as_bytes(), &name])) else { continue };
         let (v, err) = gostruct::unmarshal(&FILE, &raw);
         if err.is_some() {
             continue;

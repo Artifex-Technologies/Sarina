@@ -191,7 +191,7 @@ func MigrateDir(dir string, dryRun bool) (MigrateReport, error) {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
-		raw, err := os.ReadFile(path)
+		raw, err := ReadFile(path)
 		if err != nil {
 			r.Skipped++
 			continue

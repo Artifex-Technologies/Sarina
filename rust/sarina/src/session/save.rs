@@ -93,7 +93,7 @@ pub fn migrate_dir(dir: &str, dry_run: bool, getenv: &dyn Fn(&str) -> String) ->
             continue;
         }
         let p = gopath::join(&[dir.as_bytes(), &name]);
-        let Ok(raw) = std::fs::read(gopath::os_path(&p)) else {
+        let Ok(raw) = super::readfile::read_file(&p) else {
             r.skipped += 1;
             continue;
         };

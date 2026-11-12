@@ -100,8 +100,11 @@ func (a *Agent) notesPath(id string) string {
 // NotesPath is where the notes for a session live.
 func (a *Agent) NotesPath(id string) string { return a.notesPath(id) }
 
+// maxNotesBytes bounds reading a session's notes back (they are a page of text the model writes).
+const maxNotesBytes = 1 << 20
+
 func (a *Agent) readNotes(id string) string {
-	b, err := os.ReadFile(a.notesPath(id))
+	b, err := session.ReadRegular(a.notesPath(id), maxNotesBytes)
 	if err != nil {
 		return ""
 	}

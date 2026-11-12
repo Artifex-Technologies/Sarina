@@ -5,6 +5,7 @@
 
 pub mod message;
 pub mod migrate;
+pub mod readfile;
 pub mod redact;
 pub mod save;
 

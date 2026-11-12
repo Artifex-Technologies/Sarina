@@ -81,7 +81,7 @@ func load(dir string) []row {
 	sort.SliceStable(files, func(i, j int) bool { return files[i].mod > files[j].mod })
 	var rows []row
 	for _, fl := range files {
-		raw, err := os.ReadFile(filepath.Join(dir, fl.name))
+		raw, err := session.ReadFile(filepath.Join(dir, fl.name))
 		if err != nil {
 			continue
 		}
