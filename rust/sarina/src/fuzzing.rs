@@ -233,3 +233,34 @@ pub fn cache_file(data: &[u8]) {
         }
     }
 }
+
+/// Any text as a model's answer: the repair and the normaliser do not panic; JSON that reads as it is comes back
+/// unchanged and not truncated; arguments are an object or an error, never both; after normalising, every tool call has
+/// an id and no two share one, and a call cut off by a length stop is never run with partial arguments.
+pub fn model_text(data: &[u8]) {
+    use crate::llm::normalize::normalize;
+    use crate::llm::repair::{parse_arguments, repair_json};
+    use crate::llm::types::Turn;
+    let Ok(s) = std::str::from_utf8(data) else { return };
+    let (v, trunc, ok) = repair_json(s);
+    assert_eq!(ok, v.is_some());
+    if let (Ok(direct), false) = (crate::gojson::parse_first(s.trim().as_bytes()).0, s.trim().starts_with("```")) {
+        if let (a, None) = crate::gojson::to_any(&direct) {
+            assert!(ok && !trunc);
+            assert_eq!(v.as_ref(), Some(&a));
+        }
+    }
+    let (args, _, err) = parse_arguments(s);
+    assert_ne!(args.is_some(), !err.is_empty());
+    for finish in ["stop", "length"] {
+        let mut t = Turn { content: s.to_string(), finish_reason: finish.into(), ..Turn::default() };
+        normalize(&mut t, &["bash".to_string(), "read_file".to_string()]);
+        let mut ids = std::collections::HashSet::new();
+        for c in &t.tool_calls {
+            assert!(!c.id.is_empty() && ids.insert(c.id.clone()), "ids {:?}", t.tool_calls);
+            if c.truncated && finish == "length" {
+                assert!(!c.parse_error.is_empty());
+            }
+        }
+    }
+}

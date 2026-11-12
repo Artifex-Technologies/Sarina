@@ -93,3 +93,10 @@ path = "fuzz_targets/cache_file.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "model_text"
+path = "fuzz_targets/model_text.rs"
+test = false
+doc = false
+bench = false

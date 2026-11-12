@@ -282,6 +282,23 @@ proptest! {
         fuzzing::cache_file(doc.as_bytes());
     }
 
+    #[test]
+    fn model_text_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::model_text(&data);
+    }
+
+    /// Answers shaped like tool calls: tags, fences, quotes of both kinds, cut anywhere.
+    #[test]
+    fn model_text_shaped(parts in prop::collection::vec(
+        "(<tool_call>|</tool_call>|<\\|python_tag\\|>|<\\|eot_id\\|>|<think>|</think>|```(json)?\\n?|\\{|\\}|\\[|\\]|,|:|\"name\"|\"bash\"|'read_file'|\"arguments\"|\"parameters\"|\"function\"|\"\\{\\\\\"a\\\\\": 1\"|null|1|\\n| |\\\\)",
+        0..24,
+    ), cut in 0usize..200) {
+        let s = parts.concat();
+        let cut = (0..=cut.min(s.len())).rev().find(|i| s.is_char_boundary(*i)).unwrap_or(0);
+        fuzzing::model_text(s.as_bytes());
+        fuzzing::model_text(&s.as_bytes()[..cut]);
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

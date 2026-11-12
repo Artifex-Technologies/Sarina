@@ -155,6 +155,23 @@ pub struct ToolCall {
     pub arguments: Option<BTreeMap<String, Any>>,
     pub raw_arguments: String,
     pub parse_error: String,
+    /// the arguments only parsed after closing a cut-off structure (Go's unexported `truncated`)
+    pub truncated: bool,
+}
+
+/// A model's answer (Go's `Turn`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Turn {
+    /// set when a fallback model answered (empty: the configured one did)
+    pub model: String,
+    pub content: String,
+    pub reasoning: String,
+    pub tool_calls: Vec<ToolCall>,
+    pub finish_reason: String,
+    pub has_finish_reason: bool,
+    pub usage: Usage,
+    pub usage_reported: bool,
+    pub raw: Option<BTreeMap<String, Any>>,
 }
 
 impl ToolCall {
