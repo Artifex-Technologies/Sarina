@@ -65,3 +65,10 @@ path = "fuzz_targets/vecindex.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "heimdall_files"
+path = "fuzz_targets/heimdall_files.rs"
+test = false
+doc = false
+bench = false

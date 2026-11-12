@@ -353,6 +353,22 @@ pub fn context_window_from_env(getenv: &dyn Fn(&str) -> String) -> i64 {
     positive_env(getenv, "SARINA_CONTEXT_WINDOW")
 }
 
+/// Go's `AccessTierFromEnv`: SARINA_ACCESS_TIER, the access ladder's applied tier (0 unset or not a positive number,
+/// above 3 read as 3), capped by Heimdall's grants file while its gate is on: sarina.env is in a folder Sarina's own
+/// account can write, the cap is not, so she cannot raise her own tier.
+pub fn access_tier_from_env(getenv: &dyn Fn(&str) -> String) -> i64 {
+    access_tier_from_env_with(getenv, crate::heimdall::load_grants)
+}
+
+/// `access_tier_from_env` with the grants read by `load` (tests: a made-up file and owner). `load` runs only for a tier
+/// above 0, as in Go.
+pub fn access_tier_from_env_with(getenv: &dyn Fn(&str) -> String, load: impl FnOnce() -> crate::heimdall::Grants) -> i64 {
+    match gotext::atoi(gotext::trim_space(&getenv("SARINA_ACCESS_TIER")).as_bytes()) {
+        Some(n) if n > 0 => load().tier_cap(n.min(3)),
+        _ => 0,
+    }
+}
+
 fn default_escalation() -> EscalationConfig {
     EscalationConfig {
         cli_path: "claude".into(),

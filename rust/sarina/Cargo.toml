@@ -15,6 +15,10 @@ path = "src/lib.rs"
 [dependencies]
 # Go's regexp: \b \w \d \s are written out as Go's ASCII classes where a pattern uses them, so Unicode's Perl classes stay out
 regex = { version = "=1.12.3", default-features = false, features = ["std", "perf", "unicode-case"] }
+# ed25519 for Heimdall's signed list of approved files (trust.rs); the same crate and version as Heimdall's mesh
+ring = { version = "=0.17.14", default-features = false }
+# sha256 of the approved files (trust.rs) and the caches' content hashes; as Heimdall and Limbo
+sha2 = { version = "=0.10.9", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 proptest = { version = "=1.12.0", default-features = false, features = ["std"] }

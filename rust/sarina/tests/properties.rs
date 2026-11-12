@@ -214,6 +214,26 @@ proptest! {
         fuzzing::vecindex(&d);
     }
 
+    #[test]
+    fn heimdall_files_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::heimdall_files(&data);
+    }
+
+    /// Grants-shaped documents (a cap of any kind, escalations with times of any shape) and base64-shaped and time-shaped
+    /// text, through the fuzz body.
+    #[test]
+    fn heimdall_files_shaped(
+        cap in "(-?[0-9]{1,20}(\\.[0-9])?|null|true|\"3\"|\\[1\\])",
+        key in "(access_tier|ACCESS_TIER|Access_Tier|access-tier|acceſs_tier)",
+        until in "[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}[Tt][0-9]{1,2}:[0-9]{2}:[0-9]{2}([.,][0-9]{0,12})?(Z|[+-][0-9]{2}:[0-9]{2}|z|)",
+        b64 in "[A-Za-z0-9+/=\r\n ]{0,24}",
+    ) {
+        let doc = format!(r#"{{"{key}":{cap},"escalations":[{{"tier":"claude","until":"{until}"}}]}}"#);
+        fuzzing::heimdall_files(doc.as_bytes());
+        fuzzing::heimdall_files(until.as_bytes());
+        fuzzing::heimdall_files(b64.as_bytes());
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

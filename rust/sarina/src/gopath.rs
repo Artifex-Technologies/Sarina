@@ -11,7 +11,7 @@ use crate::goerr;
 /// ENOTDIR on Linux: a file stands where a folder must be.
 const ENOTDIR: i32 = 20;
 
-fn os_path(b: &[u8]) -> &Path {
+pub fn os_path(b: &[u8]) -> &Path {
     Path::new(OsStr::from_bytes(b))
 }
 

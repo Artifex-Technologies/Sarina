@@ -139,3 +139,26 @@ pub fn vecindex(data: &[u8]) {
     let hits = x.search(&q, 3, None).expect("a query of the right size");
     assert!(hits.len() <= 3.min(x.len()));
 }
+
+/// Any bytes as Heimdall's files (the grants file, the signed list's key and signature, a time): no panic; a gate that is on
+/// never allows more than asked nor less than 0 (read-only), whatever the file says; base64 that reads has the length its
+/// groups give.
+pub fn heimdall_files(data: &[u8]) {
+    let g = crate::heimdall::grants_from_json(data);
+    for own in 0..=3 {
+        let cap = g.tier_cap(own);
+        assert!((0..=own).contains(&cap), "cap {cap} for {own}");
+    }
+    if !g.problem.is_empty() {
+        assert_eq!(g.tier_cap(3), 0, "a file with a problem allows nothing");
+    }
+    if let Some(b) = crate::trust::std_base64(data) {
+        let n = data.iter().filter(|c| **c != b'\r' && **c != b'\n').count();
+        let pad = data.iter().rev().filter(|c| **c != b'\r' && **c != b'\n').take_while(|c| **c == b'=').count();
+        assert_eq!(b.len(), n / 4 * 3 - pad);
+    }
+    let _ = crate::trust::verify(data.get(..32).unwrap_or(data), data, data.get(32..96).unwrap_or(data));
+    if let Ok(t) = crate::gotime::Time::parse_rfc3339(&crate::gotext::lossy(data)) {
+        assert!(t.nanos() < 1_000_000_000);
+    }
+}
