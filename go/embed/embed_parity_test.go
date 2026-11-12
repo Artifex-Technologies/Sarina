@@ -67,6 +67,27 @@ func TestParityEmbed(t *testing.T) {
 		cases = append(cases, parity.Case{Fn: "reply", In: i, Out: out})
 	}
 	cases = append(cases, parity.Case{Fn: "replies", In: parity.Texts(replies)})
+	// a small limit: answers just under, at and over it, cut short, chunked
+	limited := []string{okJSON(`{"embeddings":[[1],[2]]}`), okJSON(`{"embeddings":[[1],[2]]}xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`),
+		"HTTP/1.1 200 OK\r\n\r\n{\"embeddings\":[[1],[2]]}" + strings.Repeat(" ", 60),
+		"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n18\r\n{\"embeddings\":[[1],[2]]}\r\n30\r\n" + strings.Repeat(" ", 48) + "\r\n0\r\n\r\n",
+		"HTTP/1.1 200 OK\r\nContent-Length: 90\r\n\r\n{\"embeddings\":[[1],",
+		okJSON(`{"embeddings":[[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],[2]]}`)}
+	for _, limit := range []int64{24, 25, 40, 64} {
+		for i, r := range limited {
+			addr, got := parity.RawServer(t, []byte(r), 0, true)
+			e := ollamaEmbedder{base: "http://" + addr, model: "m", limit: limit}
+			vs, err := e.Embed([]string{"a", "b"})
+			out := map[string]any{"request": got()}
+			if err != nil {
+				out["error"] = strings.ReplaceAll(err.Error(), addr, "{ADDR}")
+			} else {
+				out["vectors"] = vectorsOut(vs)
+			}
+			cases = append(cases, parity.Case{Fn: "limited", In: []any{limit, i}, Out: out})
+		}
+	}
+	cases = append(cases, parity.Case{Fn: "limitedReplies", In: parity.Texts(limited)}, parity.Case{Fn: "maxAnswerBytes", Out: MaxAnswerBytes})
 	// a port nobody listens on
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
 	addr := ln.Addr().String()

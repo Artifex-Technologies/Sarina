@@ -123,8 +123,9 @@ pub fn post(url: &str, content_type: &str, body: &[u8], timeout: Duration, limit
             Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset && raw.is_empty() => return Err(wrap("EOF".into())),
             Err(e) => return Err(io_err(e)),
         }
-        if raw.len() > 1 << 20 {
-            return Err(wrap("net/http: server response headers exceeded 1048576 bytes; aborted".into()));
+        // Go's Transport: 10 MiB of head at most
+        if raw.len() > 10 << 20 {
+            return Err(wrap("net/http: server response headers exceeded 10485760 bytes; aborted".into()));
         }
     };
     let head = String::from_utf8_lossy(&raw[..head_end.0]).into_owned();

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -24,8 +25,15 @@ type Embedder interface {
 // conversation slower than the rest.
 const KeepAlive = "30m"
 
+// MaxAnswerBytes bounds what is read of one answer from Ollama (64 MiB). The largest plausible answer is far below it:
+// Sarina embeds at most 32 texts at a time (vault, skills; desktop's prototypes are ~13), and even 256 texts of a
+// 4096-number model (the biggest embedding models today) at 24 bytes a number in JSON is about 24 MiB. A program answering on
+// Ollama's port in its place must not make Sarina read without end.
+const MaxAnswerBytes = 64 << 20
+
 type ollamaEmbedder struct {
 	base, model string
+	limit       int64 // bytes read of an answer at most; 0 = MaxAnswerBytes (tests set it lower)
 }
 
 // Default talks to Ollama: OLLAMA_HOST, else OPENAI_BASE_URL without its /v1, else 127.0.0.1:11434. Model: SARINA_EMBED_MODEL, else nomic-embed-text.
@@ -57,11 +65,23 @@ func (o ollamaEmbedder) Embed(texts []string) ([][]float32, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	limit := o.limit
+	if limit <= 0 {
+		limit = MaxAnswerBytes
+	}
+	raw, rerr := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if int64(len(raw)) > limit {
+		return nil, fmt.Errorf("embedder answer is larger than %d bytes; not read", limit)
+	}
 	var out struct {
 		Embeddings [][]float32 `json:"embeddings"`
 		Error      string      `json:"error"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	// the first JSON value of the answer; when the answer was cut short before that value ended, the read's error
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(&out); err != nil {
+		if rerr != nil && (errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)) {
+			return nil, rerr
+		}
 		return nil, err
 	}
 	if out.Error != "" {

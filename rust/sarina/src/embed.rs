@@ -3,7 +3,7 @@
 //! for `KEEP_ALIVE` after its last use.
 //!
 //! As Go: the answer's status is not looked at (Ollama's `error` field says what went wrong), only its first JSON value is
-//! read, and the body is read without a size limit (the server is the local Ollama).
+//! used, and at most `MAX_ANSWER_BYTES` of the answer is read (a larger one is refused).
 
 use crate::gohttp;
 use crate::gojson::{self, Obj};
@@ -12,6 +12,10 @@ use std::time::Duration;
 
 /// How long Ollama keeps the embedding model loaded after a request (the owner's decision D5, 2026-11-02).
 pub const KEEP_ALIVE: &str = "30m";
+
+/// Go's `MaxAnswerBytes` (64 MiB): what is read of one answer at most. Sarina embeds at most 32 texts at a time, and even
+/// 256 texts of a 4096-number model at 24 bytes a number in JSON is about 24 MiB.
+pub const MAX_ANSWER_BYTES: usize = 64 << 20;
 
 /// Texts into vectors (Go's `Embedder`).
 pub trait Embedder {
@@ -24,6 +28,8 @@ pub trait Embedder {
 pub struct Ollama {
     pub base: String,
     pub model: String,
+    /// bytes read of an answer at most; 0 = MAX_ANSWER_BYTES (tests set it lower)
+    pub limit: usize,
 }
 
 /// Go's `Default`: OLLAMA_HOST, else OPENAI_BASE_URL without its /v1, else 127.0.0.1:11434; SARINA_EMBED_MODEL, else
@@ -46,7 +52,7 @@ pub fn default_embedder(getenv: &dyn Fn(&str) -> String) -> Ollama {
         model = "nomic-embed-text".into();
     }
     let base = base.strip_suffix('/').unwrap_or(&base).to_string();
-    Ollama { base, model }
+    Ollama { base, model, limit: 0 }
 }
 
 static ANSWER: Ty = Ty::Struct(
@@ -64,7 +70,11 @@ impl Embedder for Ollama {
         let input: Vec<String> = texts.to_vec();
         let body = Obj::new(true).strs("input", &input).str("keep_alive", KEEP_ALIVE).str("model", &self.model).end().map_err(|e| e.0)?;
         let url = format!("{}/api/embed", self.base);
-        let reply = gohttp::post(&url, "application/json", body.as_bytes(), Duration::from_secs(120), usize::MAX)?;
+        let limit = if self.limit == 0 { MAX_ANSWER_BYTES } else { self.limit };
+        let reply = gohttp::post(&url, "application/json", body.as_bytes(), Duration::from_secs(120), limit + 1)?;
+        if reply.body.len() > limit {
+            return Err(format!("embedder answer is larger than {limit} bytes; not read"));
+        }
         // Go's Decoder reads the first value from the stream: what it needs before an error in the body counts
         let v = match gojson::parse_first(&reply.body).0 {
             Ok(v) => v,

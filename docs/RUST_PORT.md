@@ -209,7 +209,8 @@ reaches it any more (dead code is a risk).
 | `agents.rs` | `agents` (`Parse`: the front matter, its keys, quotes, lists, switches and limits, each document 30 times for Go's map order; `Load`: operator folders, SARINA_AGENTS_DIR, overrides of the built-ins, duplicates, links, folders, oversized and unreadable files, the trust check, the text gate; `Get` with Go's case folding) | `agents.json` | 162 |
 | `skills/parse.rs` | `skills/parse.go` (`Parse`: the front matter with scalars, quotes as `strconv.Unquote` reads them, inline, block and comma lists, the switches, the name rule; `ValidName`, `Expand`) | `skillparse.json` | 215 |
 | `gohttp.rs`, `heimdall.rs` (`consult`, `url`) | `heimdall/heimdall.go` (`Consult`, `URL`): the request byte for byte (method, URI with query, Content-Type, body) and the verdict made of 43 scripted raw answers from a loopback server (deny, allow, odd reasons, statuses, redirects, chunked with extensions and trailers, cut short, too big, not HTTP, odd status lines and versions, bare `\n` lines, duplicate and bad lengths, unsupported encodings, silent past the 2 s deadline), and the settings | `consult.json` | 52 |
-| `embed.rs`, `gostruct.rs` (float32) | `embed` (`Default`'s settings; `Embed`: the request, vectors as float32 bits, Ollama's errors, counts that differ, type errors, the first value of a longer body, a body cut short after a whole value, chunk errors, a refused connection with Go's text) | `embed.json` | 34 |
+| `embed.rs`, `gostruct.rs` (float32) | `embed` (`Default`'s settings; `Embed`: the request, vectors as float32 bits, Ollama's errors, counts that differ, type errors, the first value of a longer body, a body cut short after a whole value, chunk errors, a refused connection with Go's text; the answer limit just under, at and over it) | `embed.json` | 59 |
+| `guard.rs` (`scan`) | `guard`'s full `Gate.Scan`: the local checks first (no request then), Heimdall's verdict for a gate with a kind (memory, a session id), "Heimdall flagged this independently: ..." with the reasons, failing open on an absent or broken Heimdall; the default gate never asks | `guardconsult.json` | 145 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -290,8 +291,12 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   Heimdall's and Ollama's servers never send one). Everything else Sarina's code can see was compared with Go's client
   on raw answers: statuses, framings, odd heads, cut-short bodies, the deadline. For `Consult` these differences all end
   as "no verdict" (fail open), as an unusable answer does in Go.
-- **embed reads Ollama's answer without a size limit, as Go does.** A program pretending to be Ollama on its port could
-  make Sarina read without end; worth a limit in both (open for the owner).
+- **embed's answer is bounded, in Go and Rust (2026-11-12).** Go read Ollama's answer without a limit, so a program
+  answering on Ollama's port could make Sarina read without end. Both now read at most `MaxAnswerBytes` (64 MiB) and
+  refuse a larger answer ("embedder answer is larger than 67108864 bytes; not read"). Sized from the largest plausible
+  answer: Sarina embeds at most 32 texts at a time, and even 256 texts of a 4096-number model at 24 bytes a number in
+  JSON is about 24 MiB, so a real answer never comes near it. The rule for the clients still to come (llm, limbo, mcp,
+  helpers): every read from another process gets a bound, in both languages.
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such
@@ -343,10 +348,10 @@ loopback server (`go/internal/parity/rawserver.go`, `tests/common` `raw_server`)
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. `guard`'s full scan: `scan_local` plus `heimdall::consult` for a gate with a Heimdall kind (a small step now).
-2. The rest of step 3: `llm` (the OpenAI-compatible and Anthropic clients, streaming; TLS with `rustls` for the online
-   tiers), `limbo` (the agent socket), `mcp` (stdio servers), `helpers`.
-3. The rest of `skills` (discovery, the skill tool, the long-skill library) with step 4's tools.
+1. The rest of step 3 (guard's full scan and embed's answer limit are done): `llm` (the OpenAI-compatible and Anthropic clients, streaming; TLS with `rustls` for the online
+   tiers), `limbo` (the agent socket), `mcp` (stdio servers), `helpers`. Every read from another process gets a bound,
+   in Go and Rust both (the owner's rule: security first), with a clear error when it is exceeded.
+2. The rest of `skills` (discovery, the skill tool, the long-skill library) with step 4's tools.
 
 The mutation script used in this session copied the file back with `cp`/`mv`, which leaves the restored file older
 than the last (mutant) build, so cargo did not rebuild the first test run after a series: touch the file after restoring

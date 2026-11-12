@@ -2,8 +2,10 @@ package embed
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -27,5 +29,22 @@ func TestEmbedSendsKeepAliveAndModel(t *testing.T) {
 	}
 	if got["keep_alive"] != "30m" || got["model"] != "nomic-embed-text" {
 		t.Fatalf("request = %v", got)
+	}
+}
+
+// An answer larger than the limit is refused with a clear error, not read on without end.
+func TestEmbedRefusesAnAnswerPastTheLimit(t *testing.T) {
+	body := `{"embeddings":[[` + strings.Repeat("0.125,", 200) + `1]]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, body) }))
+	defer srv.Close()
+	if _, err := (ollamaEmbedder{base: srv.URL, model: "m", limit: int64(len(body))}).Embed([]string{"x"}); err != nil {
+		t.Fatalf("an answer of exactly the limit must be read: %v", err)
+	}
+	_, err := (ollamaEmbedder{base: srv.URL, model: "m", limit: int64(len(body) - 1)}).Embed([]string{"x"})
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("got %v", err)
+	}
+	if MaxAnswerBytes < 256*4096*24 {
+		t.Fatal("the limit must leave room for the largest plausible answer")
 	}
 }

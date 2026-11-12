@@ -12,10 +12,27 @@ fn embed_matches_go() {
     let mut check = common::Check::new();
     let cases = common::cases("embed");
     let replies = cases.iter().find(|c| c["fn"] == "replies").unwrap()["in"].as_array().unwrap().clone();
+    let limited = cases.iter().find(|c| c["fn"] == "limitedReplies").unwrap()["in"].as_array().unwrap().clone();
     for c in &cases {
         let input = &c["in"];
         let got = match c["fn"].as_str().unwrap() {
-            "replies" => continue,
+            "replies" | "limitedReplies" => continue,
+            "maxAnswerBytes" => json!(sarina::embed::MAX_ANSWER_BYTES),
+            "limited" => {
+                let raw = common::bytes(&limited[input[1].as_u64().unwrap() as usize]);
+                let (addr, got, _release) = common::raw_server(raw, Duration::ZERO, false);
+                let e = Ollama { base: format!("http://{addr}"), model: "m".into(), limit: input[0].as_u64().unwrap() as usize };
+                let r = e.embed(&["a".to_string(), "b".to_string()]);
+                let req = got.recv_timeout(Duration::from_secs(5)).unwrap_or(Value::Null);
+                match r {
+                    Ok(vs) => {
+                        let vs: Vec<String> =
+                            vs.iter().map(|v| v.iter().map(|f| format!("{:x}", f.to_bits())).collect::<Vec<_>>().join(",")).collect();
+                        json!({"request": req, "vectors": vs})
+                    }
+                    Err(e) => json!({"request": req, "error": e.replace(&addr, "{ADDR}")}),
+                }
+            }
             "default" => {
                 let env: Vec<String> = input.as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
                 let e = default_embedder(&|k| match k {
@@ -29,7 +46,7 @@ fn embed_matches_go() {
             "reply" => {
                 let raw = common::bytes(&replies[input.as_u64().unwrap() as usize]);
                 let (addr, got, _release) = common::raw_server(raw, Duration::ZERO, false);
-                let e = Ollama { base: format!("http://{addr}"), model: "nomic-embed-text".into() };
+                let e = Ollama { base: format!("http://{addr}"), model: "nomic-embed-text".into(), limit: 0 };
                 let r = e.embed(&["first <text> \u{e9}".to_string(), String::new()]);
                 let req = got.recv_timeout(Duration::from_secs(5)).unwrap_or(Value::Null);
                 match r {
@@ -45,7 +62,7 @@ fn embed_matches_go() {
                 let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
                 let addr = ln.local_addr().unwrap().to_string();
                 drop(ln);
-                let e = Ollama { base: format!("http://{addr}"), model: "m".into() };
+                let e = Ollama { base: format!("http://{addr}"), model: "m".into(), limit: 0 };
                 json!(e.embed(&["x".to_string()]).err().unwrap_or_default().replace(&addr, "{ADDR}"))
             }
             other => panic!("unknown fn {other}"),

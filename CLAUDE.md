@@ -259,6 +259,8 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   failures and exits non-zero); analysiscache refuses NaN/Inf at Set and stays writable.
 - Step 3 begun: Heimdall's review client (`Consult`) and `embed` in Rust over a small HTTP client, proved against Go's on
   raw answers. **For Heimdall's board (nothing to change):** the review request is byte for byte Go's.
+- **embed's answer is now bounded in Go and Rust** (64 MiB, `MaxAnswerBytes`; the largest plausible answer is ~24 MiB): a
+  larger answer is refused with a clear error. guard's full scan (local checks, then Heimdall) is ported too.
 
 Signed: Sarina / Claude Opus 5.5
 

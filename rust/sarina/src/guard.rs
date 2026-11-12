@@ -1,7 +1,7 @@
 //! Go: `guard`: the one text gate. Anything written where a future prompt reads from (curated memory, skills, session
 //! notes, compaction summaries) goes through it: invisible and bidirectional Unicode, instruction-override phrases and
-//! credential shapes are refused. This is the local part (`scan_local`); a gate with a Heimdall kind also asks Heimdall
-//! for a second opinion afterwards, which comes with the Heimdall client (step 3).
+//! credential shapes are refused (`scan_local`); a gate with a Heimdall kind then asks Heimdall for an out-of-process
+//! second opinion (`scan`), which fails open when Heimdall is absent and closed on its "deny".
 //!
 //! The patterns are Go's, read with Go's meaning (`goregexp`); Go's regexp sees a byte that is not UTF-8 as U+FFFD, and so
 //! does this (the match is mapped back to the original bytes for the message).
@@ -91,6 +91,22 @@ fn credential() -> &'static [Regex] {
 }
 
 impl Gate {
+    /// Go's `Scan`: the local checks, then, for a gate with a Heimdall kind, Heimdall's verdict (HEIMDALL_REVIEW_URL read
+    /// through `getenv`).
+    pub fn scan(&self, text: &[u8], getenv: &dyn Fn(&str) -> String) -> Verdict {
+        let v = self.scan_local(text);
+        if v.blocked || self.heimdall_kind.is_empty() {
+            return v;
+        }
+        match crate::heimdall::consult(&gotext::lossy(text), &self.heimdall_kind, &self.session_id, getenv) {
+            Some(h) if h.denied => Verdict {
+                blocked: true,
+                reason: format!("Heimdall flagged this independently: {}", h.reasons.unwrap_or_default().join("; ")),
+            },
+            _ => Verdict::default(),
+        }
+    }
+
     /// Go's `Scan` without the Heimdall call: the first invisible or format character, else the first instruction-like
     /// phrase (quoted), else a credential shape.
     pub fn scan_local(&self, text: &[u8]) -> Verdict {
