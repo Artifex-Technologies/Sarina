@@ -976,3 +976,25 @@ func TestTaskStoreStaysInTheWorkspace(t *testing.T) {
 		t.Fatalf("written outside the workspace: %v", entries)
 	}
 }
+
+// A check's output is kept at both ends and the middle dropped: a build or test run printing without end was held in
+// memory whole (found by the Rust port, 2026-11-12).
+func TestCheckOutputIsBounded(t *testing.T) {
+	b := &headTail{max: 4}
+	for _, p := range []string{"ab", "cdef", "ghij", "klmnop", "q"} {
+		if n, err := b.Write([]byte(p)); n != len(p) || err != nil {
+			t.Fatalf("Write(%q) = %d, %v", p, n, err)
+		}
+		if len(b.head) > 4 || len(b.tail) > 8 {
+			t.Fatalf("kept %d + %d bytes", len(b.head), len(b.tail))
+		}
+	}
+	if got := b.String(); got != "abcd\n[... 9 bytes of output left out ...]\nnopq" {
+		t.Fatalf("%q", got)
+	}
+	short := &headTail{max: 4}
+	short.Write([]byte("abcdefgh"))
+	if got := short.String(); got != "abcdefgh" {
+		t.Fatalf("at the bound: %q", got)
+	}
+}

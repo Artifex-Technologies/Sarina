@@ -199,7 +199,7 @@ func findDef(dir string, names []string, ext string) (string, string, string) {
 			if e.IsDir() || filepath.Ext(fn) != ext || strings.HasSuffix(fn, "_test.go") || isPyTestFile(fn) {
 				continue
 			}
-			data, err := os.ReadFile(filepath.Join(dir, fn))
+			data, err := readBounded(filepath.Join(dir, fn)) // a planted file of gigabytes is skipped, not read
 			if err != nil {
 				continue
 			}

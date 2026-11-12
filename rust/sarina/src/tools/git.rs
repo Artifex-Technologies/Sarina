@@ -12,7 +12,7 @@ use regex::Regex;
 use crate::goany::Any;
 use crate::goregexp;
 use crate::gotext::{self, to_valid_utf8, trim_space};
-use crate::tools::exec::{child_env, look_path_go, run_program, Capture};
+use crate::tools::exec::{child_env, exit_error, look_path_go, run_program, Capture, Prog};
 use crate::tools::files::{arg_str, clip_text, fail};
 use crate::tools::fsutil::resolve_in_root;
 use crate::tools::private::private_guard;
@@ -52,6 +52,15 @@ static GIT_REF_RE: LazyLock<Regex> = LazyLock::new(|| goregexp::compile(r"^[\w./
 static GIT_RISKY_KEY: LazyLock<Regex> =
     LazyLock::new(|| goregexp::compile(r"^(filter\..+\.(clean|smudge|process)|include\..*|includeif\..*)$").expect("a fixed pattern"));
 
+/// Keeps the first MAX_GIT_OUTPUT bytes and notes that more came.
+fn keep_first(out: &mut Vec<u8>, over: &mut bool, b: &[u8]) {
+    let room = MAX_GIT_OUTPUT.saturating_sub(out.len());
+    if b.len() > room {
+        *over = true;
+    }
+    out.extend_from_slice(&b[..b.len().min(room)]);
+}
+
 fn args_with(root: &str, rest: &[&str]) -> Vec<String> {
     GIT_SAFE.iter().copied().chain(["-C", root]).chain(rest.iter().copied()).map(str::to_owned).collect()
 }
@@ -67,14 +76,16 @@ pub fn git_config_risk(root: &str, deadline: Instant, ctx: &crate::goctx::Ctx) -
     let Ok(git) = look_path_go("git") else { return String::new() };
     let env = with_vars(child_env(&Context::default()), &["GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0"]);
     let args = args_with(root, &["config", "--local", "--name-only", "--list"]);
-    let Ok(cap) = run_program(&git, &args, &env, Capture::Stdout, MAX_GIT_OUTPUT, deadline, ctx) else { return String::new() };
-    if !cap.status.is_some_and(|s| s.success()) {
-        return String::new();
+    let (mut out, mut over) = (Vec::new(), false);
+    let prog = Prog { path: &git, args: &args, env: &env, cwd: None, capture: Capture::Stdout };
+    match run_program(&prog, &mut |b| keep_first(&mut out, &mut over, b), deadline, ctx) {
+        Ok(Some(st)) if st.success() => {}
+        _ => return String::new(),
     }
-    if cap.over {
+    if over {
         return format!("more than {MAX_GIT_OUTPUT} bytes of settings, not read whole");
     }
-    let text = gotext::lossy(&cap.out);
+    let text = gotext::lossy(&out);
     let risky: Vec<String> =
         trim_space(&text).split('\n').map(|k| gotext::to_lower(trim_space(k))).filter(|k| GIT_RISKY_KEY.is_match(k)).collect();
     risky.join(", ")
@@ -136,9 +147,9 @@ pub fn git_read(args: &BTreeMap<String, Any>, tc: &Context) -> Output {
     let git = look_path_go("git");
     if diff_head {
         if let Ok(git) = &git {
-            let rev =
-                run_program(git, &args_with(&tc.root, &["rev-parse", "-q", "--verify", "HEAD"]), &env, Capture::None, 0, deadline, &tc.ctx);
-            if rev.is_ok_and(|c| c.status.is_some_and(|s| s.success())) {
+            let rev_args = args_with(&tc.root, &["rev-parse", "-q", "--verify", "HEAD"]);
+            let prog = Prog { path: git, args: &rev_args, env: &env, cwd: None, capture: Capture::None };
+            if run_program(&prog, &mut |_| {}, deadline, &tc.ctx).is_ok_and(|st| st.is_some_and(|s| s.success())) {
                 r#ref = "HEAD".into();
                 git_args.push(r#ref.clone());
             }
@@ -149,16 +160,15 @@ pub fn git_read(args: &BTreeMap<String, Any>, tc: &Context) -> Output {
     let refs: Vec<&str> = git_args.iter().map(String::as_str).collect();
     let (out, err) = match &git {
         Err(e) => (Vec::new(), Some(e.clone())),
-        Ok(git) => match run_program(git, &args_with(&tc.root, &refs), &env, Capture::Both, MAX_GIT_OUTPUT, deadline, &tc.ctx) {
-            Err(e) => (Vec::new(), Some(e)),
-            Ok(c) => {
-                let err = match c.status {
-                    Some(st) => crate::tools::exec::exit_error(st),
-                    None => Some("signal: killed".into()),
-                };
-                (c.out, err)
+        Ok(git) => {
+            let (mut out, mut over) = (Vec::new(), false);
+            let main_args = args_with(&tc.root, &refs);
+            let prog = Prog { path: git, args: &main_args, env: &env, cwd: None, capture: Capture::Both };
+            match run_program(&prog, &mut |b| keep_first(&mut out, &mut over, b), deadline, &tc.ctx) {
+                Err(e) => (Vec::new(), Some(e)),
+                Ok(st) => (out, st.map(exit_error).unwrap_or(Some("signal: killed".into()))),
             }
-        },
+        }
     };
     let mut text = trim_space(&to_valid_utf8(&out)).to_owned();
     if let Some(e) = err {

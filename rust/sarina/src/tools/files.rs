@@ -1,7 +1,6 @@
 //! Go: `go/tools/readfile.go` and `writefile.go`: `read_file`, `list_dir`, `write_file`, `edit_file`, the per-context file
 //! state behind their guards (edit loops, summary churn, files she wrote, files read in this step), and the bounds on what
-//! they read (testdata/parity/files.json). The checks of code files after a change (`verify.go`) are not ported yet: a
-//! code file's change says so instead of a check result.
+//! they read (testdata/parity/files.json). The checks of code files after a change are `verify.rs`.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, Read};
@@ -60,6 +59,8 @@ struct StateInner {
     authored: HashSet<Vec<u8>>,
     /// files read whole or in part, and the step of the last read
     read: HashMap<Vec<u8>, i64>,
+    /// per Go package checked: the test that failed in the last check, run first next time
+    failed_test: HashMap<String, String>,
 }
 
 impl FileState {
@@ -101,6 +102,36 @@ impl FileState {
         }
         names.sort();
         names
+    }
+
+    /// The test that failed in the last check of a package ("" for none).
+    pub fn failed_test(&self, key: &str) -> String {
+        self.lock().failed_test.get(key).cloned().unwrap_or_default()
+    }
+
+    /// Records the test that failed for a package ("" forgets it).
+    pub fn set_failed_test(&self, key: &str, test: &str) {
+        let mut st = self.lock();
+        if test.is_empty() {
+            st.failed_test.remove(key);
+        } else {
+            st.failed_test.insert(key.to_owned(), test.to_owned());
+        }
+    }
+
+    /// Go's `ownTestOnOthersCode`: path is a test file she created in this session, and she created or edited no other
+    /// (non-test) file in its folder, so a failure is about code she did not write. `is_test` says it of a base name.
+    pub fn own_test_on_others_code(&self, path: &[u8], is_test: &dyn Fn(&[u8]) -> bool) -> bool {
+        if !is_test(&gopath::base(path)) {
+            return false;
+        }
+        let st = self.lock();
+        if !st.authored.contains(path) {
+            return false;
+        }
+        let dir = gopath::dir(path);
+        let other = |p: &Vec<u8>| gopath::dir(p) == dir && !is_test(&gopath::base(p));
+        !(st.authored.iter().any(other) || st.edits.iter().any(|(p, n)| *n > 0 && other(p)))
     }
 
     /// Counts one write or edit attempt on path; true when the edit-loop guard now refuses it.
@@ -512,21 +543,8 @@ fn verify_on_disk(path: &[u8], want: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Go's `verifyCode` for the files it does not check (anything but code); a code file's check is not ported yet, and the
-/// answer says the change was not verified.
-fn verify_code(path: &[u8]) -> (String, BTreeMap<String, Any>) {
-    let md = BTreeMap::from([("verify".to_owned(), s("skipped"))]);
-    let base = gopath::base(path);
-    let ext = match base.iter().rposition(|&c| c == b'.') {
-        Some(i) => gotext::to_lower_bytes(&base[i..]),
-        None => String::new(),
-    };
-    match ext.as_str() {
-        ".go" | ".py" | ".sh" | ".bash" | ".js" | ".mjs" | ".rs" => {
-            ("\nCheck skipped: the Rust port does not check code files yet, so the change was not verified.".into(), md)
-        }
-        _ => (String::new(), md),
-    }
+fn verify_code(path: &[u8], tc: &Context) -> (String, BTreeMap<String, Any>) {
+    crate::tools::verify::verify_code(path, tc)
 }
 
 /// Byte-string search with std's string search: text that is not UTF-8 is mapped byte for byte to the characters U+0000 to
@@ -678,7 +696,7 @@ pub fn write_file(args: &BTreeMap<String, Any>, tc: &Context) -> Output {
     md.insert("after_size".into(), int(content.len()));
     md.insert("after_preview".into(), Any::String(preview(&content, 240)));
     md.insert("verified_on_disk".into(), Any::Bool(true));
-    let (note, vmd) = verify_code(&path);
+    let (note, vmd) = verify_code(&path, tc);
     md.extend(vmd);
     Output {
         content: format!("Wrote {rel} ({} characters). Read back from disk: it matches.{kept_eol}{note}", content.chars().count()),
@@ -797,7 +815,7 @@ pub fn edit_file(args: &BTreeMap<String, Any>, tc: &Context) -> Output {
         return fail(format!("edited {given} but reading it back does not match: {e}"));
     }
     md.insert("verified_on_disk".into(), Any::Bool(true));
-    let (note, vmd) = verify_code(&path);
+    let (note, vmd) = verify_code(&path, tc);
     md.extend(vmd);
     let plural = if replaced == 1 { "" } else { "s" };
     Output {

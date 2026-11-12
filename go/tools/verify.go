@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -105,7 +104,7 @@ func verifyRun(ctx context.Context, path string, tc *Context, tests, trusted, sa
 		label = "node --check"
 	case ".rs":
 		if root := findUp(dir, "Cargo.toml"); root != "" {
-			if data, err := os.ReadFile(filepath.Join(root, "Cargo.toml")); err == nil && cargoManifestRE.Match(data) {
+			if data, err := readBounded(filepath.Join(root, "Cargo.toml")); err == nil && cargoManifestRE.Match(data) {
 				steps = append(steps, []string{"cargo", "check", "--offline", "--quiet"})
 				label = "cargo check --offline"
 				if tests {
@@ -152,8 +151,8 @@ func verifyRun(ctx context.Context, path string, tc *Context, tests, trusted, sa
 		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 		cmd.Dir = runDir
 		cmd.Env = append(childEnv(tc), "GOPROXY=off", "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local", "CARGO_NET_OFFLINE=true", "NO_COLOR=1")
-		var buf bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &buf, &buf
+		buf := &headTail{max: maxCheckOutput}
+		cmd.Stdout, cmd.Stderr = buf, buf
 		err := cmd.Run()
 		text := strings.TrimSpace(strings.ToValidUTF8(buf.String(), "�"))
 		if step[0] == "gofmt" && err == nil && text != "" {
@@ -297,14 +296,24 @@ func sandboxStep(dir string, step []string) (string, []string, func(), string) {
 	}
 	cleanup := func() { _ = os.RemoveAll(tmp) }
 	copyDir := filepath.Join(tmp, "project")
-	if out, err := exec.Command("cp", "-a", dir, copyDir).CombinedOutput(); err != nil {
+	cp := exec.Command("cp", "-a", dir, copyDir)
+	out := &headTail{max: maxCheckOutput}
+	cp.Stdout, cp.Stderr = out, out
+	if err := cp.Run(); err != nil {
 		cleanup()
-		return "", nil, nil, "copying the project failed: " + strings.TrimSpace(string(out))
+		return "", nil, nil, "copying the project failed: " + strings.TrimSpace(out.String())
 	}
 	home, _ := os.UserHomeDir()
 	gocache := filepath.Join(home, ".cache", "sarina", "sandbox-go")
 	_ = os.MkdirAll(filepath.Join(gocache, "build"), 0o700)
 	_ = os.MkdirAll(filepath.Join(gocache, "mod"), 0o700)
+	return copyDir, sandboxArgs(dir, copyDir, tmp, home, gocache, os.Getenv("PATH"), step, dirExists), cleanup, ""
+}
+
+// sandboxArgs is the bubblewrap command line for step, run in copyDir (the copy of dir in tmp): the whole system
+// read-only, /tmp, /run and the home folder hidden, the toolchains under home put back on a throw-away layer, no network,
+// a clean environment.
+func sandboxArgs(dir, copyDir, tmp, home, gocache, path string, step []string, exists func(string) bool) []string {
 	args := make([]string, len(step))
 	for i, a := range step {
 		args[i] = strings.Replace(a, dir, copyDir, 1)
@@ -314,11 +323,10 @@ func sandboxStep(dir string, step []string) (string, []string, func(), string) {
 	// toolchains put back, writable on a throw-away layer. All namespaces unshared, no network, a clean environment.
 	bw := []string{"bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--tmpfs", "/run", "--tmpfs", home}
 	for _, d := range []string{".cargo", "go", ".local/lib"} {
-		if p := filepath.Join(home, d); dirExists(p) {
+		if p := filepath.Join(home, d); exists(p) {
 			bw = append(bw, "--overlay-src", p, "--tmp-overlay", p)
 		}
 	}
-	path := os.Getenv("PATH")
 	if path == "" {
 		path = "/usr/local/bin:/usr/bin"
 	}
@@ -327,7 +335,48 @@ func sandboxStep(dir string, step []string) (string, []string, func(), string) {
 		"--setenv", "GOCACHE", filepath.Join(gocache, "build"), "--setenv", "GOMODCACHE", filepath.Join(gocache, "mod"),
 		"--setenv", "GOPROXY", "off", "--setenv", "GOFLAGS", "-mod=mod", "--setenv", "GOTOOLCHAIN", "local",
 		"--setenv", "CARGO_NET_OFFLINE", "true", "--setenv", "NO_COLOR", "1", "--chdir", copyDir, "--")
-	return copyDir, append(bw, args...), cleanup, ""
+	return append(bw, args...)
+}
+
+// maxCheckOutput bounds what is kept of a check's output at each end: a build or test run printing without end was held
+// in memory whole (found by the Rust port, 2026-11-12). The first and the last part are kept (the first failure and the
+// summary at the end), with how much was left out between them.
+const maxCheckOutput = 1 << 20
+
+// headTail keeps the first and the last max bytes written, and how many were left out between them.
+type headTail struct {
+	head, tail []byte
+	max        int
+	dropped    int64
+}
+
+func (b *headTail) Write(p []byte) (int, error) {
+	n := len(p)
+	if room := b.max - len(b.head); room > 0 {
+		k := min(room, len(p))
+		b.head = append(b.head, p[:k]...)
+		p = p[k:]
+	}
+	b.tail = append(b.tail, p...)
+	if len(b.tail) > 2*b.max {
+		cut := len(b.tail) - b.max
+		b.dropped += int64(cut)
+		b.tail = append([]byte(nil), b.tail[cut:]...)
+	}
+	return n, nil
+}
+
+func (b *headTail) String() string {
+	tail := b.tail
+	dropped := b.dropped
+	if len(tail) > b.max {
+		dropped += int64(len(tail) - b.max)
+		tail = tail[len(tail)-b.max:]
+	}
+	if dropped == 0 {
+		return string(b.head) + string(tail)
+	}
+	return string(b.head) + fmt.Sprintf("\n[... %d bytes of output left out ...]\n", dropped) + string(tail)
 }
 
 var errAtRE = regexp.MustCompile(`(?m)(?:^|[\s"(])((?:\.{0,2}/)?[\w./-]+\.(?:go|py|rs|sh|js|mjs)):(\d+)(?::\d+)?|File "([^"]+)", line (\d+)`)
@@ -380,7 +429,7 @@ var quotedGlobRE = regexp.MustCompile(`"[^"\n]*/\*[^"\n]*"`)
 // shellLint finds the shell mistake bash -n cannot: a glob inside double quotes, which is taken literally, so `rm -f "$1/*.tmp"`
 // removes nothing (eval code-shell-safe, 2026-10-26; shellcheck catches it too, when it is installed).
 func shellLint(path string) string {
-	b, err := os.ReadFile(path)
+	b, err := readBounded(path)
 	if err != nil {
 		return ""
 	}
@@ -406,8 +455,10 @@ func vetOnly(ctx context.Context, tc *Context, dir, path string, step []string, 
 	cmd := exec.CommandContext(ctx, step[0], step[1:]...)
 	cmd.Dir = dir
 	cmd.Env = append(childEnv(tc), "GOPROXY=off", "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local", "NO_COLOR=1")
-	b, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(strings.ToValidUTF8(string(b), "\uFFFD"))
+	b := &headTail{max: maxCheckOutput}
+	cmd.Stdout, cmd.Stderr = b, b
+	err := cmd.Run()
+	text := strings.TrimSpace(strings.ToValidUTF8(b.String(), "\uFFFD"))
 	if err != nil {
 		if text == "" {
 			text = err.Error()

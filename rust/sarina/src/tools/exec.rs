@@ -400,14 +400,6 @@ pub(crate) fn exit_error(st: std::process::ExitStatus) -> Option<String> {
     Some(format!("signal: {name}"))
 }
 
-/// What a program run by `run_program` left: the first bytes of its output (stdout and stderr in one pipe when both are
-/// asked for), whether more came, and its end.
-pub(crate) struct Captured {
-    pub out: Vec<u8>,
-    pub over: bool,
-    pub status: Option<std::process::ExitStatus>,
-}
-
 /// Which outputs of a program `run_program` keeps (the others go to the null device).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Capture {
@@ -417,62 +409,122 @@ pub(crate) enum Capture {
     Both,
 }
 
-/// Go's `exec.CommandContext(...).Run()` for a short-lived program: `path args` with `env` (stdin from the null device),
-/// the first `max` bytes of what it writes to the outputs asked for kept and the rest read and dropped, killed at
-/// `deadline` or when `ctx` ends (only the process, as Go's CommandContext does), its pipe read for at most 2 s after it
-/// ends.
-pub(crate) fn run_program(
-    path: &str,
-    args: &[String],
-    env: &[Vec<u8>],
-    capture: Capture,
+/// A program for `run_program`: its path, arguments, environment, folder (None: this process's) and the outputs kept.
+pub(crate) struct Prog<'a> {
+    pub path: &'a str,
+    pub args: &'a [String],
+    pub env: &'a [Vec<u8>],
+    pub cwd: Option<&'a str>,
+    pub capture: Capture,
+}
+
+/// Go's `headTail`: the first and the last `max` bytes written, and how many were left out between them.
+#[derive(Debug)]
+pub(crate) struct HeadTail {
+    head: Vec<u8>,
+    tail: Vec<u8>,
     max: usize,
+    dropped: u64,
+}
+
+impl HeadTail {
+    pub fn new(max: usize) -> HeadTail {
+        HeadTail { head: Vec::new(), tail: Vec::new(), max, dropped: 0 }
+    }
+
+    pub fn write(&mut self, mut p: &[u8]) {
+        let room = self.max.saturating_sub(self.head.len());
+        if room > 0 {
+            let k = room.min(p.len());
+            self.head.extend_from_slice(&p[..k]);
+            p = &p[k..];
+        }
+        self.tail.extend_from_slice(p);
+        if self.tail.len() > 2 * self.max {
+            let cut = self.tail.len() - self.max;
+            self.dropped += cut as u64;
+            self.tail.drain(..cut);
+        }
+    }
+
+    /// The text kept, with Go's note of what was left out (bytes as they are; the caller makes them valid UTF-8).
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut tail: &[u8] = &self.tail;
+        let mut dropped = self.dropped;
+        if tail.len() > self.max {
+            dropped += (tail.len() - self.max) as u64;
+            tail = &tail[tail.len() - self.max..];
+        }
+        let mut out = self.head.clone();
+        if dropped > 0 {
+            out.extend_from_slice(format!("\n[... {dropped} bytes of output left out ...]\n").as_bytes());
+        }
+        out.extend_from_slice(tail);
+        out
+    }
+}
+
+/// Go's `exec.CommandContext(...).Run()` for a short-lived program: stdin from the null device, what it writes to the
+/// outputs asked for handed to `sink` as it comes, killed at `deadline` or when `ctx` ends (only the process, as Go's
+/// CommandContext does), its pipe read for at most 2 s after it ends. The end (None when it could not be waited for) or
+/// Go's start error ("chdir /x: ...", "fork/exec /x: ...").
+pub(crate) fn run_program(
+    p: &Prog,
+    sink: &mut dyn FnMut(&[u8]),
     deadline: Instant,
     ctx: &crate::goctx::Ctx,
-) -> Result<Captured, String> {
+) -> Result<Option<std::process::ExitStatus>, String> {
     use std::os::unix::ffi::OsStrExt;
+    if let Some(dir) = p.cwd {
+        if let Err(e) = std::fs::metadata(dir) {
+            return Err(goerr::path("chdir", dir.as_bytes(), &e));
+        }
+    }
     let (reader, writer) = std::io::pipe().map_err(|e| e.to_string())?;
     let mut child = {
         // the write end lives only in this block: the parent's copies must be closed for the pipe to end with the child
         let writer = writer;
-        let mut cmd = Command::new(path);
-        cmd.args(args).env_clear().stdin(Stdio::null());
-        for kv in env {
+        let mut cmd = Command::new(p.path);
+        cmd.args(p.args).env_clear().stdin(Stdio::null());
+        if let Some(dir) = p.cwd {
+            cmd.current_dir(dir);
+        }
+        for kv in p.env {
             if let Some(i) = kv.iter().skip(1).position(|&c| c == b'=').map(|i| i + 1) {
                 cmd.env(std::ffi::OsStr::from_bytes(&kv[..i]), std::ffi::OsStr::from_bytes(&kv[i + 1..]));
             }
         }
         let w2 = writer.try_clone().map_err(|e| e.to_string())?;
-        cmd.stdout(if capture != Capture::None { Stdio::from(writer) } else { Stdio::null() });
-        cmd.stderr(if capture == Capture::Both { Stdio::from(w2) } else { Stdio::null() });
-        cmd.spawn().map_err(|e| goerr::path("fork/exec", path.as_bytes(), &e))?
+        cmd.stdout(if p.capture != Capture::None { Stdio::from(writer) } else { Stdio::null() });
+        cmd.stderr(if p.capture == Capture::Both { Stdio::from(w2) } else { Stdio::null() });
+        cmd.spawn().map_err(|e| goerr::path("fork/exec", p.path.as_bytes(), &e))?
     };
-    let mut cap = Captured { out: Vec::new(), over: false, status: None };
+    let status;
     {
-        let mut sink = |_: &'static str, b: &[u8]| {
-            let room = max.saturating_sub(cap.out.len());
-            if b.len() > room {
-                cap.over = true;
-            }
-            cap.out.extend_from_slice(&b[..b.len().min(room)]);
-        };
-        let mut pump = Pump { pipes: vec![(Some(pipe_file(reader)), "out")], sink: &mut sink, pidfd: pidfd(&child) };
+        let mut s = |_: &'static str, b: &[u8]| sink(b);
+        let pfd = pidfd(&child);
+        let mut pump = Pump { pipes: vec![(Some(pipe_file(reader)), "out")], sink: &mut s, pidfd: pfd };
         loop {
             if let Ok(Some(st)) = child.try_wait() {
-                cap.status = Some(st);
+                status = Some(st);
                 break;
             }
             let now = Instant::now();
             if now >= deadline || ctx.err().is_some() {
                 let _ = child.kill();
-                cap.status = child.wait().ok();
+                status = child.wait().ok();
                 break;
             }
             pump.step((deadline - now).min(Duration::from_millis(50)));
         }
         pump.drain();
     }
-    Ok(cap)
+    Ok(status)
+}
+
+/// This process's environment as "KEY=value" entries (what Go's exec hands a child when no environment is set).
+pub(crate) fn parent_env() -> Vec<Vec<u8>> {
+    this_environ()
 }
 
 /// Go's `exec.LookPath` for a bare name, with its error text.
