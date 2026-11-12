@@ -256,7 +256,7 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   of the workspace (`9b99e7c`); the checks after a code change held their programs' whole output (`9511017`);
   skills.json was read without a bound (`95f192d`); **the agent memory file was read through a planted link and its text
   put into every session's prompt** (a key file, say), a named pipe there hung the session, and an unreadable memory
-  file was replaced by the next add (memory commit, below). For the owner: memory files and the review queue now refuse
+  file was replaced by the next add (`315b10b`). For the owner: memory files and the review queue now refuse
   anything but a regular file inside the workspace.
 - Nothing switched; tiers and the agent loop are next.
 

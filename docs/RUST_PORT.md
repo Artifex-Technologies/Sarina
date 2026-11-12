@@ -491,7 +491,8 @@ whole (now the first and last MiB). Then skills' discovery, the skill tool and t
 library (`skills/`, its saved indexes byte for byte Go's), with skills.json read through the 4 MiB cap in both. Then MCP's definitions loader and manager
 (`mcp/config.rs`, `mcp/manager.rs`, against the client fixture's stand-in server). Then the limbo tools. Then memory
 (`memory.rs`), after a Go fix: a link planted at the agent memory file put the file it named into every session's
-prompt.
+prompt (`315b10b`). Fixtures this part: `todo` 77, `checks` 124, `skills` 122, `mcpmanager` 53, `limbotools` 21,
+`memory` 31 comparisons; CI green through each push.
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
