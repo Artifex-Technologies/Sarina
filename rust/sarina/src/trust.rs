@@ -45,6 +45,19 @@ pub fn std_base64(s: &[u8]) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// Go's `base64.StdEncoding.EncodeToString`.
+pub fn std_base64_encode(b: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(b.len().div_ceil(3) * 4);
+    for c in b.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for j in 0..4 {
+            out.push(if j <= c.len() { A[(n >> (18 - 6 * j)) as usize & 63] as char } else { '=' });
+        }
+    }
+    out
+}
+
 /// Go's `ed25519.Verify` with Go's length check of the key: true only for a 32-byte key and a valid 64-byte signature.
 pub fn verify(public: &[u8], msg: &[u8], sig: &[u8]) -> bool {
     public.len() == 32

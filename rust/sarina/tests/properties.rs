@@ -395,6 +395,27 @@ proptest! {
         server.join().unwrap();
     }
 
+    /// Limbo-shaped answers: runs and listings with text full of control, direction and zero-width characters.
+    #[test]
+    fn limbo_answer_shaped(
+        text in "[a-z \\n\\t\u{1b}\u{7}\u{85}\u{200b}\u{202e}\u{2066}é]{0,40}",
+        n in 0usize..30,
+        exit in "(0|1|-1|1\\.5|\"3\"|null|1e300)",
+    ) {
+        let t = serde_json::to_string(&text).unwrap();
+        let skipped: Vec<String> = (0..n).map(|i| format!(r#"{{"name":{t},"code":"c{i}","reason":{t},"remedy":{t}}}"#)).collect();
+        let doc = format!(
+            r#"{{"id":{t},"status":{t},"exit_code":{exit},"stdout":{t},"stderr":{t},"code":{t},"remedy":{t},"details":[{{"name":"ok","network":{t}}}],"skipped":[{}]}}"#,
+            skipped.join(",")
+        );
+        fuzzing::limbo_answer(doc.as_bytes());
+    }
+
+    #[test]
+    fn limbo_answer_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::limbo_answer(&data);
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

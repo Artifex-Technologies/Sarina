@@ -9,7 +9,39 @@
 
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
+use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};
+
+/// Where a request goes: the URL's host over TCP, or a unix socket (the URL then only names the path, as Go's clients
+/// with a socket dialer do).
+pub enum Dial<'a> {
+    Tcp,
+    Unix(&'a str),
+}
+
+/// A connection either way.
+trait Conn: Read + Write {
+    fn read_timeout(&self, d: Option<Duration>);
+    fn write_timeout(&self, d: Option<Duration>);
+}
+
+impl Conn for TcpStream {
+    fn read_timeout(&self, d: Option<Duration>) {
+        let _ = self.set_read_timeout(d);
+    }
+    fn write_timeout(&self, d: Option<Duration>) {
+        let _ = self.set_write_timeout(d);
+    }
+}
+
+impl Conn for UnixStream {
+    fn read_timeout(&self, d: Option<Duration>) {
+        let _ = self.set_read_timeout(d);
+    }
+    fn write_timeout(&self, d: Option<Duration>) {
+        let _ = self.set_write_timeout(d);
+    }
+}
 
 /// A response (the parts Sarina's code reads).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -66,36 +98,64 @@ fn target(url: &str) -> Result<Target, String> {
 /// Go's `http.Client{Timeout}.Post(url, contentType, body)`, reading at most `limit` bytes of the body. Err is Go's
 /// `*url.Error` text.
 pub fn post(url: &str, content_type: &str, body: &[u8], timeout: Duration, limit: usize) -> Result<Reply, String> {
-    let wrap = |what: String| format!("Post {}: {what}", go_quote_url(url));
+    request(&Dial::Tcp, "POST", url, Some((content_type, body)), timeout, limit)
+}
+
+/// One request (`method` in capitals; a body with its Content-Type, or none) over `dial`, as Go's client sends it with
+/// keep-alives off; at most `limit` bytes of the answer's body read.
+pub fn request(
+    dial: &Dial,
+    method: &str,
+    url: &str,
+    body: Option<(&str, &[u8])>,
+    timeout: Duration,
+    limit: usize,
+) -> Result<Reply, String> {
+    // Go's url.Error names the method as Get, Post
+    let verb = format!("{}{}", &method[..1], method[1..].to_ascii_lowercase());
+    let wrap = |what: String| format!("{verb} {}: {what}", go_quote_url(url));
     let t = target(url).map_err(wrap)?;
     let by = Instant::now() + timeout;
     let deadline = || wrap("context deadline exceeded (Client.Timeout exceeded while awaiting headers)".into());
-    let addrs: Vec<_> = t.host_port.to_socket_addrs().map_err(|e| wrap(format!("dial tcp: lookup {}: {e}", t.host_port)))?.collect();
-    let mut stream = None;
-    let mut last = String::from("dial tcp: no address");
-    for a in &addrs {
-        let left = by.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            return Err(deadline());
-        }
-        match TcpStream::connect_timeout(a, left) {
-            Ok(s) => {
-                stream = Some(s);
-                break;
+    let mut s: Box<dyn Conn> = match dial {
+        Dial::Unix(path) => match UnixStream::connect(path) {
+            Ok(c) => Box::new(c),
+            Err(e) => return Err(wrap(format!("dial unix {path}: connect: {}", crate::goerr::text(&e)))),
+        },
+        Dial::Tcp => {
+            let addrs: Vec<_> =
+                t.host_port.to_socket_addrs().map_err(|e| wrap(format!("dial tcp: lookup {}: {e}", t.host_port)))?.collect();
+            let mut stream = None;
+            let mut last = String::from("dial tcp: no address");
+            for a in &addrs {
+                let left = by.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    return Err(deadline());
+                }
+                match TcpStream::connect_timeout(a, left) {
+                    Ok(s) => {
+                        stream = Some(s);
+                        break;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::TimedOut => return Err(deadline()),
+                    Err(e) => last = format!("dial tcp {a}: connect: {}", crate::goerr::text(&e)),
+                }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => return Err(deadline()),
-            Err(e) => last = format!("dial tcp {a}: connect: {}", crate::goerr::text(&e)),
+            match stream {
+                Some(s) => Box::new(s),
+                None => return Err(wrap(last)),
+            }
         }
+    };
+    let mut req = format!("{method} {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: Go-http-client/1.1\r\n", t.request_uri, t.host_header);
+    if let Some((ctype, b)) = body {
+        req.push_str(&format!("Content-Length: {}\r\nContent-Type: {ctype}\r\n", b.len()));
     }
-    let Some(mut s) = stream else { return Err(wrap(last)) };
-    let mut req = format!(
-        "POST {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: Go-http-client/1.1\r\nContent-Length: {}\r\nContent-Type: {content_type}\r\nConnection: close\r\n\r\n",
-        t.request_uri,
-        t.host_header,
-        body.len()
-    )
-    .into_bytes();
-    req.extend_from_slice(body);
+    req.push_str("Connection: close\r\n\r\n");
+    let mut req = req.into_bytes();
+    if let Some((_, b)) = body {
+        req.extend_from_slice(b);
+    }
     let io_err = |e: std::io::Error| {
         if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) {
             deadline()
@@ -103,7 +163,7 @@ pub fn post(url: &str, content_type: &str, body: &[u8], timeout: Duration, limit
             wrap(crate::goerr::text(&e))
         }
     };
-    let _ = s.set_write_timeout(Some(by.saturating_duration_since(Instant::now()).max(Duration::from_millis(1))));
+    s.write_timeout(Some(by.saturating_duration_since(Instant::now()).max(Duration::from_millis(1))));
     s.write_all(&req).map_err(io_err)?;
     // the head: lines end in \n (a \r before it is dropped), and an empty line ends it (Go's textproto)
     let mut raw: Vec<u8> = Vec::new();
@@ -116,7 +176,7 @@ pub fn post(url: &str, content_type: &str, body: &[u8], timeout: Duration, limit
         if left.is_zero() {
             return Err(deadline());
         }
-        let _ = s.set_read_timeout(Some(left));
+        s.read_timeout(Some(left));
         match s.read(&mut buf) {
             Ok(0) => return Err(wrap(if raw.is_empty() { "EOF".into() } else { "unexpected EOF".into() })),
             Ok(n) => raw.extend_from_slice(&buf[..n]),
@@ -208,7 +268,7 @@ fn go_quote_url(url: &str) -> String {
 }
 
 struct BodyReader {
-    s: TcpStream,
+    s: Box<dyn Conn>,
     by: Instant,
     pending: Vec<u8>,
 }
@@ -222,7 +282,7 @@ impl BodyReader {
         if left.is_zero() {
             return Err("context deadline exceeded (Client.Timeout or context cancellation while reading body)".into());
         }
-        let _ = self.s.set_read_timeout(Some(left));
+        self.s.read_timeout(Some(left));
         let mut buf = [0u8; 16384];
         match self.s.read(&mut buf) {
             Ok(0) => Ok(false),

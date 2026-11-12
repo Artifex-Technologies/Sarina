@@ -126,9 +126,13 @@ func (c *Client) request(path, method, route string, body any) (any, error) {
 		return nil, fail("could not reach Limbo at %s: %v", path, err)
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
 		return nil, fail("could not reach Limbo at %s: %v", path, err)
+	}
+	// a bound with its own error: cut silently, a long answer read as "not JSON"
+	if len(raw) > maxBody {
+		return nil, fail("Limbo's answer is larger than %d bytes; not read", maxBody)
 	}
 	var data any = map[string]any{}
 	if len(raw) > 0 {

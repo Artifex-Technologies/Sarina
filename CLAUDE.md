@@ -264,6 +264,8 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 - **The Python helper (`go/helpers`) is bounded too, in Go and Rust:** an answer line of at most 64 MiB (a longer one stops
   the helper), the last 64 KiB of its error output kept, and a dying helper's reason no longer lost to a race. The Rust
   workspace now needs Rust 1.87 (`std::io::pipe`).
+- Limbo's agent-socket client ported; an over-long Limbo answer (past 1 MiB) now has its own error in Go and Rust instead
+  of reading as "not JSON". **For Limbo's board (nothing to change):** the requests on agent.sock are byte for byte Go's.
 
 Signed: Sarina / Claude Opus 5.5
 

@@ -666,3 +666,15 @@ func TestProfilesToolAndCLIListSkippedAndSayWhenNoneAreUsable(t *testing.T) {
 		t.Fatalf("%d %s", code, out)
 	}
 }
+
+// An answer past the 1 MiB bound is refused with its own error (it used to be cut and read as "not JSON").
+func TestAnswerPastTheBoundIsRefusedClearly(t *testing.T) {
+	f := newFake(t)
+	f.raw = `{"profiles":["arch-update"]}` + strings.Repeat(" ", maxBody-len(`{"profiles":["arch-update"]}`))
+	if names, err := client(f).ListProfiles(); err != nil || len(names) != 1 {
+		t.Fatalf("an answer of exactly the bound must be read: %v %v", names, err)
+	}
+	f.raw += " "
+	_, err := client(f).ListProfiles()
+	wantErr(t, err, "larger than 1048576 bytes")
+}

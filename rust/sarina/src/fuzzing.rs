@@ -306,3 +306,8 @@ pub fn skill_file(data: &[u8]) {
         }
     }
 }
+
+/// Any bytes as an answer from Limbo's agent socket (see `limbo::fuzz_answer`).
+pub fn limbo_answer(data: &[u8]) {
+    crate::limbo::fuzz_answer(data);
+}

@@ -14,7 +14,7 @@ equal.
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
-| 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **in progress**: `gohttp` (a small Go-like HTTP/1.1 client), Heimdall's review (`Consult`), `embed` and `helpers` done 2026-11-12 |
+| 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **in progress**: `gohttp` (a small Go-like HTTP/1.1 client), Heimdall's review (`Consult`), `embed`, `helpers` and `limbo`'s client done 2026-11-12 |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
@@ -212,6 +212,7 @@ reaches it any more (dead code is a risk).
 | `embed.rs`, `gostruct.rs` (float32) | `embed` (`Default`'s settings; `Embed`: the request, vectors as float32 bits, Ollama's errors, counts that differ, type errors, the first value of a longer body, a body cut short after a whole value, chunk errors, a refused connection with Go's text; the answer limit just under, at and over it) | `embed.json` | 59 |
 | `guard.rs` (`scan`) | `guard`'s full `Gate.Scan`: the local checks first (no request then), Heimdall's verdict for a gate with a kind (memory, a session id), "Heimdall flagged this independently: ..." with the reasons, failing open on an absent or broken Heimdall; the default gate never asks | `guardconsult.json` | 145 |
 | `helpers.rs` | `helpers` (`Python`, `Command`, `Available`, `Passthrough`, the `serve` client: ping and protocol, classify, group, the helper's errors, damaged, exact and over-long answer lines, a helper that dies or speaks last after closing its output, Close's exit status, the requests byte for byte), against one shell stand-in for the interpreter that both tests run | `helpers.json` | 18 |
+| `limbo.rs`, `gohttp.rs` (unix sockets, any method) | `limbo/limbo.go` (the agent-socket client: `ListProfiles`, `DescribeProfilesAndSkipped` with the capped skipped list, `Validate` and `ValidateBundle` with polling, `RunResult` and its text for the model, the cleaning of guest output, the socket-name rule, Limbo's errors, damaged and over-long answers), against a scripted unix socket (`RawUnixServer`) | `limbo.json` | 32 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -304,6 +305,9 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   could also name a dying helper's reason before its error output was copied (a race: "helper exited: EOF" instead of
   the reason); both now wait (at most 2 s) for that output, and once the helper is gone every later call answers the
   same error.
+- **Limbo's over-long answer has its own error, in Go and Rust (2026-11-12).** Go read 1 MiB and cut the rest, so a
+  long answer read as "Limbo returned something that is not JSON"; both now say "Limbo's answer is larger than 1048576
+  bytes; not read". The limbo tools and commands (`integration.go`) come with step 4's tools.
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such
@@ -350,14 +354,14 @@ new `*parity_test.go` files and the test-only `go/internal/parity`.
 
 Later on 2026-11-12: two bugs the port found were fixed in Go and Rust (`261834a`: session ids that cannot name a file
 are refused by Save and skipped and reported by MigrateDir; analysiscache refuses values JSON cannot hold), and step 3
-began: `gohttp`, Heimdall's review client (`Consult`), `embed` (its answer now bounded in both) and `helpers` (its pipes
-bounded in both), proved against Go's client on raw answers from a
+began: `gohttp`, Heimdall's review client (`Consult`), `embed` (its answer now bounded in both) `helpers` (its pipes
+bounded in both) and `limbo`'s client (its long answers named in both), proved against Go's client on raw answers from a
 loopback server (`go/internal/parity/rawserver.go`, `tests/common` `raw_server`).
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
 1. The rest of step 3 (guard's full scan and embed's answer limit are done): `llm` (the OpenAI-compatible and Anthropic clients, streaming; TLS with `rustls` for the online
-   tiers), `limbo` (the agent socket), `mcp` (stdio servers). Every read from another process gets a bound,
+   tiers), `mcp` (stdio servers); the limbo tools with step 4. Every read from another process gets a bound,
    in Go and Rust both (the owner's rule: security first), with a clear error when it is exceeded.
 2. The rest of `skills` (discovery, the skill tool, the long-skill library) with step 4's tools.
 

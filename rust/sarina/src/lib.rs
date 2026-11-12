@@ -24,6 +24,7 @@ pub mod gotime;
 pub mod guard;
 pub mod heimdall;
 pub mod helpers;
+pub mod limbo;
 pub mod llm;
 pub mod policy;
 pub mod pyfmt;

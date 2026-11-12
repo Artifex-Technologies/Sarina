@@ -122,3 +122,50 @@ pub fn raw_server(
     });
     (addr, rx, release)
 }
+
+/// The Go test's RawUnixServer: one connection per response, in order; the requests seen so far. "@big:N" is a 200 with N
+/// spaces of body.
+pub fn raw_unix_server(path: &std::path::Path, responses: Vec<Vec<u8>>) -> std::sync::Arc<std::sync::Mutex<Vec<Value>>> {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let ln = std::os::unix::net::UnixListener::bind(path).unwrap();
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let s2 = seen.clone();
+    std::thread::spawn(move || {
+        for resp in responses {
+            let Ok((c, _)) = ln.accept() else { return };
+            c.set_read_timeout(Some(std::time::Duration::from_secs(10))).unwrap();
+            let mut r = BufReader::new(c.try_clone().unwrap());
+            let mut line = String::new();
+            r.read_line(&mut line).unwrap();
+            let (mut ctype, mut n) = (String::new(), 0usize);
+            loop {
+                let mut h = String::new();
+                if r.read_line(&mut h).unwrap_or(0) == 0 || h == "\r\n" {
+                    break;
+                }
+                if let Some((k, v)) = h.split_once(':') {
+                    match k.to_ascii_lowercase().as_str() {
+                        "content-type" => ctype = v.trim().to_string(),
+                        "content-length" => n = v.trim().parse().unwrap_or(0),
+                        _ => {}
+                    }
+                }
+            }
+            let mut body = vec![0u8; n.min(1 << 20)];
+            let _ = r.read_exact(&mut body);
+            let parts: Vec<&str> = line.trim_end().splitn(3, ' ').collect();
+            s2.lock().unwrap().push(json!({"method": parts[0], "uri": parts.get(1).copied().unwrap_or(""), "contentType": ctype,
+                "body": text(&body)}));
+            let resp = match std::str::from_utf8(&resp).ok().and_then(|s| s.strip_prefix("@big:")) {
+                Some(n) => {
+                    let k: usize = n.parse().unwrap();
+                    format!("HTTP/1.1 200 OK\r\nContent-Length: {k}\r\n\r\n{}", " ".repeat(k)).into_bytes()
+                }
+                None => resp,
+            };
+            let mut c = c;
+            let _ = c.write_all(&resp);
+        }
+    });
+    seen
+}

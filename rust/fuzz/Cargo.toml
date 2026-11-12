@@ -121,3 +121,10 @@ path = "fuzz_targets/skill_file.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "limbo_answer"
+path = "fuzz_targets/limbo_answer.rs"
+test = false
+doc = false
+bench = false
