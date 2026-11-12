@@ -20,11 +20,12 @@ import (
 )
 
 // Step is one thing a scripted server does on a connection, in order: wait (milliseconds), send bytes, send Fill bytes
-// of 'x', or hold the connection open until the test ends. After the last step the connection is closed.
+// of 'x' or Pad spaces, or hold the connection open until the test ends. After the last step the connection is closed.
 type Step struct {
 	Wait int
 	Send string
 	Fill int
+	Pad  int
 	Hold bool
 }
 
@@ -42,6 +43,8 @@ func Steps(script [][]Step) []any {
 				m["wait"] = s.Wait
 			case s.Fill > 0:
 				m["fill"] = s.Fill
+			case s.Pad > 0:
+				m["pad"] = s.Pad
 			default:
 				m["send"] = Text(s.Send)
 			}
@@ -121,6 +124,8 @@ func RawSeq(t *testing.T, cfg *tls.Config, script [][]Step) (string, func() []ma
 						}
 					case s.Fill > 0:
 						c.Write([]byte(strings.Repeat("x", s.Fill)))
+					case s.Pad > 0:
+						c.Write([]byte(strings.Repeat(" ", s.Pad)))
 					default:
 						c.Write([]byte(s.Send))
 					}

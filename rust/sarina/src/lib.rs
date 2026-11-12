@@ -22,6 +22,7 @@ pub mod goregexp;
 pub mod gostruct;
 pub mod gotext;
 pub mod gotime;
+pub mod gourl;
 pub mod guard;
 pub mod heimdall;
 pub mod helpers;

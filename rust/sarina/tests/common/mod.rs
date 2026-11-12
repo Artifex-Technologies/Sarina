@@ -170,11 +170,13 @@ pub fn raw_unix_server(path: &std::path::Path, responses: Vec<Vec<u8>>) -> std::
     seen
 }
 
-/// A step of the Go test's scripted server (parity.Step): wait, send, fill with 'x', hold until the test ends.
+/// A step of the Go test's scripted server (parity.Step): wait, send, fill with 'x', pad with spaces, hold until the test
+/// ends.
 pub enum Step {
     Wait(u64),
     Send(Vec<u8>),
     Fill(usize),
+    Pad(usize),
     Hold,
 }
 
@@ -195,6 +197,8 @@ pub fn steps(v: &Value) -> Vec<Vec<Step>> {
                                 Step::Wait(w.as_u64().unwrap())
                             } else if let Some(f) = s.get("fill") {
                                 Step::Fill(f.as_u64().unwrap() as usize)
+                            } else if let Some(p) = s.get("pad") {
+                                Step::Pad(p.as_u64().unwrap() as usize)
                             } else {
                                 Step::Send(bytes(&s["send"]))
                             }
@@ -301,6 +305,9 @@ pub fn raw_seq(script: Vec<Vec<Step>>, tls: Option<std::sync::Arc<rustls::Server
                         }
                         Step::Fill(k) => {
                             let _ = conn.write_all(&vec![b'x'; k]);
+                        }
+                        Step::Pad(k) => {
+                            let _ = conn.write_all(&vec![b' '; k]);
                         }
                         Step::Send(b) => {
                             let _ = conn.write_all(&b);
