@@ -238,17 +238,24 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
-### 2026-11-12 (evening) — Rust port: the agent loop begun (answer checks, secret redactor, pure helpers); two Go fixes
+### 2026-11-12 (evening) — Rust port: the agent loop, proved against Go on a scripted model; two Go fixes
 - Ported and proved against Go (docs/RUST_PORT.md "Ported"): every answer check and carry-on nudge of `go/agent/claims.go`
   with its texts word for word, the secret redactor (`secrets.go`, streamed replies too), and the loop's pure helpers:
   token limits and budgets, the system prompt with the owner's lessons, guidance files, the git snapshot and curated
   memory, clearing old tool outputs, snipping and folding without a model, the notes' format, the summary's cleaning.
-  1.9 million answers checked in 52 tasks from the Go tests, 368 more comparisons; mutation runs 43 of 43; CI green.
+  1.9 million answers checked in 52 tasks from the Go tests, 368 more comparisons; CI green.
 - **Go fixes (live code), in Go and Rust both, each with a test that failed before:** the git snapshot a session starts
   with read each git command's whole output, and a workspace's CLAUDE.md (any guidance file) was read whole into memory;
   a sparse file of gigabytes costs nothing on disk. Both read at most 1 MiB now (`8d97da5`). For the owner: nothing
   visible changes (40,000 characters of a guidance file and 2,000 of the status were all that was ever kept).
-- Nothing switched; the drive loop itself (rounds, tools, nudges, budgets, resume) against a scripted model is next.
+- Later the same evening: **the agent loop itself in Rust** (`rust/sarina/src/agent/run.rs`): model calls, tools, the
+  nudges and the one claim check, budgets, cancellation, notes and summaries, plan decisions, resume and sub-agents. The
+  Go agent and the port were run against the same scripted model answers in 41 tasks; every request, event, result and
+  session file is the same (794 comparisons). Mutation runs 66 of 67 in all.
+- The `sarina-rs` binary exists (not packaged, nothing switched): the names it answers to, Heimdall's lock first (the
+  same refusals and message as the Go build), then every command handed unchanged to the Go build by execve, the caller's
+  SIGPIPE kept. Next: the commands without a model move to it one at a time, each after a differential run of both
+  builds. **For Labyrinth's board (nothing to do yet):** sarina-git will install both builds when the first one moves.
 
 Signed: Sarina / Claude Opus 5.5
 
