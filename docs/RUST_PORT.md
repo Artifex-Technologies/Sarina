@@ -188,6 +188,7 @@ reaches it any more (dead code is a risk).
 | `tools/destructive.rs`, `gopath.rs` | `tools/destructive.go`, `realRoot` and `within` (`fsutil.go`), `filepath.Rel` | `destructive.json` | 10,154 (about 46,000 verdicts) |
 | `tools/schema.rs`, `goany.rs`, `gotext/parsefloat.rs` | `tools/schema.go` (`ValidateArgs`), `strconv.ParseFloat` | `schema.json` | 2,073 |
 | `tools/secret.rs`, `tools/exfil.rs`, `tools/private.rs`, `goregexp.rs` | `secret.go` (`secretName`, `IsSecretPath`, `secretGuard` with hard links), `exfil.go` (`ExfilRisk`, `PrivateReference`), `private.go` (`IsPrivate`, `privateGuard`, the credential stores with their globs), on a made-up home folder | `secrets.json` | 1,621 |
+| `tools/fsutil.rs`, `goerr.rs` | `fsutil.go` (`ResolveInRoot`, `ResolveForWrite`, `relPath`, `expandHome`, `TruncateOutput`, `preview`), with Go's error texts (`lstat ...: not a directory`; errno table from Heimdall's generator), on a made-up tree for six workspace roots | `fsutil.json` | 139 (1,404 answers) |
 | `testguard.rs`, `gopath.rs` | `testguard`, `filepath.EvalSymlinks`, `Abs`, `Clean`, `Join`, `Dir`, `Base` (on a made-up folder tree) | `testguard.json` | 405 |
 | `pyfmt.rs` | `chymaera/internal/pyfmt` | `pyfmt.json` | 681 |
 | `flagx.rs`, `goflag.rs` | `flagx` and Go's `flag` package (syntax, values, error texts, the usage on an error) | `flagx.json` | 1,513 |
@@ -253,9 +254,9 @@ the Go fixtures current, fmt, clippy `-D warnings`, the tests). No existing Go f
 Next, in this order:
 
 1. (Done: `pyfmt`, `testguard` with Go's filepath on a made-up tree, `version`, `flagx` with Go's flag package.)
-2. (Done: the file tools' guards `secret.go`, `exfil.go`, `private.go`.) Next in `tools`: `ResolveInRoot` and
-   `ResolveForWrite` (`fsutil.go`, on the made-up tree), then the registry's permission gate (`permission.go`) and the
-   tool definitions' JSON (what the model is offered: byte for byte, it is part of every request).
+2. (Done: the file tools' guards `secret.go`, `exfil.go`, `private.go`, and `fsutil.go`'s path resolution.) Next in
+   `tools`: the registry's permission gate (`permission.go`) and the tool definitions' JSON (what the model is offered:
+   byte for byte, it is part of every request), which needs `gojson`'s writer (item 3) first.
 3. Step 2's formats, starting with what Heimdall reads: llm's message types, `config`'s data structures and tolerant
    loaders, `session` (writer byte for byte, reader of every file Go reads), `session/redact.go`. This needs a `gojson`
    module (Go's decoder and encoder: take Limbo's `gojson.rs`, which already has Go's error texts and escaping).

@@ -6,6 +6,8 @@ use std::ffi::OsStr;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::Path;
 
+use crate::goerr;
+
 /// ENOTDIR on Linux: a file stands where a folder must be.
 const ENOTDIR: i32 = 20;
 
@@ -182,9 +184,9 @@ pub fn abs(path: &[u8]) -> std::io::Result<Vec<u8>> {
     Ok(join(&[&wd, path]))
 }
 
-/// `filepath.EvalSymlinks`: the path with every link followed, cleaned; an error when a part is missing, a file stands
-/// where a folder must be, or there are more than 255 links.
-pub fn eval_symlinks(path: &[u8]) -> std::io::Result<Vec<u8>> {
+/// `filepath.EvalSymlinks`: the path with every link followed, cleaned; an error, with Go's text, when a part is missing, a
+/// file stands where a folder must be, or there are more than 255 links.
+pub fn eval_symlinks(path: &[u8]) -> Result<Vec<u8>, String> {
     let mut path = path.to_vec();
     let mut vol_len = usize::from(path.first() == Some(&b'/'));
     let mut vol: Vec<u8> = path[..vol_len].to_vec();
@@ -225,19 +227,19 @@ pub fn eval_symlinks(path: &[u8]) -> std::io::Result<Vec<u8>> {
             dest.push(b'/');
         }
         dest.extend_from_slice(elem);
-        let md = std::fs::symlink_metadata(os_path(&dest))?;
+        let md = std::fs::symlink_metadata(os_path(&dest)).map_err(|e| goerr::path("lstat", &dest, &e))?;
         if !md.file_type().is_symlink() {
             if !md.is_dir() && end < path.len() {
-                return Err(std::io::Error::from_raw_os_error(ENOTDIR));
+                return Err(goerr::errno(ENOTDIR));
             }
             start = end;
             continue;
         }
         links += 1;
         if links > 255 {
-            return Err(std::io::Error::other("EvalSymlinks: too many links"));
+            return Err("EvalSymlinks: too many links".into());
         }
-        let link = std::fs::read_link(os_path(&dest))?.into_os_string().into_vec();
+        let link = std::fs::read_link(os_path(&dest)).map_err(|e| goerr::path("readlink", &dest, &e))?.into_os_string().into_vec();
         let mut np = link.clone();
         np.extend_from_slice(&path[end..]);
         path = np;

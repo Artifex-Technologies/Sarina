@@ -4,6 +4,7 @@
 pub mod flagx;
 pub mod fuzzing;
 pub mod goany;
+pub mod goerr;
 pub mod goflag;
 pub mod gopath;
 pub mod goregexp;
