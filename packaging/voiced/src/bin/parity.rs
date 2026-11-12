@@ -263,7 +263,7 @@ fn request_cmd(textfile: &str, seed: u128) {
         idle: 600.0,
         reference: c.dir.join("voice").join("sarina.wav").to_string_lossy().into_owned(),
         venv: c.venv.clone(),
-        pipeline: env_or("PIPELINE", "1") != "0",
+        pipeline: Some(env_or("PIPELINE", "1") != "0"),
         seed: Some(seed),
         pronunciations: env_or("PRONUNCIATIONS", "/nonexistent"),
     };

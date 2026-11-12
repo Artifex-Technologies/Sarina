@@ -7,7 +7,8 @@
 //! Python made them, so a seed gives the same speech either way: the writer draws for each sentence in turn, and when the
 //! decoder finds invalid audio (the Python's ValueError, tried again up to three times), the writer is sent back to that
 //! sentence with the generator as it stood right after that sentence's tokens, which is where the Python's retry drew from.
-//! `LABYRINTH_VOICE_PIPELINE=0` makes the sentences one after the other, exactly as the Python did.
+//! It is on with the graphics card and off on the processor, where both halves want every core and overlapping them made the
+//! sentences later (measured: tests/bench.py); `LABYRINTH_VOICE_PIPELINE=1` or `=0` decides instead.
 
 use crate::engine::{Config, Decoder, Engine, Fail, Voice as Conditioning, Writer};
 use crate::npy::Generator;
@@ -28,7 +29,8 @@ pub struct Settings {
     pub idle: f64,
     pub reference: String,
     pub venv: PathBuf,
-    pub pipeline: bool,
+    /// Some(true/false): LABYRINTH_VOICE_PIPELINE=1/0; None: on with the graphics card, off on the processor
+    pub pipeline: Option<bool>,
     /// a fixed seed for every request (tests only: LABYRINTH_VOICE_SEED); None draws one from the system, as the Python's
     /// random.getrandbits(32) did
     pub seed: Option<u128>,
@@ -164,7 +166,8 @@ impl Service {
         let table = text::pronunciations(&self.settings.pronunciations)?;
         let sentences: Vec<Sentence> = text::sentences(text_in, &table).into_iter().map(|(name, plain)| Sentence { plain, name }).collect();
         let voice = engine.voice.clone().ok_or("set_voice first")?;
-        let r = if self.settings.pipeline && sentences.len() > 1 {
+        let pipeline = self.settings.pipeline.unwrap_or(engine.providers.first() == Some(&"CUDAExecutionProvider"));
+        let r = if pipeline && sentences.len() > 1 {
             self.speak_pipelined(&mut engine.writer, &mut engine.decoder, &voice, &sentences, &mut rng, send)
         } else {
             self.speak_in_turn(&mut engine.writer, &mut engine.decoder, &voice, &sentences, &mut rng, send)

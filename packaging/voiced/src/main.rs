@@ -25,7 +25,8 @@ being made.
   voice to copy in ~/.local/share/labyrinth/tts/chatterbox/voice/sarina.wav (LABYRINTH_VOICE_REFERENCE; about 10 seconds
   of clean speech; it never leaves this computer). ONNX Runtime and the CUDA libraries come from the voice's venv,
   ~/.local/share/labyrinth/tts/gpu-venv (LABYRINTH_VOICE_VENV; LABYRINTH_VOICE_ORT names the library itself).
-  LABYRINTH_VOICE_PIPELINE=0 makes the sentences one after the other instead of writing the next while one is decoded.
+  With the graphics card the next sentence is written while one is decoded (after the first); on the processor they are made
+  one after the other. LABYRINTH_VOICE_PIPELINE=1 or =0 decides instead.
 
   sarina-voiced check [TEXT]: asks the running voice service (this one or the Python one: the same socket) to say TEXT,
   plays nothing, and prints when each sentence arrived, how long it is, the time to the first one and the gaps a listener
@@ -70,7 +71,11 @@ fn main() {
         idle,
         reference,
         venv: PathBuf::from(py::expanduser(env.get_or("LABYRINTH_VOICE_VENV", "~/.local/share/labyrinth/tts/gpu-venv"), &env)),
-        pipeline: env.get("LABYRINTH_VOICE_PIPELINE") != Some("0"),
+        pipeline: match env.get("LABYRINTH_VOICE_PIPELINE") {
+            Some("0") => Some(false),
+            Some("1") => Some(true),
+            _ => None,
+        },
         seed: env.truthy("LABYRINTH_VOICE_SEED").and_then(|s| s.parse::<u128>().ok()),
         pronunciations: py::expanduser("~/.config/labyrinth/pronunciations", &env),
     };
