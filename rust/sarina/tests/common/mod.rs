@@ -321,6 +321,24 @@ pub fn raw_seq(script: Vec<Vec<Step>>, tls: Option<std::sync::Arc<rustls::Server
     SeqServer { addr, seen, stop }
 }
 
+/// The Go test's parity.Settle: waits until the requests seen stop changing (four looks 50 ms apart, at most 5 s).
+pub fn settle(seen: &std::sync::Mutex<Vec<Value>>) -> Vec<Value> {
+    let (mut last, mut stable) = (usize::MAX, 0);
+    for _ in 0..100 {
+        if stable >= 4 {
+            break;
+        }
+        let n = seen.lock().unwrap().len();
+        if n == last {
+            stable += 1;
+        } else {
+            (stable, last) = (0, n);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    seen.lock().unwrap().clone()
+}
+
 pub trait ReadWrite: std::io::Read + std::io::Write + Send {}
 impl<T: std::io::Read + std::io::Write + Send> ReadWrite for T {}
 

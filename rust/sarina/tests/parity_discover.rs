@@ -53,8 +53,7 @@ fn discover_matches_go() {
                         });
                     }
                     let (n, src) = d.context_window(&ctx, &cfg);
-                    std::thread::sleep(Duration::from_millis(50));
-                    results.push(json!([n, src, srv.seen.lock().unwrap().len()]));
+                    results.push(json!([n, src, common::settle(&srv.seen).len()]));
                 }
                 let seen = srv.seen.lock().unwrap().clone();
                 json!({"results": results, "requests": if seen.is_empty() { Value::Null } else { Value::Array(seen) }})

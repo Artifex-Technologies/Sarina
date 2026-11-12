@@ -111,8 +111,7 @@ func TestParityDiscover(t *testing.T) {
 			}
 			n, src := d.ContextWindow(ctx, cfg)
 			cancel()
-			time.Sleep(50 * time.Millisecond)
-			results = append(results, []any{n, src, len(seen())})
+			results = append(results, []any{n, src, len(parity.Settle(seen))})
 		}
 		in := map[string]any{"name": tc.name, "model": model, "path": tc.path, "script": parity.Steps(tc.script), "timeoutMs": tc.timeoutMs,
 			"calls": calls, "cancelMs": tc.cancelMs}

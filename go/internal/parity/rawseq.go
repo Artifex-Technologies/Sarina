@@ -140,6 +140,22 @@ func RawSeq(t *testing.T, cfg *tls.Config, script [][]Step) (string, func() []ma
 	}
 }
 
+// Settle waits until the requests a scripted server saw have stopped changing (four looks 50 ms apart, at most five
+// seconds), so a request the server records a moment after the client gave up (a refused handshake) is counted on a busy
+// machine too, and returns them.
+func Settle(seen func() []map[string]any) []map[string]any {
+	last, stable := -1, 0
+	for i := 0; i < 100 && stable < 4; i++ {
+		if n := len(seen()); n == last {
+			stable++
+		} else {
+			stable, last = 0, n
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return seen()
+}
+
 // TestCA is an authority made for one test run and certificates from it for loopback servers.
 type TestCA struct {
 	Pool *x509.CertPool

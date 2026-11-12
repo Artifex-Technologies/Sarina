@@ -92,16 +92,16 @@ func transportCases() []transportCase {
 		{name: "informational", script: [][]S{{{Send: "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 102 Processing\r\n\r\n"}, {Send: okJSON(answerOK)[0].Send}}}},
 		{name: "timeout", script: [][]S{{{Wait: 1500}, {Send: okJSON(answerOK)[0].Send}}}, timeout: 0.3},
 		{name: "timeoutFallback", script: [][]S{{{Wait: 1500}, {Send: okJSON(answerOK)[0].Send}}, okJSON(answerOK)}, timeout: 0.3, fallbacks: []string{"m2"}},
-		{name: "maxTokensExtends", script: [][]S{{{Wait: 550}, {Send: okJSON(answerOK)[0].Send}}}, timeout: 0.3, maxTokens: 20},
-		{name: "maxTokensStillTimesOut", script: [][]S{{{Wait: 1800}, {Send: okJSON(answerOK)[0].Send}}}, timeout: 0.3, maxTokens: 20},
+		{name: "maxTokensExtends", script: [][]S{{{Wait: 600}, {Send: okJSON(answerOK)[0].Send}}}, timeout: 0.3, maxTokens: 40},
+		{name: "maxTokensStillTimesOut", script: [][]S{{{Wait: 3000}, {Send: okJSON(answerOK)[0].Send}}}, timeout: 0.3, maxTokens: 40},
 		{name: "bodyTimeout", script: [][]S{{{Send: "HTTP/1.1 200 OK\r\nContent-Length: 50\r\n\r\n{\"cho"}, {Wait: 1500}}}, timeout: 0.3},
-		{name: "streamIdleReset", script: [][]S{slowStream}, stream: true, timeout: 0.6},
+		{name: "streamIdleReset", script: [][]S{slowStream}, stream: true, timeout: 1.0},
 		{name: "streamStalled", script: [][]S{stalled}, stream: true, timeout: 0.4, maxTokens: 400},
 		{name: "streamHeadTimeout", script: [][]S{{{Wait: 1500}, {Send: sseHead}}}, stream: true, timeout: 0.3},
 		{name: "cancel", script: [][]S{{{Hold: true}}}, cancelMs: 250},
 		{name: "cancelStream", script: [][]S{{{Send: sseHead}, {Send: sseEvent("a")}, {Hold: true}}}, stream: true, cancelMs: 250},
-		{name: "cancelInRetryWait", script: [][]S{statusJSON(503, "a")}, cancelMs: 250, retryMs: 3000},
-		{name: "ctxDeadline", script: [][]S{{{Hold: true}}}, ctxMs: 300},
+		{name: "cancelInRetryWait", script: [][]S{statusJSON(503, "a")}, cancelMs: 600, retryMs: 3000},
+		{name: "ctxDeadline", script: [][]S{{{Hold: true}}}, ctxMs: 400},
 		{name: "bodyCutShort", script: [][]S{{{Send: "HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{\"choices\":[]}"}}}},
 		{name: "streamCutShort", script: [][]S{{{Send: sseHead}, {Send: sseEvent("a")}, {Send: "40\r\ndata: {\"cho"}}}, stream: true},
 		{name: "streamBadChunk", script: [][]S{{{Send: sseHead}, {Send: sseEvent("a")}, {Send: "zz\r\n"}}}, stream: true},
@@ -200,7 +200,7 @@ func TestParityOpenAIComplete(t *testing.T) {
 		})
 		maxResponseBytes = oldR
 		cancel()
-		time.Sleep(150 * time.Millisecond) // a refused handshake is seen by the server a moment after the client gives up
+		requests := parity.Settle(seen) // a refused handshake is seen by the server a moment after the client gives up
 		var tf any
 		if turn != nil {
 			m := turnFields(turn).(map[string]any)
@@ -211,7 +211,7 @@ func TestParityOpenAIComplete(t *testing.T) {
 			"timeout": tc.timeout, "fallbacks": tc.fallbacks, "stream": tc.stream, "tools": tc.tools, "maxTokens": tc.maxTokens,
 			"cancelMs": tc.cancelMs, "ctxMs": tc.ctxMs, "retryMs": tc.retryMs, "maxResp": tc.maxResp, "apiKey": tc.apiKey}
 		cases = append(cases, parity.Case{Fn: "complete", In: in, Out: map[string]any{"turn": tf, "err": errShort(err, addr), "events": evs,
-			"requests": seen()}})
+			"requests": requests}})
 	}
 	cases = append(cases, parity.Case{Fn: "defaults", Out: []any{int64(750 * time.Millisecond), config.DefaultTimeoutSeconds}})
 	parity.Fixture(t, "transport", cases)

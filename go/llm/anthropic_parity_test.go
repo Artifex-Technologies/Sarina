@@ -115,7 +115,7 @@ func TestParityAnthropic(t *testing.T) {
 		{name: "maxTokensDoNotExtend", script: [][]S{{{Wait: 1500}, {Send: okJSON(ok)[0].Send}}}, timeout: 0.3, maxTokens: 4000},
 		{name: "bodyTimeout", script: [][]S{{{Send: "HTTP/1.1 200 OK\r\nContent-Length: 50\r\n\r\n{\"con"}, {Wait: 1500}}}, timeout: 0.3},
 		{name: "cancel", script: [][]S{{{Hold: true}}}, cancelMs: 250},
-		{name: "cancelInRetryWait", script: [][]S{statusJSON(503, "a")}, cancelMs: 250, retryMs: 3000},
+		{name: "cancelInRetryWait", script: [][]S{statusJSON(503, "a")}, cancelMs: 600, retryMs: 3000},
 		{name: "tooLarge", script: [][]S{okJSON(ok)}, maxResp: 64},
 		{name: "bodyCutShort", script: [][]S{{{Send: "HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{\"content\":[]}"}}}},
 		{name: "tlsOK", script: [][]S{okJSON(ok)}, tls: "trusted"},
@@ -169,10 +169,10 @@ func TestParityAnthropic(t *testing.T) {
 			})
 		maxResponseBytes = oldR
 		cancel()
-		time.Sleep(150 * time.Millisecond)
+		requests := parity.Settle(seen)
 		in := map[string]any{"name": tc.name, "script": parity.Steps(tc.script), "tls": tc.tls, "base": tc.base, "timeout": tc.timeout,
 			"stream": tc.stream, "maxTokens": tc.maxTokens, "cancelMs": tc.cancelMs, "retryMs": tc.retryMs, "maxResp": tc.maxResp, "apiKey": tc.apiKey}
-		out := map[string]any{"turn": turnFields(turn), "err": errShort(err, addr), "events": evs, "requests": seen()}
+		out := map[string]any{"turn": turnFields(turn), "err": errShort(err, addr), "events": evs, "requests": requests}
 		if err != nil && strings.Contains(err.Error(), anthKey) {
 			t.Errorf("%s: the key is in the error: %v", tc.name, err)
 		}

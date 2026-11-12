@@ -213,7 +213,6 @@ fn anthropic_matches_go() {
                 let start = Instant::now();
                 let r = cl.complete(&ctx, &req, Some(&mut on));
                 let _ = start;
-                std::thread::sleep(Duration::from_millis(150));
                 if let Err(e) = &r {
                     assert!(!e.text().contains(&key), "the key is in the error: {}", e.text());
                 }
@@ -222,7 +221,7 @@ fn anthropic_matches_go() {
                     Err(e) => (Value::Null, err_short(e, &addr)),
                 };
                 let requests = server.as_ref().map_or(Value::Null, |s| {
-                    let seen = s.seen.lock().unwrap().clone();
+                    let seen = common::settle(&s.seen);
                     if seen.is_empty() {
                         Value::Null
                     } else {

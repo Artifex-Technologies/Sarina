@@ -140,13 +140,12 @@ fn complete_matches_go() {
             evs.push(json!([e.kind, common::text(e.delta.as_bytes()), e.finish_reason]));
         };
         let r = client.complete(&ctx, &req, Some(&mut on));
-        std::thread::sleep(Duration::from_millis(150));
         let (turn, err) = match &r {
             Ok(t) => (turn_fields(t), Value::Null),
             Err(e) => (Value::Null, err_short(e, &addr)),
         };
         let requests = server.as_ref().map_or(Value::Null, |s| {
-            let seen = s.seen.lock().unwrap().clone();
+            let seen = common::settle(&s.seen);
             if seen.is_empty() {
                 Value::Null
             } else {

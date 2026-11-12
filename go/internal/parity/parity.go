@@ -74,6 +74,21 @@ func Fixture(t *testing.T, name string, cases []Case) {
 		t.Fatalf("%s: %v (write it with %s=1)", path, err, UpdateEnv)
 	}
 	if !bytes.Equal(old, buf.Bytes()) {
+		// the first line that differs, cut short, so a failure on another machine says which case moved
+		ol, nl := bytes.Split(old, []byte("\n")), bytes.Split(buf.Bytes(), []byte("\n"))
+		for i := 0; i < max(len(ol), len(nl)); i++ {
+			var a, b []byte
+			if i < len(ol) {
+				a = ol[i]
+			}
+			if i < len(nl) {
+				b = nl[i]
+			}
+			if !bytes.Equal(a, b) {
+				t.Errorf("line %d\n  fixture: %.800s\n  now:     %.800s", i+1, a, b)
+				break
+			}
+		}
 		t.Fatalf("%s is out of date with the Go code: rerun with %s=1 and review the diff", path, UpdateEnv)
 	}
 }
