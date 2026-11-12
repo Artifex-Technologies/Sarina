@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -257,3 +258,48 @@ type (
 func perms() config.Permissions { return config.Permissions{} }
 
 func a0() config.RuntimeConfig { return config.DefaultRuntime(".") }
+
+// The git snapshot read each git command's whole output (a status of millions of changed files was held whole although only
+// 2,000 characters are kept): it reads at most maxSnapshotOutput now.
+func TestGitSnapshotOutputIsBounded(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/bash\ns=x\nfor i in {1..20}; do s=$s$s; done\nfor i in 1 2 3; do printf '%s\\n' \"$s\"; done\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	out, ok := git(t.TempDir(), "status", "--short")
+	if !ok {
+		t.Fatal("the stand-in git failed")
+	}
+	if len(out) > maxSnapshotOutput {
+		t.Fatalf("read %d bytes of git's output, more than %d", len(out), maxSnapshotOutput)
+	}
+}
+
+// A guidance file was read whole although 40,000 characters are kept: a workspace's sparse CLAUDE.md of a few hundred
+// megabytes (nothing on disk) made Sarina allocate all of it. At most maxGuidanceBytes is read now.
+func TestGuidanceFileIsReadWithABound(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "CLAUDE.md")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("Use tabs.\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(256 << 20); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	text, ok := readGuidance(p)
+	runtime.ReadMemStats(&after)
+	if !ok || !strings.HasPrefix(text, "Use tabs.") || !strings.HasSuffix(text, "[file truncated at 40000 characters]") {
+		t.Fatalf("got %v %.40q", ok, text)
+	}
+	if n := after.TotalAlloc - before.TotalAlloc; n > 32<<20 {
+		t.Fatalf("reading the guidance file allocated %d bytes", n)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Artifex-Technologies/Sarina/go/tools"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -174,12 +175,21 @@ func renderSystemMessage(parts []string, sysCtx session.OrderedMap) string {
 
 const guidanceFileLimit = 40000
 
+// maxGuidanceBytes is how much of a guidance file is read: 40,000 characters are kept, so more is never needed, and a
+// workspace's CLAUDE.md (a sparse file of many gigabytes costs nothing on disk) was read whole into memory.
+const maxGuidanceBytes = 1 << 20
+
 func readGuidance(path string) (string, bool) {
 	st, err := os.Stat(path)
 	if err != nil || !st.Mode().IsRegular() {
 		return "", false
 	}
-	b, err := os.ReadFile(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false
+	}
+	b, err := io.ReadAll(io.LimitReader(f, maxGuidanceBytes))
+	f.Close()
 	if err != nil {
 		return "", false
 	}
@@ -258,6 +268,24 @@ func discoverGuidance(cwd string, extra []string, home string) string {
 
 // ---- git snapshot -----------------------------------------------------------
 
+// maxSnapshotOutput bounds what one git command of the snapshot is read for: the snapshot keeps 2,000 characters of the
+// status and five log lines, so more is never needed, and a workspace with millions of changed files was read whole.
+const maxSnapshotOutput = 1 << 20
+
+// cappedBuffer keeps the first max bytes written to it and drops the rest (the writer is never told to stop, so git ends
+// normally).
+type cappedBuffer struct {
+	buf []byte
+	max int
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	if room := c.max - len(c.buf); room > 0 {
+		c.buf = append(c.buf, p[:min(len(p), room)]...)
+	}
+	return len(p), nil
+}
+
 func git(cwd string, args ...string) (string, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -265,11 +293,12 @@ func git(cwd string, args ...string) (string, bool) {
 	cmd := exec.CommandContext(ctx, "git", append(tools.GitSafeArgs(), args...)...)
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat")
-	out, err := cmd.Output()
-	if err != nil {
+	out := &cappedBuffer{max: maxSnapshotOutput}
+	cmd.Stdout = out
+	if err := cmd.Run(); err != nil {
 		return "", false
 	}
-	return strings.TrimSpace(string(out)), true
+	return strings.TrimSpace(string(out.buf)), true
 }
 
 func isGitRepo(cwd string) bool {
