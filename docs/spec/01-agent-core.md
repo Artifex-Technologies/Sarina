@@ -881,7 +881,7 @@ Meaning each default section must convey (write new prose; no copying):
 - Caution on irreversible/externally visible actions.
 - Prefer dedicated tools over shell equivalents (only mention tools that exist); call independent tools in parallel.
 - Style: terse, no emojis unless asked, cite `path:line`, no colon right before a tool call.
-- Communication: state intent before the first tool call, short milestone updates, lead with the answer.
+- Communication: call a needed tool in the same reply instead of announcing it (a reply without a tool call ends the task: "I'll check the system first" and then nothing cost a whole extra model round), lead with the answer.
 **The sentinel**: the dynamic-boundary marker is a literal string placed in the list and
 currently ends up in the text the model sees. **DO NOT REPLICATE:** do not send it; use the boundary
 only for deciding which tail is volatile (relevant only for prompt-prefix caching, which most local

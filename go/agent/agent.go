@@ -392,6 +392,9 @@ type run struct {
 	done     map[string]bool
 	segments []string
 	lastText string
+	// noThink: the prompt ended with "/no_think" (a spoken question), so every round of this run skips the hidden thinking, the
+	// rounds after a nudge too (the nudge is the latest user message then, and without this it turned the thinking back on)
+	noThink bool
 
 	// toolTurnsSince counts tool-using turns since the notes were last refreshed.
 	toolTurnsSince int
@@ -417,7 +420,7 @@ func (r *run) budgetText() string {
 func (a *Agent) drive(ctx context.Context, sess *session.Session, prompt string, resumed bool) (*Result, error) {
 	rt := a.opts.Runtime
 	sess.Model, sess.Runtime = a.opts.Model, rt
-	r := &run{a: a, sess: sess, done: map[string]bool{}}
+	r := &run{a: a, sess: sess, done: map[string]bool{}, noThink: strings.HasSuffix(strings.TrimSpace(prompt), "/no_think")}
 	a.cur = r
 	defer func() { a.cur = nil }()
 	defer a.endRun()
@@ -840,7 +843,8 @@ func (r *run) request() llm.Request {
 	for _, m := range r.sess.Messages {
 		msgs = append(msgs, m.Wire())
 	}
-	req := llm.Request{Messages: msgs, Tools: r.a.registry.Specs(), Schema: rt.OutputSchema, Stream: rt.StreamModelResponses}
+	req := llm.Request{Messages: msgs, Tools: r.a.registry.Specs(), Schema: rt.OutputSchema, Stream: rt.StreamModelResponses,
+		NoThink: r.noThink}
 	if rt.BudgetConfig.MaxOutputTokens != nil && *rt.BudgetConfig.MaxOutputTokens > 0 {
 		req.MaxTokens = *rt.BudgetConfig.MaxOutputTokens
 	}

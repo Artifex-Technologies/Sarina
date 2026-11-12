@@ -214,6 +214,9 @@ type Request struct {
 	Schema    *config.OutputSchema
 	MaxTokens int // 0 = not sent
 	Stream    bool
+	// NoThink turns a reasoning model's hidden thinking off for this request, as a "/no_think" at the end of the latest user
+	// message does: the agent sets it for every round of a run whose prompt asked for it, so its own nudges do not turn it back on.
+	NoThink bool
 }
 
 // Turn is the model's reply after normalisation.

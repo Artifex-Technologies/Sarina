@@ -106,8 +106,8 @@ func defaultParts(toolNames []string, perms config.Permissions) []string {
 	}
 	parts = append(parts,
 		"Style: be brief and plain, skip emojis unless asked, and refer to code as path:line. "+
-			"Say what you are about to do before your first tool call, give short updates at milestones, "+
-			"and put the answer first in your final reply.")
+			"When a tool is needed, call it in the same reply: never end a reply by saying what you will do next, "+
+			"since a reply without a tool call ends the task. Put the answer first in your final reply.")
 	var blocked []string
 	if !perms.AllowFileWrite {
 		blocked = append(blocked, "writing and editing files, and the to-do, plan and memory tools that save state (the operator must restart with --allow-write)")

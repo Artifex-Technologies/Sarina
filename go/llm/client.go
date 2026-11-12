@@ -65,7 +65,7 @@ func (c *Client) BuildBody(req Request) ([]byte, error) {
 	if req.Stream {
 		body.StreamOptions = &streamOptions{IncludeUsage: true}
 	}
-	if noThink(msgs) {
+	if req.NoThink || noThink(msgs) {
 		body.ReasoningEffort = "none"
 	}
 	if len(req.Tools) > 0 {

@@ -421,6 +421,8 @@ func TestAnnouncedNotDone(t *testing.T) {
 		"I'll help diagnose and fix the Go test failure. First, let me inspect the test file and relevant code:\n\n1. List directory contents\n2. Read the test file\n\nLet me start by listing the files in this directory:",
 		"I'll check the go.mod file to ensure all dependencies are properly specified.\n\nLet me first check the go module configuration:",
 		"Let me check your system.",
+		// a spoken question, 2026-11-11: this, and nothing done until the nudge
+		"I'll check the system's security status and recent changes first. Let me run a quick scan of the security settings and look for any recent updates or advisories.",
 		"Okay, I'll look at the logs now.",
 	}
 	for _, a := range stopped {

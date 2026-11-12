@@ -594,4 +594,9 @@ func TestNoThinkIsSentAsAFieldToo(t *testing.T) {
 	if strings.Contains(string(b), "reasoning_effort") {
 		t.Fatalf("a later question without it thinks again: %s", b)
 	}
+	// the agent's own nudge is the latest user message after a spoken question: the request's NoThink keeps it off
+	b, _ = c.BuildBody(Request{Messages: []Message{{Role: "user", Content: "Carry on."}}, NoThink: true})
+	if !strings.Contains(string(b), `"reasoning_effort":"none"`) {
+		t.Fatalf("NoThink not sent: %s", b)
+	}
 }

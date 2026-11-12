@@ -448,3 +448,48 @@ func TestAnUnreadDefinitionIsANudgeAndKeepsTheClaimCheck(t *testing.T) {
 		t.Fatalf("final %q", res.FinalOutput)
 	}
 }
+
+// A spoken question asks for no hidden thinking ("/no_think" at its end). The nudge after an announcement is the latest user message
+// then, and it used to turn the thinking back on for the rest of the run: every round of the run now asks for none (2026-11-11).
+func TestNoThinkHoldsForTheWholeRun(t *testing.T) {
+	f := newFakeServer(t,
+		reply("I'll check the system's security status first.", "stop", use(1, 1)),
+		reply("", "tool_calls", use(1, 1), tcall{"c1", "probe", `{}`}),
+		reply("All fine: nothing failed today.", "stop", use(1, 1)))
+	a := newTestAgent(t, f, func(o *Options) {
+		o.Tools.Extra = []toolT{customTool("probe", func(context.Context, map[string]any, *toolCtx) (string, map[string]any, error) {
+			return "services: none failed", nil, nil
+		})}
+	})
+	res := mustRun(t, a, "Is my system healthy? /no_think")
+	reqs := f.requests()
+	if len(reqs) != 3 || !strings.HasPrefix(lastUserText(reqs[1]), "Carry on: you said what you would do next") {
+		t.Fatalf("%d model calls, want 3 (announcement, nudge, answer)", len(reqs))
+	}
+	for i, r := range reqs {
+		if r["reasoning_effort"] != "none" {
+			t.Fatalf("round %d thinks again: reasoning_effort %v", i+1, r["reasoning_effort"])
+		}
+	}
+	if res.FinalOutput != "All fine: nothing failed today." {
+		t.Fatalf("final %q", res.FinalOutput)
+	}
+
+	// a typed question keeps the thinking
+	g := newFakeServer(t, reply("Hello.", "stop", use(1, 1)))
+	mustRun(t, newTestAgent(t, g), "Is my system healthy?")
+	if _, ok := g.requests()[0]["reasoning_effort"]; ok {
+		t.Fatal("a typed question lost its thinking")
+	}
+}
+
+// The style rule told the model to say what it was about to do before its first tool call; a local model then often said it and
+// stopped, and the nudge cost a whole extra round (a spoken question, 2026-11-11). The rule now asks for the call in the same reply.
+func TestTheSystemPromptAsksForTheToolCallNotAnAnnouncement(t *testing.T) {
+	f := newFakeServer(t, reply("Hi.", "stop", use(1, 1)))
+	mustRun(t, newTestAgent(t, f), "hello")
+	sys := reqMessages(f.requests()[0])[0]["content"].(string)
+	if strings.Contains(sys, "Say what you are about to do") || !strings.Contains(sys, "call it in the same reply") {
+		t.Fatalf("system prompt style rule: %q", sys)
+	}
+}
