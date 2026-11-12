@@ -948,3 +948,31 @@ func TestBashTimeoutIsTheOneNamed(t *testing.T) {
 		}
 	}
 }
+
+// The to-do list and the plan stay in the workspace: a .port_sessions link planted there led both files out of it (found
+// by the Rust port, 2026-11-12). A store outside reads as empty and is not written.
+func TestTaskStoreStaysInTheWorkspace(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(outside, taskFileName), []byte(`{"tasks":[{"task_id":"x","title":"from outside"}]}`), 0o644)
+	if err := os.Symlink(outside, filepath.Join(root, ".port_sessions")); err != nil {
+		t.Fatal(err)
+	}
+	tc := &Context{Root: root, MaxOutputChars: 12000, Permissions: config.Permissions{AllowFileWrite: true}}
+	reg := NewRegistry(TodoTools()...)
+	run := func(name string, args map[string]any) Result { return reg.Execute(t.Context(), name, args, tc) }
+	if r := run("task_create", map[string]any{"title": "t"}); r.OK || !strings.Contains(r.Content, "outside the workspace") {
+		t.Fatalf("task_create: %+v", r)
+	}
+	if r := run("update_plan", map[string]any{"items": []any{map[string]any{"step": "s"}}}); r.OK || !strings.Contains(r.Content, "outside the workspace") {
+		t.Fatalf("update_plan: %+v", r)
+	}
+	if r := run("task_list", nil); !r.OK || r.Content != "No tasks." {
+		t.Fatalf("task_list: %+v", r)
+	}
+	if r := run("plan_get", nil); !r.OK || r.Content != "There is no plan." {
+		t.Fatalf("plan_get: %+v", r)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 1 {
+		t.Fatalf("written outside the workspace: %v", entries)
+	}
+}

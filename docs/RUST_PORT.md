@@ -15,7 +15,7 @@ equal.
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
-| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools |
+| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
 
@@ -222,6 +222,7 @@ reaches it any more (dead code is a risk).
 | `tools/exec.rs` | `bash.go`, `exec.go`, `procs.go`, `proc_unix.go`: the bash tool (the exfiltration, privileged and destructive guards before anything runs, the child's environment without secret-looking names in its three layers, its own process group killed on the timeout or a cancel, the output kept to its last 2 MiB, streaming line by line, the files she wrote named), background processes (one pipe for both streams, as Go does when both writers are one) and TaskOutput and TaskStop; Go's `Duration.String`. The fixture runs bash's builtins only, with nothing but bash on PATH and a temporary workspace, so a refused command (always an external program) could find nothing to run | `bash.json` | 46 calls in 2 scenarios, 3 environments |
 | `tools/git.rs`, `tools/exec.rs` (`run_program`) | `git.go`: `git_read` (the ref and path checks, the settings that keep a repository's config from running programs, the arguments for each command, the variables, git's failures and empty answers, the bounds) and `GitConfigRisk`; against a stand-in git (bash's builtins only, written from the fixture) that prints what it was given and leaves a mark when rev-parse runs | `git.json` | 40 calls in 11 workspaces |
 | `tools/plan.rs` | `plan.go`'s tools: `enter_plan_mode` and `exit_plan_mode` (plan mode unknown, on and off; plans at, under and over 20,000 characters) | `plantools.json` | 3 modes x 7 calls |
+| `tools/todo.rs` | `todo.go`: `task_list`, `task_create`, `task_update`, `todo_write`, `plan_get`, `update_plan`; the store under `.port_sessions/` (read as Go 1.27 reads it into the struct: keys in any case, a damaged file as empty; written as MarshalIndent writes it, through a temporary file), the dependency rules, cycles (walked with a loop, so a planted chain cannot exhaust the stack), the plan merged by id, pruning, Go's `%v` of metadata; time, content hashes and random ids written as placeholders | `todo.json` | 77 calls in 16 scenarios |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -356,6 +357,12 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   unseen). `diff` without a ref asked git for HEAD before the repository's settings were checked, with the whole
   unfiltered environment and no time limit; now the settings come first and rev-parse gets the filtered environment
   and the 20 s limit (`TestGitOutputIsBounded`, `TestGitReadChecksSettingsBeforeRunningGit`).
+- **The to-do list and the plan stay in the workspace, in Go and Rust (2026-11-12).** `.port_sessions/` was joined to the
+  workspace without being resolved, so a `.port_sessions` link planted in a workspace led `task_runtime.json` and
+  `plan_runtime.json` out of it (read and written there). Both resolve the store as a file tool's write is now; a store
+  outside reads as empty and is not written (`TestTaskStoreStaysInTheWorkspace` read and wrote the outside list before).
+  The same pattern exists for the agent's memory (`memory/runtime.go`, `.port_sessions/memory/AGENT_MEMORY.md`) and the
+  default session folder: to be looked at when those are ported.
 - **grep_search's patterns are read by `goregexp`.** Go's regexp syntax is translated to the regex crate's with Go's
   meaning, and constructs it does not translate (named groups, POSIX classes, `\pL`, `\Q...\E`) are refused; Go
   accepts them. A pattern Go refuses is refused here too, but the error after "invalid pattern: " is the regex crate's,
@@ -450,13 +457,13 @@ in Go and Rust both: a refused `write_file` (or a failed `edit_file`) let the sa
 line-range read held every line asked for; `write_file` onto a named pipe and `grep_search` given one waited forever
 (`b6fb83e`); bash's timeout message said "0s" for the default 30 s (`2859309`); `git_read` read git's output and the
 config listing without a bound and ran rev-parse before the risky-settings check, unfiltered and without a time limit
-(`280d48b`). The bash and git fixtures run bash's builtins only, with nothing but bash (or the stand-in) on PATH.
+(`280d48b`). The bash and git fixtures run bash's builtins only, with nothing but bash (or the stand-in) on PATH. Then the
+to-do and plan tools (`todo.rs`, 77 calls), after a Go fix: a `.port_sessions` link planted in a workspace led the to-do
+list and the plan out of it.
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. The rest of step 4's tools: the to-do tools (`todo.go`, 1,228 lines: task_list/create/update, todo_write,
-   plan_get/update_plan; the JSON files under `.port_sessions/`, timestamps and random ids to be written as placeholders
-   in the fixture), then `verify.go` with `check_code` (the checks after a code change run go, python3, bash -n, node,
+1. The rest of step 4's tools: `verify.go` with `check_code` (the checks after a code change run go, python3, bash -n, node,
    cargo and bubblewrap: prove them against stand-ins on PATH that print what they were given, never the real tools;
    `files.rs`'s `verify_code` says "not ported yet" until then). Then `skills`' discovery with the skill tool and the
    long-skill library, MCP's definitions loader (`mcp/config.go`) and manager (`mcp/manager.go`), and the limbo tools;

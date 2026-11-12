@@ -13,3 +13,4 @@ pub mod registry;
 pub mod schema;
 pub mod search;
 pub mod secret;
+pub mod todo;

@@ -122,8 +122,11 @@ func randHex(n int) string {
 
 // ---- storage ----------------------------------------------------------------
 
-func storePath(tc *Context, name string) string {
-	return filepath.Join(tc.Root, ".port_sessions", name)
+// storePath is where a store file lives: <workspace>/.port_sessions/<name>, resolved as a file tool's write is, so a link
+// planted in the workspace cannot lead the to-do list or the plan out of it (found by the Rust port, 2026-11-12). A store
+// outside reads as empty and is not written.
+func storePath(tc *Context, name string) (string, error) {
+	return ResolveForWrite(tc.Root, filepath.Join(".port_sessions", name))
 }
 
 func writeFileAtomic(path string, data []byte) error {
@@ -513,7 +516,10 @@ func (u *unchanged) Error() string { return u.msg }
 func mutateTasks(tc *Context, action string, fn func(ts *[]Task) (string, *Task, error)) (string, map[string]any, error) {
 	storeMu.Lock()
 	defer storeMu.Unlock()
-	path := storePath(tc, taskFileName)
+	path, err := storePath(tc, taskFileName)
+	if err != nil {
+		return "", nil, fmt.Errorf("cannot use the task list: %v", err)
+	}
 	var before []byte
 	if raw, err := os.ReadFile(path); err == nil {
 		before = raw
@@ -669,7 +675,10 @@ func TodoTools() []Tool {
 func readTasks(tc *Context) []Task {
 	storeMu.Lock()
 	defer storeMu.Unlock()
-	path := storePath(tc, taskFileName)
+	path, err := storePath(tc, taskFileName)
+	if err != nil {
+		return []Task{}
+	}
 	ts := loadTasks(path)
 	if normalizeTasks(ts) && tc.Permissions.AllowFileWrite {
 		_ = writeFileAtomic(path, encodeTasks(ts))
@@ -930,7 +939,11 @@ func todoWrite() Tool {
 func readPlan(tc *Context) planFile {
 	storeMu.Lock()
 	defer storeMu.Unlock()
-	return loadPlan(storePath(tc, planFileName))
+	path, err := storePath(tc, planFileName)
+	if err != nil {
+		return planFile{Steps: []PlanStep{}}
+	}
+	return loadPlan(path)
 }
 
 func planGet() Tool {
@@ -1008,7 +1021,14 @@ func updatePlan() Tool {
 		Handler: func(ctx context.Context, args map[string]any, tc *Context) (string, map[string]any, error) {
 			storeMu.Lock()
 			defer storeMu.Unlock()
-			ppath, tpath := storePath(tc, planFileName), storePath(tc, taskFileName)
+			ppath, err := storePath(tc, planFileName)
+			if err != nil {
+				return "", nil, fmt.Errorf("cannot use the plan: %v", err)
+			}
+			tpath, err := storePath(tc, taskFileName)
+			if err != nil {
+				return "", nil, fmt.Errorf("cannot use the task list: %v", err)
+			}
 			var before []byte
 			if raw, err := os.ReadFile(ppath); err == nil {
 				before = raw
