@@ -94,7 +94,8 @@ func Roots(o Options) []Root {
 	}
 	if o.Home != "" {
 		sj := filepath.Join(o.Home, ".sarina", "skills.json")
-		if raw, err := os.ReadFile(sj); err == nil && (o.Trust == nil || o.Trust.Refuse(sj) == "") {
+		// read as a skill file is: at most maxFileBytes (it was read whole)
+		if raw, err := readCapped(sj); err == nil && (o.Trust == nil || o.Trust.Refuse(sj) == "") {
 			var cfg struct {
 				Paths []string `json:"paths"`
 			}

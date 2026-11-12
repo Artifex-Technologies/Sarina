@@ -15,7 +15,7 @@ equal.
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
-| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code |
+| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
 
@@ -224,6 +224,7 @@ reaches it any more (dead code is a risk).
 | `tools/plan.rs` | `plan.go`'s tools: `enter_plan_mode` and `exit_plan_mode` (plan mode unknown, on and off; plans at, under and over 20,000 characters) | `plantools.json` | 3 modes x 7 calls |
 | `tools/todo.rs` | `todo.go`: `task_list`, `task_create`, `task_update`, `todo_write`, `plan_get`, `update_plan`; the store under `.port_sessions/` (read as Go 1.27 reads it into the struct: keys in any case, a damaged file as empty; written as MarshalIndent writes it, through a temporary file), the dependency rules, cycles (walked with a loop, so a planted chain cannot exhaust the stack), the plan merged by id, pruning, Go's `%v` of metadata; time, content hashes and random ids written as placeholders | `todo.json` | 77 calls in 16 scenarios |
 | `tools/verify.rs`, `tools/exec.rs` (`run_program`, `HeadTail`) | `verify.go`, `localise.go`, `checkcode.go`: the check after a code change (go vet / go test with the failed test first, gofmt without a module, py_compile and unittest, bash -n and shellcheck, node --check, cargo check and test; the shell lint; "not installed"; cargo refused without trust or sandbox; the sandbox copy and its failure, vetOnly), `verifyMode`, the bubblewrap command line (`sandboxArgs`, recorded as data), the localiser (Go failures, panics, Python tracebacks, the function under test), `around`, `check_code`; against one stand-in (bash builtins) for go, gofmt, python3, bash, cargo, shellcheck, cp and bwrap that prints its arguments, folder and variables | `checks.json` | 64 verifyMode, 3 sandboxArgs, 57 runs and calls |
+| `skills/discover.rs`, `library.rs`, `recall.rs`, `tool.rs` | `skills`: `Roots` (operator folders, SARINA_SKILLS_DIR, skills.json read as Go 1.27 reads it, the system folder, the workspace's only with the opt-in), `Discover` (name.md and name/SKILL.md, links refused, the scan gate and the owner's signed list first, files over 4 MiB, a SKILL.md without front matter, collisions, notices), long skills (sections from headings or `sections/*.md`, parts, the table of contents and its cut), the `skill` tool, `skill_section`, `skill_search` by words (Go's amd64 `math.Log`) and by meaning (an index per skill, saved and loaded: the folder name, `meta.json` and `passages.vec` byte for byte the same as Go's), `ExpandWith` with prefetched context; with a made-up embedder and trust list in both tests | `skills.json` | 122 comparisons |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -374,6 +375,9 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **hasPyTests reads the folder, not a glob.** Go globs `<dir>/test_*.py`, so a folder whose name holds `*`, `?` or `[`
   is read as a pattern and its tests may be missed; the port lists the folder and matches the names. Same answer for
   every ordinary folder.
+- **skills.json is read through the skill files' 4 MiB cap, in Go and Rust (2026-11-12)** (it was read whole). Not
+  covered by the fixture: the 0.45 similarity below which a passage is not offered (no made-up passage scores between
+  0.44 and 0.45).
 - **grep_search's patterns are read by `goregexp`.** Go's regexp syntax is translated to the regex crate's with Go's
   meaning, and constructs it does not translate (named groups, POSIX classes, `\pL`, `\Q...\E`) are refused; Go
   accepts them. A pattern Go refuses is refused here too, but the error after "invalid pattern: " is the regex crate's,
@@ -472,12 +476,12 @@ config listing without a bound and ran rev-parse before the risky-settings check
 to-do and plan tools (`todo.rs`, 77 calls), after a Go fix: a `.port_sessions` link planted in a workspace led the to-do
 list and the plan out of it. Then the checks after a code change and `check_code` (`verify.rs`, against one stand-in
 for every program; the bubblewrap command line recorded as data), after a Go fix: their programs' output was collected
-whole (now the first and last MiB).
+whole (now the first and last MiB). Then skills' discovery, the skill tool and the long-skill
+library (`skills/`, its saved indexes byte for byte Go's), with skills.json read through the 4 MiB cap in both.
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. Then `skills`' discovery with the skill tool and the
-   long-skill library, MCP's definitions loader (`mcp/config.go`) and manager (`mcp/manager.go`), and the limbo tools;
+1. MCP's definitions loader (`mcp/config.go`) and manager (`mcp/manager.go`), and the limbo tools;
    then memory, tiers, the agent loop (against a scripted fake model only). Every read from another process keeps its
    bound (the owner's rule), and a timed fixture case must not depend on how bytes arrive.
 2. The binary (`sarina-rs`) and the switch plan, once the agent loop is equal.

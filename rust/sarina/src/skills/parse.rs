@@ -29,6 +29,8 @@ pub struct Skill {
     pub source: String,
     /// context looked up before the model starts (front matter "prefetch"); None when absent
     pub prefetch: Option<Vec<String>>,
+    /// a long skill's sections, read on demand (library.rs); empty for a short one
+    pub sections: Vec<super::library::Section>,
 }
 
 impl Skill {
