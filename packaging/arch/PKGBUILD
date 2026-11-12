@@ -33,6 +33,8 @@ optdepends=(
   'claude-code: hand off tasks to the real Claude Code CLI when local resources are insufficient'
 )
 makedepends=('go' 'cargo' 'python-build' 'python-installer' 'python-wheel' 'python-setuptools')
+# ring (TLS for the Rust build's model clients) does not link from GCC's LTO objects (makepkg's lto option)
+options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/Artifex-Technologies/Sarina/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
