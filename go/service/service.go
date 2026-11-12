@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/agent"
 	"github.com/Artifex-Technologies/Sarina/go/cli"
@@ -34,6 +35,13 @@ import (
 
 // maxBody bounds a request body.
 const maxBody = 8 << 20
+
+// bodyReadTimeout bounds how long a request's body may take to arrive. net/http's ReadHeaderTimeout covers only the
+// header: without this a client that declared a body and sent less held its connection and handler for ever, also
+// when the handler never read the body (the server drains up to 256 KiB of it after the answer). It is a read
+// deadline set when a request starts and cleared once readBody has the body, so a long turn is never cut off (a
+// deadline left in place would cancel the request's context through the server's background read).
+var bodyReadTimeout = 30 * time.Second
 
 // Config is the operator's configuration. Zero values mean "nothing granted".
 type Config struct {
@@ -110,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 // computer are unaffected: they send a loopback Host and no Origin.
 func browserGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyReadTimeout))
 		host := r.Host
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
@@ -174,9 +183,19 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 func readBody(w http.ResponseWriter, r *http.Request, into any) bool {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
-		detail(w, http.StatusRequestEntityTooLarge, "request body too large")
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			detail(w, http.StatusRequestEntityTooLarge, "request body too large")
+		} else {
+			// cut short, too slow (bodyReadTimeout) or badly chunked: not "too large", as it read before. The
+			// connection is closed after the answer: what is left of the body cannot be told from a next request.
+			w.Header().Set("Connection", "close")
+			detail(w, http.StatusBadRequest, "request body could not be read")
+		}
 		return false
 	}
+	// the body is in: the turn that follows may take longer than the body's deadline
+	_ = http.NewResponseController(w).SetReadDeadline(time.Time{})
 	if err := json.Unmarshal(body, into); err != nil {
 		var te *json.UnmarshalTypeError
 		switch {

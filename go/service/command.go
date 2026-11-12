@@ -184,9 +184,14 @@ func rootsText(r []string) string {
 	return strings.Join(r, ", ")
 }
 
+// idleTimeout bounds how long a kept-alive connection may wait for its next request. Without it (net/http falls back
+// to ReadTimeout, which is unset) an idle connection was kept for ever, so any local program could hold as many open
+// connections, each a goroutine and a file descriptor, as it liked.
+var idleTimeout = 120 * time.Second
+
 // Serve runs the server on ln until ctx is cancelled, then shuts down.
 func Serve(ctx context.Context, s *Server, ln net.Listener) error {
-	hs := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 15 * time.Second}
+	hs := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 15 * time.Second, IdleTimeout: idleTimeout}
 	errc := make(chan error, 1)
 	go func() { errc <- hs.Serve(ln) }()
 	select {
