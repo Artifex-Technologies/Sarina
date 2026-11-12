@@ -1,0 +1,32 @@
+[package]
+name = "sarina-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+license = "MPL-2.0"
+
+# cargo-fuzz (nightly):   cd rust/fuzz && cargo +nightly fuzz run shellparse
+# Every target's body is sarina::fuzzing::*, which tests/properties.rs also runs on stable.
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.10"
+sarina = { path = "../sarina" }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "shellparse"
+path = "fuzz_targets/shellparse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bash_guards"
+path = "fuzz_targets/bash_guards.rs"
+test = false
+doc = false
+bench = false
