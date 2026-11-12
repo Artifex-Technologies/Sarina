@@ -73,15 +73,41 @@ func Load(path string) (*Index, error) {
 	if n > 1<<32 || n*uint64(x.per) > 1<<36 {
 		return nil, fmt.Errorf("vecindex: implausible size %d", n)
 	}
+	// nothing is reserved for more than the file still holds: a damaged count (2^32 passes the check above) would
+	// otherwise ask for about 52 GB before the first read fails; the error is the one the read would give
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	rest := uint64(max(st.Size()-int64(len(magic)+24), 0))
+	take := func(need uint64) error {
+		if need <= rest {
+			rest -= need
+			return nil
+		}
+		if rest == 0 {
+			return io.EOF
+		}
+		return io.ErrUnexpectedEOF
+	}
+	if err := take(n * 8); err != nil {
+		return nil, err
+	}
 	x.ids = make([]uint64, n)
-	x.norms = make([]float32, n)
-	x.codes = make([]byte, int(n)*x.per)
 	if err := binary.Read(r, binary.LittleEndian, x.ids); err != nil {
 		return nil, err
 	}
+	if err := take(n * 4); err != nil {
+		return nil, err
+	}
+	x.norms = make([]float32, n)
 	if err := binary.Read(r, binary.LittleEndian, x.norms); err != nil {
 		return nil, err
 	}
+	if err := take(n * uint64(x.per)); err != nil {
+		return nil, err
+	}
+	x.codes = make([]byte, int(n)*x.per)
 	if _, err := io.ReadFull(r, x.codes); err != nil {
 		return nil, err
 	}

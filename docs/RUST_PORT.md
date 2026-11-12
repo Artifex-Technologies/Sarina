@@ -235,12 +235,14 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   "exceeded max depth", the session reader's type error names `map[string]jsontext.Value`, and a number out of float64's
   range reads as 0 (not null) with the error while the rest is still read. `gojson.rs` follows Go 1.27; the siblings'
   ports may differ from their own Go builds in these texts (for their boards).
-- **vecindex, two Go faults not carried over.** `New(65536, ...)` passes Go's dimension check and never ends (its block
-  loop appends blocks of size 0 until memory runs out; a damaged index file with that dimension does the same to `Load`):
-  the port refuses 65,536 as an unsupported dimension. Go's `Load` allocates the slices for the file's vector count
-  before reading (2^32 vectors pass its size check: about 52 GB); the port checks the count against the bytes that
-  follow first, with the same error. Both hit the owner's PC through the first fixture writer (killed by the kernel's
-  OOM killer, 2026-11-11 23:34); the fixture now stays clear of them.
+- **vecindex: two Go faults, fixed in Go too (2026-11-12), so Go and Rust agree.** `New(65536, ...)` passed Go's
+  dimension check and never ended (its block loop appended blocks of size 0 until memory ran out; a damaged index file
+  with that dimension did the same to `Load`): both refuse 65,536 as an unsupported dimension now. Go's `Load` allocated
+  the slices for the file's vector count before reading (2^32 vectors passed its size check: about 52 GB); both check
+  the count against the bytes the file still holds first, with the error the read would give (`EOF`, `unexpected EOF`).
+  Both hit my PC through the first fixture writer (killed by the kernel's OOM killer, 2026-11-11 23:34); the fixture
+  now records both cases, and Go's own tests (`TestDimension65536Refused`, `TestLoadCountBeyondFile`) run them bounded
+  in time and allocation.
 - **vecindex levels depend on the CPU.** Go's amd64 `math.Exp` has an FMA path and a plain one, which differ in the last
   bit now and then; the levels (not saved in the file) follow, so Go itself can search a moved index very slightly
   differently. The port takes Go's path on the same CPU (AVX and FMA), so the fixture holds on this PC and on CI.

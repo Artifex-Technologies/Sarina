@@ -99,9 +99,7 @@ func TestParityVecindex(t *testing.T) {
 	for _, c := range []struct {
 		dim, bits int
 		seed      int64
-	}{{1, 2, 0}, {2, 3, 0}, {1<<16 - 1, 2, 0}, {1<<16 + 1, 4, 0}, {0, 4, 0}} {
-		// not 1<<16: Go's New accepts it and then never ends (its block loop appends blocks of size 0 until memory runs
-		// out); the port refuses it (docs/RUST_PORT.md)
+	}{{1, 2, 0}, {2, 3, 0}, {1<<16 - 1, 2, 0}, {1 << 16, 2, 0}, {1 << 16, 4, 0}, {1<<16 + 1, 4, 0}, {0, 4, 0}} {
 		_, err := New(c.dim, c.bits, c.seed)
 		cases = append(cases, parity.Case{Fn: "New", In: []any{c.dim, c.bits, c.seed}, Out: parity.Err(err)})
 	}
@@ -198,9 +196,10 @@ func TestParityVecindex(t *testing.T) {
 						at  int
 						val []byte
 					}{
-						// never a count Go accepts that is large: Go's Load allocates the count's slices before it reads
-						// (2^32 vectors pass its size check and cost 52 GB), see docs/RUST_PORT.md
-						{6, []byte{1, 0, 0, 0}}, {10, []byte{3, 0, 0, 0}}, {22, []byte{1, 0, 0, 0, 1, 0, 0, 0}}, {22, []byte{255, 255, 255, 255, 255, 255, 255, 255}}, {22, []byte{0, 4, 0, 0, 0, 0, 0, 0}}, {0, []byte("SVEC2")}} {
+						// a dimension of 65,536 and counts far beyond the file (2^32 passes the size check): refused before
+						// anything is reserved for them
+						{6, []byte{1, 0, 0, 0}}, {6, []byte{0, 0, 1, 0}}, {10, []byte{3, 0, 0, 0}}, {22, []byte{1, 0, 0, 0, 1, 0, 0, 0}}, {22, []byte{0, 0, 0, 0, 1, 0, 0, 0}},
+						{22, []byte{255, 255, 255, 255, 0, 0, 0, 0}}, {22, []byte{0, 0, 0, 64, 0, 0, 0, 0}}, {22, []byte{255, 255, 255, 255, 255, 255, 255, 255}}, {22, []byte{0, 4, 0, 0, 0, 0, 0, 0}}, {0, []byte("SVEC2")}} {
 						d := append([]byte(nil), data...)
 						copy(d[patch.at:], patch.val)
 						p := filepath.Join(dir, "patched.vec")

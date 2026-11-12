@@ -4,10 +4,9 @@
 //! `math.Exp` (`gomath`), and all arithmetic is float32 or float64 exactly where Go's is, so an index Go saved searches
 //! the same here (testdata/parity/vecindex.json).
 //!
-//! On purpose, not as Go: a dimension of exactly 65,536 passes Go's check and then never ends (its block loop appends
-//! blocks of size 0 until memory runs out); here it is refused as an unsupported dimension. And a file's vector count is
-//! checked against the bytes that follow before anything is allocated (Go allocates the count's slices first: 2^32
-//! vectors pass its size check and cost about 52 GB); the error is the same either way.
+//! As Go (since both were fixed there on 2026-11-12): a dimension of 65,536 is refused (the block loop would otherwise
+//! append blocks of size 0 forever), and a file's vector count is checked against the bytes that follow before anything
+//! is allocated (2^32 passes the size check), with the error the read would give.
 
 use crate::gomath;
 use crate::gorand::Rand;

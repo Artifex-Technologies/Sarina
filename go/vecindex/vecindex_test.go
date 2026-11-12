@@ -1,11 +1,15 @@
 package vecindex
 
 import (
+	"encoding/binary"
 	"math"
 	"math/rand"
+	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"testing"
+	"time"
 )
 
 // clustered unit-ish vectors, like real embeddings: a few topics plus noise
@@ -206,5 +210,93 @@ func BenchmarkSearch100k(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ix.Search(q, 10, nil)
+	}
+}
+
+// bounded runs f and stops the whole test binary if it has not returned within a few seconds: the faults below used to
+// loop or allocate without end, and a hung test must not take the machine's memory with it.
+func bounded(t *testing.T, what string, f func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() { f(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		panic(what + " did not return")
+	}
+}
+
+// header is an index file's head: magic, dimension, bits, seed and vector count, then body.
+func header(dim, bits uint32, n uint64, body []byte) []byte {
+	b := []byte(magic)
+	b = binary.LittleEndian.AppendUint32(b, dim)
+	b = binary.LittleEndian.AppendUint32(b, bits)
+	b = binary.LittleEndian.AppendUint64(b, 9)
+	b = binary.LittleEndian.AppendUint64(b, n)
+	return append(b, body...)
+}
+
+// 65,536 used to pass the check and then append blocks of size 0 forever (New and Load of such a file).
+func TestDimension65536Refused(t *testing.T) {
+	want := "vecindex: dimension 65536 is not supported"
+	for _, bits := range []int{2, 4} {
+		bounded(t, "New(65536)", func() {
+			if _, err := New(1<<16, bits, 1); err == nil || err.Error() != want {
+				t.Errorf("New(65536, %d): %v", bits, err)
+			}
+		})
+	}
+	if x, err := New(1<<16-1, 2, 1); err != nil || len(x.blocks) != 16 {
+		t.Fatalf("65535 must still work: %v", err)
+	}
+	p := filepath.Join(t.TempDir(), "d.vec")
+	if err := os.WriteFile(p, header(1<<16, 2, 0, nil), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bounded(t, "Load of dimension 65536", func() {
+		if _, err := Load(p); err == nil || err.Error() != want {
+			t.Errorf("Load: %v", err)
+		}
+	})
+}
+
+// A vector count larger than the file holds is refused before anything is reserved for it (2^32 passes the size check
+// and used to ask for about 52 GB), with the error the read gives.
+func TestLoadCountBeyondFile(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		n    uint64
+		body int
+		want string
+	}{
+		{1 << 32, 0, "EOF"},
+		{1 << 32, 100, "unexpected EOF"},
+		{1<<32 - 1, 13, "unexpected EOF"},
+		{1 << 30, 0, "EOF"},
+		{3, 3 * 8, "EOF"},     // the ids are there, the norms are not
+		{3, 3*8 + 3*4, "EOF"}, // the codes are missing
+		{3, 3*8 + 3*4 + 2, "unexpected EOF"},
+		{3, 3*8 + 3*4 + 3, ""}, // whole
+		{1<<32 + 1, 0, "vecindex: implausible size 4294967297"},
+	} {
+		p := filepath.Join(dir, "c.vec")
+		if err := os.WriteFile(p, header(2, 2, c.n, make([]byte, c.body)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		var err error
+		bounded(t, "Load of a large count", func() { _, err = Load(p) })
+		runtime.ReadMemStats(&after)
+		got := ""
+		if err != nil {
+			got = err.Error()
+		}
+		if got != c.want {
+			t.Errorf("count %d, %d bytes: %q, want %q", c.n, c.body, got, c.want)
+		}
+		if grew := after.TotalAlloc - before.TotalAlloc; grew > 1<<20 {
+			t.Errorf("count %d, %d bytes: Load allocated %d bytes", c.n, c.body, grew)
+		}
 	}
 }

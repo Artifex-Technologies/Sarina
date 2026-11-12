@@ -42,7 +42,8 @@ const rounds = 3
 
 // New makes an empty index. bits is 2 or 4; seed fixes the rotation (keep it with a saved index; Save does).
 func New(dim, bits int, seed int64) (*Index, error) {
-	if dim < 2 || dim > 1<<16 {
+	// below 1<<16: the block loop starts at 1<<15, and 1<<16 would leave a remainder it fills with blocks of size 0 forever
+	if dim < 2 || dim >= 1<<16 {
 		return nil, fmt.Errorf("vecindex: dimension %d is not supported", dim)
 	}
 	if bits != 2 && bits != 4 {
