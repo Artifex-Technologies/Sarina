@@ -389,8 +389,7 @@ impl Router {
     pub fn request_up(&self) -> Result<String, String> {
         let mut st = self.lock();
         let base = st.pending.unwrap_or(st.cur);
-        for next in base + 1..self.opt.config.tiers.len() {
-            let t = &self.opt.config.tiers[next];
+        for (next, t) in self.opt.config.tiers.iter().enumerate().skip(base + 1) {
             if !t.enabled {
                 continue;
             }
