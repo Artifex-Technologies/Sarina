@@ -1,0 +1,42 @@
+[package]
+name = "sarina-voiced"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+description = "Sarina's voice service (Chatterbox Turbo through ONNX Runtime), a port of labyrinth-voiced"
+publish = false
+
+[lib]
+name = "sarina_voiced"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sarina-voiced"
+path = "src/main.rs"
+
+[dependencies]
+# Python's json, whitespace, letters and paths, shared with the voice client (packaging/voice)
+sarina-voice = { path = "../voice" }
+# ONNX Runtime, loaded at run time from the library given (the voice venv's GPU build, or the system's onnxruntime-cpu):
+# nothing is downloaded at build time. The C API asked for is version 17, so any onnxruntime from 1.17 on works; no newer
+# feature is needed, and leaving them out also keeps ort from setting an execution-provider selection policy.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "cuda"] }
+# the same tokenizer library as Python's tokenizers 0.23 (the Python package is a binding of this crate), with the same
+# regular-expression engine (Oniguruma)
+tokenizers = { version = "0.23", default-features = false, features = ["onig"] }
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+# The side-by-side checks (tests/) drive the library through this; it is never installed.
+[[bin]]
+name = "sarina-voiced-parity"
+path = "src/bin/parity.rs"
+required-features = ["parity"]
+
+[features]
+parity = []

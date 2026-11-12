@@ -1,0 +1,70 @@
+//! sarina-voiced: Sarina's voice service, the Rust port of labyrinth-voiced (see the crate README).
+
+use sarina_voice::py::{self, Env};
+use sarina_voiced::{server, voice};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+const HELP: &str = "sarina-voiced (labyrinth-voiced): Sarina's voice service (a user service). Keeps the Chatterbox Turbo voice
+ready and makes speech on request, one sentence at a time, so the first sentence can be played while the next is still
+being made.
+
+  talk to it:   a unix socket, $XDG_RUNTIME_DIR/labyrinth-sarina/voiced.sock (private to you), JSON lines
+    {\"op\":\"speak\",\"text\":\"Hello. How are you?\"}  ->  {\"wav\":\"/run/user/1000/labyrinth-sarina/voiced-1.wav\",\"text\":\"Hello.\"} per sentence, then {\"done\":true}
+                                                      (the caller plays and deletes each file)
+    {\"op\":\"ping\"}    ->  {\"ok\":true,\"loaded\":false,\"engine\":\"chatterbox\"}
+    {\"op\":\"warm\"}    ->  {\"ok\":true} at once; loads the models in the background (the panel sends it when you start to talk)
+    {\"op\":\"unload\"}  ->  frees the graphics card memory now
+  The models load on the first request (a few seconds) and are freed after 10 minutes without one (LABYRINTH_VOICE_IDLE
+  seconds), so the card is free for games and for Sarina's language model.
+
+  Where things are: models in ~/.local/share/labyrinth/tts/chatterbox/onnx (fp16 by default, LABYRINTH_VOICE_DTYPE), the
+  voice to copy in ~/.local/share/labyrinth/tts/chatterbox/voice/sarina.wav (LABYRINTH_VOICE_REFERENCE; about 10 seconds
+  of clean speech; it never leaves this computer). ONNX Runtime and the CUDA libraries come from the voice's venv,
+  ~/.local/share/labyrinth/tts/gpu-venv (LABYRINTH_VOICE_VENV; LABYRINTH_VOICE_ORT names the library itself).
+  LABYRINTH_VOICE_PIPELINE=0 makes the sentences one after the other instead of writing the next while one is decoded.
+";
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 && (args[1] == "-h" || args[1] == "--help") {
+        println!("{}", HELP);
+        return;
+    }
+    let env = Env::from_process();
+    let run = PathBuf::from(py::join(
+        &match env.truthy("XDG_RUNTIME_DIR") {
+            Some(d) => d.to_string(),
+            None => format!("/run/user/{}", py::getuid()),
+        },
+        "labyrinth-sarina",
+    ));
+    let sock =
+        env.get("LABYRINTH_VOICED_SOCKET").map(|s| s.to_string()).unwrap_or_else(|| run.join("voiced.sock").to_string_lossy().into_owned());
+    let dir = py::expanduser(env.get_or("LABYRINTH_VOICE_DIR", "~/.local/share/labyrinth/tts/chatterbox"), &env);
+    let idle = match py::parse_float(env.get_or("LABYRINTH_VOICE_IDLE", "600")) {
+        Some(v) => v,
+        None => {
+            eprintln!("voiced: LABYRINTH_VOICE_IDLE is not a number");
+            std::process::exit(1);
+        }
+    };
+    let reference =
+        env.get("LABYRINTH_VOICE_REFERENCE").map(|s| s.to_string()).unwrap_or_else(|| py::join_all(&[&dir, "voice", "sarina.wav"]));
+    let settings = voice::Settings {
+        run,
+        dir: PathBuf::from(&dir),
+        dtype: env.get_or("LABYRINTH_VOICE_DTYPE", "fp16").to_string(),
+        idle,
+        reference,
+        venv: PathBuf::from(py::expanduser(env.get_or("LABYRINTH_VOICE_VENV", "~/.local/share/labyrinth/tts/gpu-venv"), &env)),
+        pipeline: env.get("LABYRINTH_VOICE_PIPELINE") != Some("0"),
+        seed: env.truthy("LABYRINTH_VOICE_SEED").and_then(|s| s.parse::<u128>().ok()),
+        pronunciations: py::expanduser("~/.config/labyrinth/pronunciations", &env),
+    };
+    let service = Arc::new(voice::Service::new(settings));
+    if let Err(e) = server::serve(service, &sock) {
+        eprintln!("voiced: {}: {}", sock, e);
+        std::process::exit(1);
+    }
+}

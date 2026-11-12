@@ -57,3 +57,4 @@ progress.md
 
 # The voice programs' Rust build folder
 packaging/voice/target/
+packaging/voiced/target/
