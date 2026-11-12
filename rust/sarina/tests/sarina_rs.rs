@@ -95,16 +95,58 @@ fn sarina_rs_starts_as_go_does() {
     check.eq("sigpipe ignored", &json!(String::from_utf8_lossy(&out.stdout).contains("sigpipe_ignored=1\n")), &json!(true));
     // no Go build: 127 and what is missing; a relative SARINA_GO_BINARY is not taken
     let mut cmd = Command::new(tmp.join("sarina"));
-    cmd.arg("memory-status").env("SARINA_GO_BINARY", tmp.join("absent")).env("SARINA_CONTAINED_PATH", tmp.join("none"));
+    cmd.arg("chat").env("SARINA_GO_BINARY", tmp.join("absent")).env("SARINA_CONTAINED_PATH", tmp.join("none"));
     let out = cmd.output().unwrap();
     check.eq(
         "missing go build",
         &json!([out.status.code(), String::from_utf8_lossy(&out.stderr)]),
         &json!([
             127,
-            format!("sarina: memory-status is not in the Rust build yet, and the Go build ({}) is missing\n", tmp.join("absent").display())
+            format!("sarina: chat is not in the Rust build yet, and the Go build ({}) is missing\n", tmp.join("absent").display())
         ]),
     );
+    // a ported command runs here (the stand-in is never started); one with an argument that is not UTF-8 goes to Go
+    let home = tmp.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let ported = |args: &[&[u8]], no_go: bool| {
+        let mut cmd = Command::new(tmp.join("sarina"));
+        cmd.args(args.iter().map(|a| std::ffi::OsStr::from_bytes(a)))
+            .current_dir(&tmp)
+            .env("HOME", &home)
+            .env("SARINA_GO_BINARY", &go)
+            .env("SARINA_CONTAINED_PATH", tmp.join("none"));
+        if no_go {
+            cmd.env("SARINA_RS_NO_GO", "1");
+        }
+        let out = cmd.output().unwrap();
+        json!([out.status.code(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)])
+    };
+    check.eq("ported", &ported(&[b"memory-show"], false), &json!([0, "No curated memory is stored.\n", ""]));
+    check.eq("ported, no Go", &ported(&[b"memory-show"], true), &json!([0, "No curated memory is stored.\n", ""]));
+    let away = ported(&[b"memory-show", b"\xff"], false);
+    check.eq("not UTF-8 handed over", &json!(away[1].as_str().unwrap().starts_with("arg=memory-show\n")), &json!(true));
+    for c in ["memory-review", "chat", "version", "help", "--help", "-h", ""] {
+        let args: Vec<&[u8]> = if c.is_empty() { vec![] } else { vec![c.as_bytes()] };
+        check.eq(
+            format!("{c:?} with SARINA_RS_NO_GO"),
+            &ported(&args, true),
+            &json!([2, "", format!("sarina-rs: {c} is not ported (SARINA_RS_NO_GO is set)\n")]),
+        );
+    }
+    for c in [
+        "memory-status",
+        "memory-show",
+        "session-search",
+        "memory-review-list",
+        "memory-review-approve",
+        "memory-review-reject",
+        "session-migrate",
+        "limbo-profiles",
+        "limbo-validate",
+        "tiers",
+    ] {
+        check.eq(format!("{c} in the table"), &json!(sarina::cli::ported(c).is_some()), &json!(true));
+    }
     check.eq("relative go build", &json!(entry::go_binary(&|_: &str| b"sarina-go".to_vec())), &json!(entry::GO_BUILD.as_bytes()));
     let _ = std::fs::remove_dir_all(&tmp);
     check.done("sarina-rs");

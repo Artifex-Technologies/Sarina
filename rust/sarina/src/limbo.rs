@@ -445,8 +445,11 @@ impl Client {
             return Err(Error("Limbo did not return a valid run id".into()));
         }
         let poll = if self.poll_interval.is_zero() { Duration::from_secs(3) } else { self.poll_interval };
-        // boot plus teardown plus the command's own limit, with slack
-        let deadline = Instant::now() + Duration::from_secs((timeout_seconds + 300).max(0) as u64);
+        // boot plus teardown plus the command's own limit, with slack; Go's `time.Duration(timeoutSeconds+300) *
+        // time.Second` wraps for a huge --timeout (a deadline already past), and so does this, without a panic
+        let nanos = timeout_seconds.wrapping_add(300).wrapping_mul(1_000_000_000);
+        let now = Instant::now();
+        let deadline = if nanos < 0 { Some(now) } else { now.checked_add(Duration::from_nanos(nanos as u64)) };
         loop {
             let data = self.request(&p, "GET", &format!("/v1/runs/{id}"), None)?;
             if let Any::Object(m) = &data {
@@ -454,7 +457,7 @@ impl Client {
                     return Ok(parse_result(m));
                 }
             }
-            if Instant::now() > deadline {
+            if deadline.is_some_and(|d| Instant::now() > d) {
                 return Err(Error(format!("run {id} did not finish in time")));
             }
             std::thread::sleep(poll);
@@ -508,7 +511,7 @@ fn clamp_timeout(args: &BTreeMap<String, Any>) -> i64 {
     n.clamp(10, 900)
 }
 
-fn empty_with_skipped(n: usize) -> String {
+pub fn empty_with_skipped(n: usize) -> String {
     format!("no usable validation profiles; {n} skipped as invalid")
 }
 

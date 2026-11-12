@@ -1,5 +1,5 @@
-# The Rust port of the Go core (rust/, docs/RUST_PORT.md): the Go fixtures current, format, lints, and the tests (every
-# fixture compared with the Rust code, the properties, the fuzz targets' bodies).
+# The Rust port of the Go core (rust/, docs/RUST_PORT.md): the Go fixtures current, format, lints, the tests (every
+# fixture compared with the Rust code, the properties, the fuzz targets' bodies), and both builds' CLI side by side.
 name: rust
 on:
   push:
@@ -26,3 +26,9 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - working-directory: rust
         run: cargo test --locked
+      # both builds on the same command lines (rust/parity/cli-differential.py): the commands sarina-rs runs itself
+      - name: the CLI differential
+        run: |
+          (cd go && go build -o "$RUNNER_TEMP/sarina-go" ./cmd/sarina)
+          (cd rust && cargo build --locked --bin sarina-rs)
+          python3 -I rust/parity/cli-differential.py --go "$RUNNER_TEMP/sarina-go" --rs rust/target/debug/sarina-rs

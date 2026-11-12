@@ -1,7 +1,8 @@
 //! Go's `flag` package as Sarina's CLI uses it (`flag.NewFlagSet(name, flag.ContinueOnError)`): the same syntax (`-x`, `--x`,
 //! `-x=v`, `-x v`, `--` ending the flags), the same messages, and on a mistake the same "Usage of NAME:" listing on the
-//! set's output. From Limbo's port (`rust/limbo/src/cli/flags.rs`); string, bool and int flags so far, the other kinds
-//! come with the commands that use them.
+//! set's output. From Limbo's port (`rust/limbo/src/cli/flags.rs`); string, bool, int and repeatable string (a `flag.Var`
+//! list) flags, a usage header of the command's own (a set whose `Usage` prints a line before `PrintDefaults`), and Go's
+//! back-quoted names in a usage text; the other kinds come with the commands that use them.
 
 use crate::gotext::quote;
 
@@ -10,6 +11,8 @@ pub enum Kind {
     Str,
     Bool,
     Int,
+    /// a `flag.Var` whose `Set` appends (each use adds a value; Go's usage calls it "value")
+    List,
 }
 
 struct Flag {
@@ -23,6 +26,10 @@ struct Flag {
 pub struct FlagSet {
     name: &'static str,
     flags: Vec<Flag>,
+    /// a `Usage` of the command's own: this line, then `PrintDefaults` (None: "Usage of NAME:")
+    header: Option<String>,
+    /// the values a List flag was given
+    lists: Vec<(&'static str, Vec<String>)>,
 }
 
 /// What a parse failed with: Go's error text. The usage has already gone to `stderr`.
@@ -30,7 +37,23 @@ pub const HELP: &str = "flag: help requested";
 
 impl FlagSet {
     pub fn new(name: &'static str) -> FlagSet {
-        FlagSet { name, flags: vec![] }
+        FlagSet { name, flags: vec![], header: None, lists: vec![] }
+    }
+
+    /// A `fs.Usage` that prints `line` and then the flags.
+    pub fn usage_header(&mut self, line: &str) {
+        self.header = Some(line.to_owned());
+    }
+
+    /// A repeatable flag (Go's `fs.Var` with a value that appends).
+    pub fn list(&mut self, name: &'static str, usage: &'static str) {
+        self.flags.push(Flag { name, kind: Kind::List, usage, default: String::new(), value: String::new() });
+        self.lists.push((name, vec![]));
+    }
+
+    /// What a List flag was given, in order.
+    pub fn values(&self, name: &str) -> Vec<String> {
+        self.lists.iter().find(|(n, _)| *n == name).map(|(_, v)| v.clone()).unwrap_or_default()
     }
 
     pub fn string(&mut self, name: &'static str, default: &str, usage: &'static str) {
@@ -63,9 +86,13 @@ impl FlagSet {
         self.get(name).value.parse().unwrap_or(0)
     }
 
-    /// Go's `defaultUsage`: "Usage of NAME:" ("Usage:" for a set without a name) and `PrintDefaults`, flags sorted by name.
+    /// Go's `defaultUsage`: "Usage of NAME:" ("Usage:" for a set without a name) and `PrintDefaults`, flags sorted by name;
+    /// or the set's own header line and `PrintDefaults`.
     pub fn usage(&self, out: &mut Vec<u8>) {
-        if self.name.is_empty() {
+        if let Some(h) = &self.header {
+            out.extend_from_slice(h.as_bytes());
+            out.push(b'\n');
+        } else if self.name.is_empty() {
             out.extend_from_slice(b"Usage:\n");
         } else {
             out.extend_from_slice(format!("Usage of {}:\n", self.name).as_bytes());
@@ -74,10 +101,10 @@ impl FlagSet {
         fl.sort_by(|a, b| a.name.cmp(b.name));
         for f in fl {
             let mut b = format!("  -{}", f.name);
-            match f.kind {
-                Kind::Str => b.push_str(" string"),
-                Kind::Int => b.push_str(" int"),
-                Kind::Bool => {}
+            let (name, usage) = unquote_usage(f);
+            if !name.is_empty() {
+                b.push(' ');
+                b.push_str(&name);
             }
             // a one-letter flag without a type name stays on one line
             if b.len() <= 4 {
@@ -85,9 +112,9 @@ impl FlagSet {
             } else {
                 b.push_str("\n    \t");
             }
-            b.push_str(&f.usage.replace('\n', "\n    \t"));
+            b.push_str(&usage.replace('\n', "\n    \t"));
             let zero = match f.kind {
-                Kind::Str => "",
+                Kind::Str | Kind::List => "",
                 Kind::Bool => "false",
                 Kind::Int => "0",
             };
@@ -160,7 +187,12 @@ impl FlagSet {
                     let Some(v) = value else {
                         return Err(self.fail(format!("flag needs an argument: -{name}"), stderr));
                     };
-                    if kind == Kind::Int {
+                    if kind == Kind::List {
+                        if let Some((_, vals)) = self.lists.iter_mut().find(|(n, _)| *n == name) {
+                            vals.push(v.clone());
+                        }
+                        self.flags[i].value = v;
+                    } else if kind == Kind::Int {
                         match parse_int(&v) {
                             Ok(x) => self.flags[i].value = x.to_string(),
                             Err(why) => {
@@ -180,6 +212,25 @@ impl FlagSet {
             }
         }
     }
+}
+
+/// Go's `UnquoteUsage`: the first back-quoted word of the usage is the value's name (and loses its quotes), else the
+/// kind's name ("" for a bool).
+fn unquote_usage(f: &Flag) -> (String, String) {
+    let u = f.usage;
+    if let Some(i) = u.find('`') {
+        if let Some(j) = u[i + 1..].find('`') {
+            let name = &u[i + 1..i + 1 + j];
+            return (name.to_owned(), format!("{}{name}{}", &u[..i], &u[i + 2 + j..]));
+        }
+    }
+    let name = match f.kind {
+        Kind::Str => "string",
+        Kind::Int => "int",
+        Kind::Bool => "",
+        Kind::List => "value",
+    };
+    (name.to_owned(), u.to_owned())
 }
 
 /// strconv.ParseBool

@@ -1,8 +1,9 @@
 //! `sarina-rs`: the Rust build's entry point, to be installed as `/usr/bin/sarina` (and its `sarina-service` and
 //! `sarina-gui` names). As Go's `cmd/sarina`: the name it was started as picks the command, then Heimdall's containment
-//! lock is checked before anything runs. No command is ported to this binary yet, so every command line is handed,
-//! unchanged, to the Go build by `execve`: the Go build replaces this process, with the caller's arguments (`argv[0]`
-//! too), environment, working folder, standard streams and signal dispositions.
+//! lock is checked before anything runs. The commands in `cli::ported` run here; every other command line (and one that
+//! is not UTF-8) is handed, unchanged, to the Go build by `execve`: the Go build replaces this process, with the caller's
+//! arguments (`argv[0]` too), environment, working folder, standard streams and signal dispositions. With
+//! `SARINA_RS_NO_GO` set (the differential runs, rust/parity) a command not ported fails instead of reaching Go.
 
 use std::ffi::{CString, OsString};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -45,7 +46,41 @@ fn main() {
         eprint!("{}", entry::contained_message(&why));
         std::process::exit(3);
     }
-    hand_over(&argv, args.first().map(Vec::as_slice).unwrap_or_default());
+    let command = args.first().map(Vec::as_slice).unwrap_or_default();
+    if let Some(run) = std::str::from_utf8(command).ok().and_then(sarina::cli::ported) {
+        let words: Option<Vec<String>> = args[1..].iter().map(|a| String::from_utf8(a.clone()).ok()).collect();
+        if let Some(words) = words {
+            std::process::exit(run_here(run, &words));
+        }
+    }
+    if std::env::var_os("SARINA_RS_NO_GO").is_some() {
+        eprintln!("sarina-rs: {} is not ported (SARINA_RS_NO_GO is set)", sarina::gotext::lossy(command));
+        std::process::exit(2);
+    }
+    hand_over(&argv, command);
+}
+
+/// A ported command, its output written as it comes. A write to a closed pipe on standard output or error ends the
+/// process by SIGPIPE, as Go's runtime does (`os.epipecheck`: the default disposition put back and the signal raised,
+/// even when the caller started it with SIGPIPE ignored; the differential checks both).
+fn run_here(run: sarina::cli::Command, args: &[String]) -> i32 {
+    use std::io::Write;
+    let mut env = sarina::cli::Env {
+        sink: Some(Box::new(|fd, b| {
+            let r = if fd == 1 { std::io::stdout().lock().write_all(b) } else { std::io::stderr().lock().write_all(b) };
+            if matches!(&r, Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe) {
+                // SAFETY: the default disposition restored and the signal raised; the process ends here as Go's would.
+                unsafe {
+                    libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+                    libc::raise(libc::SIGPIPE);
+                }
+            }
+        })),
+        ..Default::default()
+    };
+    let code = run(&mut env, args);
+    env.flush();
+    code
 }
 
 /// Replaces this process with the Go build, the command line exactly as it came.
