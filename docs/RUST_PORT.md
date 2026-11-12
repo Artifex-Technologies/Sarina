@@ -12,7 +12,7 @@ equal.
 | Step | What | State |
 | --- | --- | --- |
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
-| 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: see "Ported" |
+| 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | open |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | open |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
@@ -182,14 +182,47 @@ reaches it any more (dead code is a risk).
 
 ## Ported
 
-| Rust (`rust/sarina/src`) | Go | Fixture | Comparisons |
+| Rust (`rust/sarina/src`) | Go | Fixture | Cases |
 | --- | --- | --- | ---: |
+| `shellparse.rs` | `tools/shellparse` | `shellparse.json` | 7,475 |
+| `tools/destructive.rs`, `gopath.rs` | `tools/destructive.go`, `realRoot` and `within` (`fsutil.go`), `filepath.Rel` | `destructive.json` | 10,154 (about 46,000 verdicts) |
+| `tools/schema.rs`, `goany.rs`, `gotext/parsefloat.rs` | `tools/schema.go` (`ValidateArgs`), `strconv.ParseFloat` | `schema.json` | 2,073 |
+| `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
-(filled in as each piece lands)
+How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
+
+- **Shell corpus** (`parity.ShellCorpus`): every string literal of `shellparse_test.go`, `destructive_test.go`, `bash_test.go`
+  and `exfil_test.go` (read with go/parser, so a new test input joins the fixture by itself), hand-written hostile lines
+  (bytes that are not UTF-8, NUL, every unterminated form, ANSI-C escapes running past their width), every prefix of four
+  long lines, the nesting limit (40) from both sides for each way of nesting, here-documents whose body is read inside a
+  substitution for a command of an outer frame, and generated lines (fixed seeds).
+- **Guard corpus** (`parity.GuardCorpus`): lines from the guards' own vocabulary: chains of wrappers with their options,
+  shells with every flag form, interpreters with their code flags and risky or harmless code, git's subcommands and
+  flags, the script depth limit (6) and the wrapper depth limit (8) from both sides, fork bombs and downloads into shells
+  by pipeline, and short-flag lookups on words with a run-time part.
+- `CheckDestructive` is recorded under five workspace roots: none, a folder that exists on no machine (so the fixture is
+  the same everywhere), the same with a trailing slash, a relative one, and `/`.
+- **Mutation runs**: deliberate changes to the Rust code (a limit off by one, an escape's width, a flag letter, a missing
+  rounding bit, ...) must make the fixture fail. Shell parser 11 of 12, guards 13 of 14, schema and ParseFloat 15 of 17
+  caught (after the corpus was widened for the ones that first got through); each change left was checked to be
+  equivalent (it cannot change any answer). One gap is known: the guards' fixture uses workspace roots that do not
+  exist, so dropping the `realRoot` half of `outsideRoot` (a workspace reached through a link) is not caught there; the
+  `EvalSymlinks` fixture on a made-up tree (next, with `testguard`) covers it.
+- **Properties and fuzzing**: `rust/fuzz` targets `shellparse`, `bash_guards`, `parse_float` (cargo-fuzz, nightly; not run on
+  this PC, which has no nightly toolchain); their bodies run on stable in `tests/properties.rs` over random bytes,
+  shell-shaped lines and every fixture line with bytes changed. What must hold: no panic; a line that does not parse is
+  refused by both guards; a privileged or destructive program, or one built at run time, is refused wherever it sits;
+  `sudo` before anything is refused; ParseFloat agrees with Rust's parser on plain decimals and round-trips every finite
+  float; ValidateArgs never adds a key and is idempotent.
 
 ## Differences from Go, on purpose or accepted
 
-(none yet)
+- **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
+  (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
+  are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such
+  lines 400 times and accepts any reason Go gave. Whether something is refused never depends on the order.
+- **Paths**: `realRoot` follows links with a port of Go's `EvalSymlinks` (not `std::fs::canonicalize`, which differs for
+  relative paths and missing parts).
 
 ## Running the tests
 
@@ -203,4 +236,18 @@ SARINA_PARITY_UPDATE=1 go test ./... -run Parity   # after a deliberate change: 
 
 ## Resume here
 
-Step 1 is under way (see "Ported").
+Done (2026-11-11 night): phase 0; the workspace and the fixture writer; `shellparse`, the bash guards and `ValidateArgs`
+with ParseFloat, each with its fixture, a mutation run, properties and fuzz targets; the CI job (`.github/workflows/rust.yml`:
+the Go fixtures current, fmt, clippy `-D warnings`, the tests). No existing Go file was changed.
+
+Next, in this order:
+
+1. The rest of step 1's leaves: `chymaera/internal/pyfmt` (Python's repr for JSON values with `json.Number`), `testguard`
+   (on a made-up folder tree: links in and out, `SARINA_TEST_ROOT`, `TMPDIR`; needs `gopath::abs` and `eval_symlinks`
+   proved by their own fixture first), `internal/version` (the `VERSION` file), `flagx` (needs Go's `flag` package: Limbo's
+   `rust/limbo/src/cli/flags.rs` is the start).
+2. The other pure checks in `tools`: `IsSecretPath`/`secretName` (`secret.go`), `ExfilRisk`/`PrivateReference`
+   (`exfil.go`), the private-folder list (`private.go`, on a made-up home).
+3. Step 2's formats, starting with what Heimdall reads: llm's message types, `config`'s data structures and tolerant
+   loaders, `session` (writer byte for byte, reader of every file Go reads), `session/redact.go`. This needs a `gojson`
+   module (Go's decoder and encoder: take Limbo's `gojson.rs`, which already has Go's error texts and escaping).

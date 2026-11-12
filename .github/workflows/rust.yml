@@ -1,0 +1,28 @@
+# The Rust port of the Go core (rust/, docs/RUST_PORT.md): the Go fixtures current, format, lints, and the tests (every
+# fixture compared with the Rust code, the properties, the fuzz targets' bodies).
+name: rust
+on:
+  push:
+    paths: ["rust/**", "go/**", "testdata/**", ".github/workflows/rust.yml"]
+  pull_request:
+    paths: ["rust/**", "go/**", "testdata/**", ".github/workflows/rust.yml"]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+      - name: the Go fixtures are current
+        working-directory: go
+        run: go test ./... -run Parity
+      - run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+      - working-directory: rust
+        run: cargo fmt --all --check
+      - working-directory: rust
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - working-directory: rust
+        run: cargo test --locked
