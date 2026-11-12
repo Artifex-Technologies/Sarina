@@ -2,6 +2,7 @@
 //! the `Env`'s outputs, returning the exit status; the table and the hand-over of unported commands to the Go build come
 //! with the `sarina-rs` binary (docs/RUST_PORT.md "The switch").
 
+pub mod entry;
 pub mod memorycmd;
 
 pub const EXIT_OK: i32 = 0;

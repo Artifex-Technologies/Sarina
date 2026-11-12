@@ -11,6 +11,11 @@ publish = false
 name = "sarina"
 path = "src/lib.rs"
 
+# the Rust build's entry point (docs/RUST_PORT.md "The plan for `sarina-rs`"): hands every command to the Go build for now
+[[bin]]
+name = "sarina-rs"
+path = "src/bin/sarina-rs.rs"
+
 # Exact versions on purpose (the lock file pins the rest).
 [dependencies]
 # Go's regexp: \b \w \d \s are written out as Go's ASCII classes where a pattern uses them, so Unicode's Perl classes stay out;
