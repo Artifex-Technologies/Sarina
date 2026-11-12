@@ -308,6 +308,12 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **Limbo's over-long answer has its own error, in Go and Rust (2026-11-12).** Go read 1 MiB and cut the rest, so a
   long answer read as "Limbo returned something that is not JSON"; both now say "Limbo's answer is larger than 1048576
   bytes; not read". The limbo tools and commands (`integration.go`) come with step 4's tools.
+- **The model clients' answers are bounded with their own errors, in Go now (2026-11-12); the Rust llm port must do the
+  same.** Go cut a non-streamed answer at 256 MiB silently (it then read as damaged JSON) and read a streamed answer
+  without any bound, line or total. Now an answer past `maxResponseBytes` (256 MiB) is refused, streamed or not ("the
+  model's answer is larger than ... bytes; not read"), and so is a streamed line past `maxStreamLine` (16 MiB); the
+  model-description probe (`discover.go`) treats an answer past 4 MiB as none. The MCP client was already bounded (a
+  line of at most `MaxLineBytes`, 2 KiB of stderr kept).
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such
@@ -361,7 +367,7 @@ loopback server (`go/internal/parity/rawserver.go`, `tests/common` `raw_server`)
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
 1. The rest of step 3 (guard's full scan and embed's answer limit are done): `llm` (the OpenAI-compatible and Anthropic clients, streaming; TLS with `rustls` for the online
-   tiers), `mcp` (stdio servers); the limbo tools with step 4. Every read from another process gets a bound,
+   tiers; with Go's new answer bounds), `mcp` (stdio servers; already bounded); the limbo tools with step 4. Every read from another process gets a bound,
    in Go and Rust both (the owner's rule: security first), with a clear error when it is exceeded.
 2. The rest of `skills` (discovery, the skill tool, the long-skill library) with step 4's tools.
 

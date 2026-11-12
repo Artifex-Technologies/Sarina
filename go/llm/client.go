@@ -229,7 +229,7 @@ func (c *Client) once(ctx context.Context, body []byte, req Request, on func(Str
 		}
 		return turn, false, nil
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 256<<20))
+	b, err := readBounded(resp.Body, maxResponseBytes)
 	if err != nil {
 		return fail(err, false)
 	}
@@ -414,6 +414,42 @@ func (a *streamAcc) merge(index int, id, name, args string) {
 	s.args.WriteString(args)
 }
 
+// The bounds on what is read from a model server (another process, maybe another machine): an answer of at most
+// maxResponseBytes (256 MiB; a long answer is a few hundred KiB), streamed or not, and a streamed line of at most
+// maxStreamLine (16 MiB; a line is one small chunk of the answer). Past either, the answer is refused with its own error
+// rather than read on without end. Variables so tests can set them low.
+var (
+	maxResponseBytes int64 = 256 << 20
+	maxStreamLine          = 16 << 20
+)
+
+// readBounded reads all of r, refusing more than max bytes.
+func readBounded(r io.Reader, max int64) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > max {
+		return nil, &BackendError{Message: fmt.Sprintf("the model's answer is larger than %d bytes; not read", max)}
+	}
+	return b, nil
+}
+
+// readLine is bufio.Reader.ReadString('\n') refusing a line longer than max bytes.
+func readLine(br *bufio.Reader, max int) (string, error) {
+	var line []byte
+	for {
+		part, err := br.ReadSlice('\n')
+		if len(line)+len(part) > max {
+			return "", &BackendError{Message: fmt.Sprintf("a line of the model's streamed answer is longer than %d bytes; not read", max)}
+		}
+		line = append(line, part...)
+		if err != bufio.ErrBufferFull {
+			return string(line), err
+		}
+	}
+}
+
 func readStream(r io.Reader, touch func(), on func(StreamEvent)) (*Turn, error) {
 	emit := func(e StreamEvent) {
 		if on != nil {
@@ -422,7 +458,8 @@ func readStream(r io.Reader, touch func(), on func(StreamEvent)) (*Turn, error) 
 	}
 	acc := &streamAcc{byIndex: map[int]int{}}
 	emit(StreamEvent{Type: "message_start"})
-	br := bufio.NewReaderSize(r, 64<<10)
+	lr := &io.LimitedReader{R: r, N: maxResponseBytes + 1}
+	br := bufio.NewReaderSize(lr, 64<<10)
 	var data []string
 	done := false
 
@@ -448,7 +485,14 @@ func readStream(r io.Reader, touch func(), on func(StreamEvent)) (*Turn, error) 
 	}
 
 	for !done {
-		line, err := br.ReadString('\n')
+		line, err := readLine(br, maxStreamLine)
+		if lr.N <= 0 {
+			return nil, &BackendError{Message: fmt.Sprintf("the model's streamed answer is larger than %d bytes; not read", maxResponseBytes)}
+		}
+		var be *BackendError
+		if errors.As(err, &be) {
+			return nil, err
+		}
 		if line != "" {
 			touch()
 			line = strings.TrimRight(line, "\r\n")

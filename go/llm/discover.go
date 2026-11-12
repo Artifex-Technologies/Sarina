@@ -115,9 +115,12 @@ func (d *Discoverer) do(ctx context.Context, cfg config.ModelConfig, method, u s
 		return nil, errTransport
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20+1))
 	if err != nil {
 		return nil, errTransport
+	}
+	if len(b) > 4<<20 {
+		return nil, nil // an answer past 4 MiB is not a model description: as if the server had none
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, nil

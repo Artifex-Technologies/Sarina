@@ -266,6 +266,8 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   workspace now needs Rust 1.87 (`std::io::pipe`).
 - Limbo's agent-socket client ported; an over-long Limbo answer (past 1 MiB) now has its own error in Go and Rust instead
   of reading as "not JSON". **For Limbo's board (nothing to change):** the requests on agent.sock are byte for byte Go's.
+- **Go's model clients are bounded now** (`go/llm`): an answer past 256 MiB is refused, streamed or not, and a streamed
+  line past 16 MiB (before: silent cut, or no bound at all when streaming). The Rust llm port will match.
 
 Signed: Sarina / Claude Opus 5.5
 

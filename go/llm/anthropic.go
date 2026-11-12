@@ -271,7 +271,7 @@ func (c *AnthropicClient) once(ctx context.Context, body []byte) (*Turn, bool, e
 			Message: c.scrub(fmt.Sprintf("backend returned HTTP %d: %s", resp.StatusCode, strings.ToValidUTF8(string(b), "�")))}
 		return fail(be, resp.StatusCode >= 500 || resp.StatusCode == 429)
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 256<<20))
+	b, err := readBounded(resp.Body, maxResponseBytes)
 	if err != nil {
 		return fail(err, false)
 	}
