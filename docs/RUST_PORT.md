@@ -15,7 +15,7 @@ equal.
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
-| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; next the agent loop |
+| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop's answer checks, secret redactor and pure helpers (prompt, limits, clearing, compaction without a model); next the agent loop itself against a scripted model |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
 
@@ -261,6 +261,8 @@ reaches it any more (dead code is a risk).
 | `tiers/` (config, guard, resource, cli, wake, router), `heimdall.rs` (`request_grant`), `gotime.rs` (formatting) | `tiers`: `Parse` (Go 1.27's struct reading: the type errors, keys in any case, duplicates), `Load`, `FromEscalation`, `RedactSecrets`, `LooksLikeCapture`, `Sanitize`, `Pressure`, the meminfo and nvidia-smi parsers, `BuildPrompt`, `Command`, the claude CLI's and the wake command's environments, `offMachine`, `estimateTokens`; the claude CLI client (its own process group, the timeout and a cancel, every kind of answer, the output bounds) against a stand-in in bash's builtins; the wake runner (URLs, the shell command under the permission model); the `Router` in 37 scenarios against scripted model servers and a scripted Heimdall (health probes and their cache, escalations, refusals, redactions, confirmation, /tier up and down, wake, the grant gate with requests filed, the CLI tier and its cap, status, the session record merged across turns); `heimdall.RequestGrant` | `tiers.json`, `tiersrun.json` | 548 + 328 |
 | `tools/fsutil.rs` (`state_dir`), `memory/mod.rs` (`session_dir`) | `tools.StateDir` on a made-up tree (links out, in, dangling, at each level) | `statedir.json` | 216 |
 | `memory/review.rs`, `cli/memorycmd.rs` | `memory/review.go` (the transcript, the array in a model's answer, proposals with the gate, `Propose` against a scripted model, the queue file through Load, Add, Pending, Get, Approve, Reject and the summary) and `cli/memorycmd.go`'s commands that need no model (memory-status, memory-show, session-search, memory-review-list, -approve, -reject, with their flags, usage errors and help) | `review.json`, `memorycmd.json` | 236 + 31 |
+| `agent/claims.rs`, `agent/secrets.rs`, `goregexp.rs` (`\p{L}`, `\p{N}`) | `agent/claims.go` (every answer check and carry-on nudge, the texts sent back word for word; `isCommand` on a made-up PATH, `deniedReadable` and `taskInsteadOfFile` on a made-up workspace) and `secrets.go` (`toolTexts`, `secretValues`, `hideSecretsRead`, the stream redactor): on every string literal of `claims_test.go`, `secrets_test.go` and `acceptance_test.go` (and the same with Unicode spacing, in capitals, broken at full stops, cut in half, and answers at each check's limits) in 52 tasks from those tests; a task whose tool output is a JSON object run four times in Go (map order), every distinct answer kept | `claims.json` | 1.9 million answers checked |
+| `agent/limits.rs`, `agent/prompt.rs`, `agent/compact.rs` | `limits.go` (tokens, the window from a model's name, `TakeSnapshot`, `Cost`, `checkBudget`), `prompt.go` and `lessons.go` (the system prompt's parts, the lessons file's rules, the guidance files on a made-up tree, the git snapshot against a stand-in git in bash, the curated-memory block), `clear.go`, `compact.go` (`reduce`: snip, fold, reactive), the pure parts of `notes.go` and `summarize.go` (coverage, `normaliseNotes`, the transcript, `tailWithin`, `cleanSummary`); session files compared by sha256 | `agentpure.json` | 368 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -444,6 +446,18 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **The review queue keeps two Go behaviours.** A queue file that does not read as JSON counts as empty, so the next
   proposal overwrites it (only proposals are lost; memory itself is never written over an unreadable file); and of two
   entries with the same id only the first can be approved or rejected (ids are 12 random hex digits).
+- **The git snapshot and the guidance files are read with a bound, in Go and Rust (2026-11-12).** Each git command of the
+  snapshot a session starts with was read whole (a status of millions of changed files, of which 2,000 characters are
+  kept), and a workspace's CLAUDE.md (and the other guidance files) was read whole into memory: a sparse file of
+  gigabytes costs nothing on disk. Both read the first MiB now (`maxSnapshotOutput`, `maxGuidanceBytes`;
+  `TestGitSnapshotOutputIsBounded`, `TestGuidanceFileIsReadWithABound`, both failing on the old code). A guidance file
+  whose first MiB is all spaces now reads as empty (before: its text after them).
+- **The answer checks' `\p{L}` and `\p{N}` are the regex crate's tables** (Unicode 16) where Go has its own; a letter
+  added in a later Unicode version could count as a word in one and not the other (`inventedHistory`'s words of four
+  letters or more). A lessons rule cut at 300 bytes inside a character keeps the bad bytes in Go and has U+FFFD here: the
+  same once written to JSON (the model's request, the session file). `secretValues` sorts values of the same length
+  stably (Go's sort is stable only up to twelve values), and `toolTexts` walks an object in key order (Go: random); the
+  fixture accepts any answer Go gave.
 - **grep_search's patterns are read by `goregexp`.** Go's regexp syntax is translated to the regex crate's with Go's
   meaning, and constructs it does not translate (named groups, POSIX classes, `\pL`, `\Q...\E`) are refused; Go
   accepts them. A pattern Go refuses is refused here too, but the error after "invalid pattern: " is the regex crate's,
@@ -559,18 +573,29 @@ failed before: the claude CLI's and nvidia-smi's output bounded (`f8f0f56`); ses
 the workspace against a planted `.port_sessions` link, and session_search kept off the folder it pointed at (`15627ba`).
 The switch plan is written ("The plan for `sarina-rs`" above). CI green through `483a1cf` (`7b40b29` failed only `cargo fmt --check`).
 
+Third session of 2026-11-12 (evening): the agent loop begun. Step (a): `claims.go`'s checks and nudges and `secrets.go`
+(`agent/claims.rs`, `agent/secrets.rs`; `claims.json`, 1.9 million answers in 52 tasks, mutation 17 of 17 after the
+corpus was widened). Step (b): the pure helpers (`agent/limits.rs`, `prompt.rs`, `compact.rs`: limits, the prompt with
+lessons, guidance and the git snapshot, curated memory, clearing, snipping and folding, the notes' format, the summary's
+cleaning; `agentpure.json`, 368 comparisons, mutation 26 of 26). Go fixes, each in Go and Rust with a Go test that failed
+before: the git snapshot's and the guidance files' reads bounded (`8d97da5`). CI green through the format fix after it.
+
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. **The agent loop** (`go/agent`, 4,868 lines with claims.go's 1,426), against a scripted fake model only, in four
-   steps, each with its fixture: (a) `claims.go`'s checks, pure functions of the answer, the prompt, the messages and the
-   file history, on a corpus of the Go tests' own inputs (`claims_test.go`, `bugfix_test.go`) plus generated answers;
-   (b) the pure helpers: `prompt.go`, `window.go`, `limits.go`, `secrets.go` (the stream redactor), `lessons.go`,
-   `clear.go`; (c) `compact.go`, `notes.go`, `summarize.go`, `plan.go`, `subagent.go` against the scripted model; (d)
-   `agent.go`'s drive loop: rounds, tool dispatch through the ported registry, the voice no-think rule and the "carry on"
-   nudges (`4490363`), cancellation, budgets and limits, resume. Proof for (c) and (d): the same scripted answers (a
-   RawSeq model server, the tiers fixture's helpers) given to both, and compared are every request body sent, the
-   events, the session file after each turn and the result. The tiers Router is the agent's Completer and TierTracker
-   (`begin_turn`, `record`).
+1. **The agent loop**, steps (c) and (d) (step (a) and (b) are done): (c) `compact.go`'s and `notes.go`'s model-side parts
+   (`notesCompact`, `compactHistory`, `llmCompact` with its retries and breaker, `updateNotes` and its cadence,
+   `vettedNotes`), `plan.go`'s agent methods (decisions, `onPlanAction`, narrowing) and `subagent.go`, against the
+   scripted model; (d) `agent.go`'s drive loop: rounds, tool dispatch through the ported registry, the voice no-think rule
+   and the "carry on" nudges (in the order `drive` tries them: claimsNoTools, toolNamedNotCalled, fixPending,
+   unreproducedFailure, unreadDefinition, deniedReadable, undecompiledFunction, announcedNotDone, then the one claim
+   check in its order), cancellation, budgets and limits, resume (`appendReplays`). Proof for (c) and (d): a Go parity
+   test that runs the Go agent against a RawSeq model server (scripted OpenAI answers, streamed and not) on a temporary
+   workspace with a fixed `Now`, recording every request body, the events, the result and the saved session file (the
+   random session id written as SID); the Rust test runs the same scripts. The pure pieces (a) and (b) are ready for it:
+   `agent::claims`, `agent::secrets` (`StreamRedactor`), `agent::limits`, `agent::prompt`, `agent::compact`
+   (`reduce`, `fold_history`, `clear_tool_outputs`, the notes' coverage). The tiers Router is the agent's Completer and
+   TierTracker (`begin_turn`, `record`). Still missing in Rust for the loop: a session id (`session.NewID`, 16 random
+   bytes as a UUID4 in hex) and the agent's `Options` (Go's `agent.Options`).
 2. `sarina-rs` as planned above, with `memory-*`, `session-search` and the limbo commands as its first Rust commands,
    once the agent loop is equal.
 
