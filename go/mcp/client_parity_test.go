@@ -135,7 +135,7 @@ func mcpScenarios() []mcpScenario {
 			Ops: []mcpOp{{Op: "init", TimeMs: t}}},
 		{Dir: "lines", Replies: []string{init1, `@xline:9437184 ` + r(2, `{"after":"long"}`), fmt.Sprintf("@text:3:%d", MaxLineBytes-frame),
 			fmt.Sprintf("@text:4:%d", MaxLineBytes-frame+1)},
-			Ops: []mcpOp{{Op: "init", TimeMs: t}, {Op: "raw", Name: "a", TimeMs: t}, {Op: "call", Name: "exact", TimeMs: t}, {Op: "call", Name: "over", TimeMs: 1000}}},
+			Ops: []mcpOp{{Op: "init", TimeMs: t}, {Op: "raw", Name: "a", TimeMs: t}, {Op: "call", Name: "exact", TimeMs: t}, {Op: "call", Name: "over", TimeMs: t}}},
 		{Dir: "flood", Replies: []string{`@flood:5000 ` + init1, r(2, `{"still":"here"}`)},
 			Ops: []mcpOp{{Op: "init", TimeMs: 10000}, {Op: "raw", Name: "a", TimeMs: 10000}}},
 		{Dir: "env", Env: map[string]string{"FAKE_VAR": "over"}, Cwd: "work", Replies: []string{init1}, Ops: []mcpOp{{Op: "init", TimeMs: t}}},
