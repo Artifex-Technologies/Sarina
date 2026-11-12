@@ -129,7 +129,10 @@ fn agent_pure_helpers_match_go() {
     let mhome = format!("{top}/mem/home");
     let agent_mem: Vec<String> = (0..7).map(|i| format!("Project rule {i}: use cargo for builds number {i}")).collect();
     write(&format!("{mws}/.port_sessions/memory/AGENT_MEMORY.md"), agent_mem.join("\n§\n").as_bytes());
-    write(&format!("{mhome}/.sarina/memory/USER.md"), "The owner likes short answers\n§\nPrefers Rust over Go\n§\nUses Hyprland".as_bytes());
+    write(
+        &format!("{mhome}/.sarina/memory/USER.md"),
+        "The owner likes short answers\n§\nPrefers Rust over Go\n§\nUses Hyprland".as_bytes(),
+    );
     std::env::set_var("SHELL", "/usr/bin/zsh");
 
     let u = Usage {
