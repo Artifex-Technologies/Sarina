@@ -11,6 +11,7 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/config"
 	"github.com/Artifex-Technologies/Sarina/go/llm"
 	"github.com/Artifex-Technologies/Sarina/go/session"
+	"github.com/Artifex-Technologies/Sarina/go/tools"
 )
 
 // Session notes: a running, structured summary of the session kept in
@@ -87,8 +88,13 @@ func remapCoverage(c, prefix, cut int) int {
 	return min(c, prefix)
 }
 
+// notesPath is "" when the session folder may not be used (tools.StateDir): nothing is read or written then.
 func (a *Agent) notesPath(id string) string {
-	return filepath.Join(a.opts.Runtime.SessionDirectory, id+".notes.md")
+	dir, err := tools.StateDir(a.opts.Runtime.CWD, a.opts.Runtime.SessionDirectory)
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, id+".notes.md")
 }
 
 // NotesPath is where the notes for a session live.
@@ -324,12 +330,16 @@ func (a *Agent) updateNotes(ctx context.Context, r *run, turn int, why string) e
 	if !ok {
 		return fmt.Errorf("notes reply had no usable sections")
 	}
-	if err := writeFileAtomic(a.notesPath(s.ID), []byte(text)); err != nil {
+	path := a.notesPath(s.ID)
+	if path == "" {
+		return fmt.Errorf("cannot write notes: the session folder leads out of the workspace")
+	}
+	if err := writeFileAtomic(path, []byte(text)); err != nil {
 		return fmt.Errorf("cannot write notes: %w", err)
 	}
 	setNotesCoverage(s, len(s.Messages))
 	r.emit(event{"type": "session_notes_updated", "turn_index": turn, "trigger": why,
-		"covered_messages": len(s.Messages), "usage_tokens": u.Total(), "path": a.notesPath(s.ID)})
+		"covered_messages": len(s.Messages), "usage_tokens": u.Total(), "path": path})
 	return nil
 }
 

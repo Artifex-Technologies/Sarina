@@ -69,6 +69,31 @@ func ResolveInRoot(root, p string) (string, error) {
 	return resolved, nil
 }
 
+// StateDir checks a folder Sarina keeps her own state in (saved sessions, their notes, scratchpads) before it is used.
+// When dir is under the workspace's own .port_sessions (where those live by default), it must resolve inside the
+// workspace, as a file tool's write must: a .port_sessions link planted in a workspace would otherwise lead the session
+// files (the whole conversation) out of it, and session_search would read whatever .json files the link pointed at
+// (found by the Rust port, 2026-11-12). Any other folder is the operator's choice and is returned as it is.
+func StateDir(root, dir string) (string, error) {
+	if root == "" || dir == "" {
+		return dir, nil
+	}
+	abs, err1 := filepath.Abs(root)
+	d, err2 := filepath.Abs(dir)
+	if err1 != nil || err2 != nil {
+		return dir, nil
+	}
+	state := filepath.Join(abs, ".port_sessions")
+	if !within(state, d) {
+		return dir, nil
+	}
+	rel, _ := filepath.Rel(abs, d)
+	if _, err := ResolveForWrite(abs, rel); err != nil {
+		return "", fmt.Errorf("no state is kept in %s: %v", d, err)
+	}
+	return dir, nil
+}
+
 // ResolveForWrite is ResolveInRoot for a path that may not exist yet. The
 // deepest existing ancestor is resolved through symlinks, so a write cannot
 // leave the workspace through a link, and a dangling symlink is refused rather

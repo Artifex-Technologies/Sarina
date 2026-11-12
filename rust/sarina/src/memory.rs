@@ -372,12 +372,14 @@ fn result(verb: &str, m: Result<Mutation, String>) -> Output {
     }
 }
 
-/// Go's `SessionDir`: where saved sessions live for a tool context.
+/// Go's `SessionDir`: where saved sessions live for a tool context; "" (nothing to search) when that is the workspace's
+/// own folder and it leads out of the workspace (`state_dir`).
 pub fn session_dir(tc: &Context) -> String {
-    if !tc.session_directory.is_empty() {
-        return tc.session_directory.clone();
+    let dir = if tc.session_directory.is_empty() { join(&tc.root, ".port_sessions/agent") } else { tc.session_directory.clone() };
+    if crate::tools::fsutil::state_dir(&tc.root, &dir).is_err() {
+        return String::new();
     }
-    join(&tc.root, ".port_sessions/agent")
+    dir
 }
 
 /// Go's `SearchSessions`: session search rendered as the tool returns it.

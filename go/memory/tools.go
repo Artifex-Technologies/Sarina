@@ -136,12 +136,17 @@ func intArg(a map[string]any, k string, def int) int {
 	return def
 }
 
-// SessionDir is where saved sessions live for a tool context.
+// SessionDir is where saved sessions live for a tool context; "" (nothing to search) when that is the workspace's own
+// folder and it leads out of the workspace (tools.StateDir).
 func SessionDir(tc *tools.Context) string {
-	if tc.SessionDirectory != "" {
-		return tc.SessionDirectory
+	dir := tc.SessionDirectory
+	if dir == "" {
+		dir = filepath.Join(tc.Root, ".port_sessions", "agent")
 	}
-	return filepath.Join(tc.Root, ".port_sessions", "agent")
+	if _, err := tools.StateDir(tc.Root, dir); err != nil {
+		return ""
+	}
+	return dir
 }
 
 // SearchSessions renders session search results the way the tool returns them.

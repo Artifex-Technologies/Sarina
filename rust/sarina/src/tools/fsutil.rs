@@ -93,6 +93,27 @@ pub fn resolve_for_write(root: &str, p: &str) -> Result<Vec<u8>, String> {
     Ok(resolved)
 }
 
+/// Go's `StateDir`: a folder Sarina keeps her own state in (saved sessions, their notes, scratchpads), checked before it
+/// is used. Under the workspace's own .port_sessions (where those live by default) it must resolve inside the workspace,
+/// as a file tool's write must, so a planted link cannot lead the session files out of it or session_search into
+/// another folder's files; any other folder is the operator's choice and is returned as it is.
+pub fn state_dir(root: &str, dir: &str) -> Result<String, String> {
+    if root.is_empty() || dir.is_empty() {
+        return Ok(dir.to_string());
+    }
+    let (Ok(abs), Ok(d)) = (gopath::abs(root.as_bytes()), gopath::abs(dir.as_bytes())) else { return Ok(dir.to_string()) };
+    let state = gopath::join(&[&abs, b".port_sessions"]);
+    if !within(&state, &d) {
+        return Ok(dir.to_string());
+    }
+    let rel = gopath::rel(&abs, &d).unwrap_or_default();
+    let abs_s = String::from_utf8_lossy(&abs).into_owned();
+    if let Err(e) = resolve_for_write(&abs_s, &String::from_utf8_lossy(&rel)) {
+        return Err(format!("no state is kept in {}: {e}", String::from_utf8_lossy(&d)));
+    }
+    Ok(dir.to_string())
+}
+
 /// Go's `relPath`: p relative to the workspace root (or its real path), else p.
 pub fn rel_path(root: &str, p: &[u8]) -> Vec<u8> {
     for base in [root.as_bytes().to_vec(), real_root(root.as_bytes())] {

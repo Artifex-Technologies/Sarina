@@ -223,7 +223,7 @@ func (a *Agent) Resume(ctx context.Context, prompt string, stored *session.Sessi
 	stored.Messages = session.RepairPairing(stored.Messages)
 	a.setPlan(stored.Plan(), nil) // plan state comes from the file, not from this process
 	a.appendReplays(stored)
-	if stored.ScratchpadDirectory == "" {
+	if _, err := tools.StateDir(a.opts.Runtime.CWD, a.opts.Runtime.ScratchpadRoot); err == nil && stored.ScratchpadDirectory == "" {
 		dir := filepath.Join(a.opts.Runtime.ScratchpadRoot, stored.ID)
 		if os.MkdirAll(dir, 0o755) == nil {
 			stored.ScratchpadDirectory = dir
@@ -239,6 +239,9 @@ func (a *Agent) newSession() (*session.Session, error) { return a.newSessionFor(
 func (a *Agent) newSessionFor(prompt string) (*session.Session, error) {
 	rt := a.opts.Runtime
 	s := &session.Session{ID: session.NewID(), Model: a.opts.Model, Runtime: rt}
+	if _, err := tools.StateDir(rt.CWD, rt.ScratchpadRoot); err != nil {
+		return nil, fmt.Errorf("cannot create scratchpad: %w", err)
+	}
 	scratch := filepath.Join(rt.ScratchpadRoot, s.ID)
 	if err := os.MkdirAll(scratch, 0o755); err != nil {
 		return nil, fmt.Errorf("cannot create scratchpad: %w", err)
@@ -764,7 +767,11 @@ func (a *Agent) finish(r *run, stop, out string, turns int, startUsage llm.Usage
 	if stop == StopPlanPending {
 		res.Plan = s.Plan().Pending
 	}
-	path, err := s.Save(a.opts.Runtime.SessionDirectory)
+	dir, err := tools.StateDir(a.opts.Runtime.CWD, a.opts.Runtime.SessionDirectory)
+	if err != nil {
+		return res, fmt.Errorf("saving session: %w", err)
+	}
+	path, err := s.Save(dir)
 	if err != nil {
 		return res, fmt.Errorf("saving session: %w", err)
 	}
