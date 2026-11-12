@@ -6,6 +6,7 @@ pub mod fuzzing;
 pub mod goany;
 pub mod goflag;
 pub mod gopath;
+pub mod goregexp;
 pub mod gotext;
 pub mod pyfmt;
 pub mod shellparse;

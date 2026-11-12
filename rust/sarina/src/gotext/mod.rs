@@ -45,6 +45,51 @@ pub fn trim_space(s: &str) -> &str {
     s.trim_matches(is_space)
 }
 
+/// Go's `utf8.DecodeRune`: the character at the start of `b` and its length, or None and 1 for a byte that does not start a
+/// valid sequence (and None and 0 for no bytes).
+pub fn decode_rune(b: &[u8]) -> (Option<char>, usize) {
+    if b.is_empty() {
+        return (None, 0);
+    }
+    let n = match b[0] {
+        0x00..=0x7f => 1,
+        0xc2..=0xdf => 2,
+        0xe0..=0xef => 3,
+        0xf0..=0xf4 => 4,
+        _ => return (None, 1),
+    };
+    match b.get(..n).and_then(|s| std::str::from_utf8(s).ok()) {
+        Some(s) => (s.chars().next(), n),
+        None => (None, 1),
+    }
+}
+
+/// Go's `strings.TrimSpace` on bytes that may not be UTF-8: Unicode spaces off both ends; a byte that is not UTF-8 stops it.
+pub fn trim_space_bytes(mut b: &[u8]) -> &[u8] {
+    while let (Some(c), n) = decode_rune(b) {
+        if !is_space(c) {
+            break;
+        }
+        b = &b[n..];
+    }
+    // from the end: the spaces are at most 3 bytes long, so try each start position
+    'outer: while !b.is_empty() {
+        for n in 1..=b.len().min(4) {
+            if let (Some(c), m) = decode_rune(&b[b.len() - n..]) {
+                if m == n {
+                    if is_space(c) {
+                        b = &b[..b.len() - n];
+                        continue 'outer;
+                    }
+                    break 'outer;
+                }
+            }
+        }
+        break;
+    }
+    b
+}
+
 /// Bytes to a string as Go reads them: each byte that does not start a valid UTF-8 sequence becomes one U+FFFD.
 pub fn lossy(b: &[u8]) -> String {
     match std::str::from_utf8(b) {

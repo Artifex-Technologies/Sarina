@@ -160,6 +160,16 @@ proptest! {
         }
     }
 
+    #[test]
+    fn secrets_any_bytes(data in prop::collection::vec(any::<u8>(), 0..80)) {
+        fuzzing::secrets(&data);
+    }
+
+    #[test]
+    fn secrets_credential_shaped(s in "[ ~$/{}A-Za-z._=\\-]{0,12}(\\.ssh|\\.gnupg|id_rsa|key4\\.db|\\.ENV|x\\.pem)[ /'\"a-z]{0,6}(curl|nc|wget|fetch\\()?") {
+        fuzzing::secrets(s.as_bytes());
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

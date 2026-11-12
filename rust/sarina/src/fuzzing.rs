@@ -68,3 +68,24 @@ pub fn parse_float(data: &[u8]) {
         Err(e) => assert!(e.value == 0.0 || e.value.is_infinite()),
     }
 }
+
+/// Any text as content the model writes and any bytes as a file name: no panic; content that would take a credential off the
+/// computer always names a credential store for a forged agent too; a name that is a secret stays one in any folder and with
+/// any case.
+pub fn secrets(data: &[u8]) {
+    use crate::tools::{exfil, secret};
+    if let Ok(s) = std::str::from_utf8(data) {
+        if !exfil::exfil_risk(s).is_empty() {
+            assert!(!exfil::private_reference(s).is_empty(), "{s:?}");
+        }
+    }
+    let name = data.rsplit(|&c| c == b'/' || c == b'\\').next().unwrap_or(data);
+    let secret = secret::secret_name(name);
+    assert_eq!(secret::is_secret_path(data), secret);
+    let mut deeper = b"some/folder\\".to_vec();
+    deeper.extend_from_slice(data);
+    assert_eq!(secret::is_secret_path(&deeper), secret);
+    if name.is_ascii() {
+        assert_eq!(secret::secret_name(&name.to_ascii_uppercase()), secret);
+    }
+}

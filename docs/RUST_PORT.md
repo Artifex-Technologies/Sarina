@@ -12,7 +12,7 @@ equal.
 | Step | What | State |
 | --- | --- | --- |
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
-| 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
+| 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | open |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | open |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
@@ -187,6 +187,7 @@ reaches it any more (dead code is a risk).
 | `shellparse.rs` | `tools/shellparse` | `shellparse.json` | 7,475 |
 | `tools/destructive.rs`, `gopath.rs` | `tools/destructive.go`, `realRoot` and `within` (`fsutil.go`), `filepath.Rel` | `destructive.json` | 10,154 (about 46,000 verdicts) |
 | `tools/schema.rs`, `goany.rs`, `gotext/parsefloat.rs` | `tools/schema.go` (`ValidateArgs`), `strconv.ParseFloat` | `schema.json` | 2,073 |
+| `tools/secret.rs`, `tools/exfil.rs`, `tools/private.rs`, `goregexp.rs` | `secret.go` (`secretName`, `IsSecretPath`, `secretGuard` with hard links), `exfil.go` (`ExfilRisk`, `PrivateReference`), `private.go` (`IsPrivate`, `privateGuard`, the credential stores with their globs), on a made-up home folder | `secrets.json` | 1,621 |
 | `testguard.rs`, `gopath.rs` | `testguard`, `filepath.EvalSymlinks`, `Abs`, `Clean`, `Join`, `Dir`, `Base` (on a made-up folder tree) | `testguard.json` | 405 |
 | `pyfmt.rs` | `chymaera/internal/pyfmt` | `pyfmt.json` | 681 |
 | `flagx.rs`, `goflag.rs` | `flagx` and Go's `flag` package (syntax, values, error texts, the usage on an error) | `flagx.json` | 1,513 |
@@ -212,12 +213,13 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   equivalent (it cannot change any answer). One gap is known: the guards' fixture uses workspace roots that do not
   exist, so dropping the `realRoot` half of `outsideRoot` (a workspace reached through a link) is not caught there; the
   `EvalSymlinks` fixture on a made-up tree (next, with `testguard`) covers it.
-- **Properties and fuzzing**: `rust/fuzz` targets `shellparse`, `bash_guards`, `parse_float` (cargo-fuzz, nightly; not run on
+- **Properties and fuzzing**: `rust/fuzz` targets `shellparse`, `bash_guards`, `parse_float`, `secrets` (cargo-fuzz, nightly; not run on
   this PC, which has no nightly toolchain); their bodies run on stable in `tests/properties.rs` over random bytes,
   shell-shaped lines and every fixture line with bytes changed. What must hold: no panic; a line that does not parse is
   refused by both guards; a privileged or destructive program, or one built at run time, is refused wherever it sits;
   `sudo` before anything is refused; ParseFloat agrees with Rust's parser on plain decimals and round-trips every finite
-  float; ValidateArgs never adds a key and is idempotent.
+  float; ValidateArgs never adds a key and is idempotent; content ExfilRisk refuses always names a store for
+  PrivateReference too; a secret file name stays one in any folder and in any case.
 
 ## Differences from Go, on purpose or accepted
 
@@ -251,8 +253,9 @@ the Go fixtures current, fmt, clippy `-D warnings`, the tests). No existing Go f
 Next, in this order:
 
 1. (Done: `pyfmt`, `testguard` with Go's filepath on a made-up tree, `version`, `flagx` with Go's flag package.)
-2. The other pure checks in `tools`: `IsSecretPath`/`secretName` (`secret.go`), `ExfilRisk`/`PrivateReference`
-   (`exfil.go`), the private-folder list (`private.go`, on a made-up home).
+2. (Done: the file tools' guards `secret.go`, `exfil.go`, `private.go`.) Next in `tools`: `ResolveInRoot` and
+   `ResolveForWrite` (`fsutil.go`, on the made-up tree), then the registry's permission gate (`permission.go`) and the
+   tool definitions' JSON (what the model is offered: byte for byte, it is part of every request).
 3. Step 2's formats, starting with what Heimdall reads: llm's message types, `config`'s data structures and tolerant
    loaders, `session` (writer byte for byte, reader of every file Go reads), `session/redact.go`. This needs a `gojson`
    module (Go's decoder and encoder: take Limbo's `gojson.rs`, which already has Go's error texts and escaping).

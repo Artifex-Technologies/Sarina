@@ -37,3 +37,10 @@ path = "fuzz_targets/parse_float.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "secrets"
+path = "fuzz_targets/secrets.rs"
+test = false
+doc = false
+bench = false
