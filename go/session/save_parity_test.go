@@ -1,6 +1,7 @@
 package session
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -23,6 +24,15 @@ func fixedDoc(t *testing.T, s *Session, id string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// cleanList is xs with the folder written as {DIR}.
+func cleanList(xs []string, dir string) []string {
+	var out []string
+	for _, x := range xs {
+		out = append(out, strings.ReplaceAll(x, dir, "{DIR}"))
+	}
+	return out
 }
 
 var tempPart = regexp.MustCompile(`\.[0-9]+\.tmp`)
@@ -61,8 +71,9 @@ func TestParitySave(t *testing.T) {
 	retired := fixedDoc(t, retiredSession(t), "retired-session")
 	var cases []parity.Case
 	docs := map[string]string{"plain": plain, "retired": retired}
-	for _, id := range []string{"a/b", "../escape", "x*y", "dots..", "-", "é", " sp ace", "x.json", ".hidden", "a\\b"} {
-		docs["id:"+id] = strings.Replace(plain, `"session_id": "fixed-session"`, `"session_id": `+strings.Replace(fmt.Sprintf("%q", id), `\\`, `\\`, 1), 1)
+	for _, id := range []string{"a/b", "../escape", "x*y", "dots..", "-", "é", " sp ace", "x.json", ".hidden", "a\\b", "x\x00y", "/abs"} {
+		q, _ := json.Marshal(id)
+		docs["id:"+id] = strings.Replace(plain, `"session_id": "fixed-session"`, `"session_id": `+string(q), 1)
 	}
 	names := make([]string, 0, len(docs))
 	for k := range docs {
@@ -106,6 +117,8 @@ func TestParitySave(t *testing.T) {
 		"slash":   {{"a.json", retired}, {"b.json", strings.Replace(retired, `"session_id": "retired-session"`, `"session_id": "x/y"`, 1)}, {"c.json", retired}},
 		"bakdir":  {{"retired-session.json", retired}, {"retired-session.json.bak/", ""}},
 		"nothing": {},
+		// a folder the run cannot write: every file fails, each is reported, none stops the others
+		"readonly": {{"a.json", retired}, {"b.json", retired}, {"c.json", plain}},
 	}
 	snames := make([]string, 0, len(setups))
 	for k := range setups {
@@ -126,11 +139,15 @@ func TestParitySave(t *testing.T) {
 					os.WriteFile(p, []byte(f.body), 0o600)
 				}
 			}
+			if sn == "readonly" {
+				os.Chmod(dir, 0o555)
+			}
 			var runs []any
 			for run := 0; run < 2; run++ {
 				r, err := MigrateDir(dir, dry)
-				runs = append(runs, []any{r.Scanned, r.Changed, r.Skipped, r.Calls, r.Results, r.Files, strings.ReplaceAll(parity.Err(err), dir, "{DIR}"), listing(dir)})
+				runs = append(runs, []any{r.Scanned, r.Changed, r.Skipped, r.Calls, r.Results, r.Files, strings.ReplaceAll(parity.Err(err), dir, "{DIR}"), listing(dir), cleanList(r.Failed, dir)})
 			}
+			os.Chmod(dir, 0o755)
 			cases = append(cases, parity.Case{Fn: "migrateDir", In: []any{sn, dry}, Out: runs})
 		}
 	}

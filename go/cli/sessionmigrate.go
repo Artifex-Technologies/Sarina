@@ -33,7 +33,13 @@ func sessionMigrateCommand(env *Env, args []string) int {
 	for _, f := range r.Files {
 		fmt.Fprintf(env.Stdout, "%s: %s\n", verb, f)
 	}
-	fmt.Fprintf(env.Stdout, "session-migrate: %d files scanned, %d %s, %d calls rewritten, %d results renamed, %d unreadable skipped\n",
-		r.Scanned, r.Changed, verb, r.Calls, r.Results, r.Skipped)
+	for _, f := range r.Failed {
+		fmt.Fprintf(env.Stderr, "session-migrate: not migrated, left as it was: %s\n", f)
+	}
+	fmt.Fprintf(env.Stdout, "session-migrate: %d files scanned, %d %s, %d calls rewritten, %d results renamed, %d unreadable skipped, %d failed\n",
+		r.Scanned, r.Changed, verb, r.Calls, r.Results, r.Skipped, len(r.Failed))
+	if len(r.Failed) > 0 {
+		return exitFailure
+	}
 	return exitOK
 }

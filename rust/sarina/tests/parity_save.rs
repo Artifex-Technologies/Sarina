@@ -104,6 +104,7 @@ fn save_matches_go() {
                     "backup" => vec![("retired-session.json", retired.clone()), ("retired-session.json.bak", b"kept".to_vec())],
                     "slash" => vec![("a.json", retired.clone()), ("b.json", slash), ("c.json", retired.clone())],
                     "bakdir" => vec![("retired-session.json", retired.clone()), ("retired-session.json.bak/", vec![])],
+                    "readonly" => vec![("a.json", retired.clone()), ("b.json", retired.clone()), ("c.json", plain.clone())],
                     _ => vec![],
                 };
                 for (name, body) in files {
@@ -118,13 +119,24 @@ fn save_matches_go() {
                     }
                 }
                 let getenv = |k: &str| if k == "SARINA_SESSION_FILE_MODE" { "0600".to_string() } else { String::new() };
+                let readonly = input[0] == "readonly";
+                if readonly {
+                    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+                }
                 let mut runs = Vec::new();
                 for _ in 0..2 {
                     let (r, err) = migrate_dir(dir.to_str().unwrap(), input[1] == true, &getenv);
                     let files = if r.files.is_empty() { Value::Null } else { json!(r.files) };
                     let err = err.unwrap_or_default().replace(dir.to_str().unwrap(), "{DIR}");
-                    runs.push(json!([r.scanned, r.changed, r.skipped, r.calls, r.results, files, err, listing(&dir, &temp)]));
+                    let ds = dir.to_str().unwrap();
+                    let failed = if r.failed.is_empty() {
+                        Value::Null
+                    } else {
+                        json!(r.failed.iter().map(|f| f.replace(ds, "{DIR}")).collect::<Vec<_>>())
+                    };
+                    runs.push(json!([r.scanned, r.changed, r.skipped, r.calls, r.results, files, err, listing(&dir, &temp), failed]));
                 }
+                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
                 json!(runs)
             }
             "migrateOdd" => {

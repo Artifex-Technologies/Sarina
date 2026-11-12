@@ -1,8 +1,10 @@
 package analysiscache
 
 import (
+	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,4 +70,28 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// A value JSON cannot hold is refused at Set and not kept, so the cache stays writable afterwards.
+func TestNonFiniteValueIsRefusedAndTheCacheStaysUsable(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c.json")
+	c := New(p, "ns")
+	if err := c.Set("a", 1.0); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []any{math.NaN(), math.Inf(1), map[string]any{"x": []any{math.Inf(-1)}}} {
+		if err := c.Set("bad", bad); err == nil || !strings.Contains(err.Error(), "not stored") {
+			t.Fatalf("%v: %v", bad, err)
+		}
+		if _, ok := c.Get("bad"); ok {
+			t.Fatal("a refused value was kept")
+		}
+	}
+	if err := c.Set("b", 2.0); err != nil {
+		t.Fatalf("the cache must stay writable: %v", err)
+	}
+	back := New(p, "ns")
+	if v, ok := back.Get("b"); !ok || v != 2.0 {
+		t.Fatalf("%v %v", v, ok)
+	}
 }

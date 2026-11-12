@@ -2,14 +2,15 @@
 //! temporary file in the same folder, its mode from SARINA_SESSION_FILE_MODE, then a rename), and every saved session of a
 //! folder brought up to date (retired tool names), the original kept as `<name>.bak` the first time.
 //!
-//! As Go, on purpose: a session id with a slash cannot be saved (Go's CreateTemp refuses the pattern), and MigrateDir stops
-//! at such a file with that error, after its backup and before the files after it; a `.bak` that exists as anything (a
-//! folder too) means no new backup; a session file that is a link is replaced by a regular file.
+//! A session id that cannot name a file (a slash, a NUL byte, empty) is refused by `save` before anything is written, and
+//! `migrate_dir` reports such a file (and any file it cannot write) and goes on with the rest. As Go: a `.bak` that
+//! exists as anything (a folder too) means no new backup, and a session file that is a link is replaced by a regular file.
 
 use super::{file_mode, parse_raw, path, Session};
 use crate::goerr;
 use crate::goos::{create_temp, mkdir_all, write_file};
 use crate::gopath;
+use crate::gotext;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 
@@ -33,9 +34,22 @@ pub fn write_atomic(dest: &[u8], id: &str, data: &[u8], getenv: &dyn Fn(&str) ->
     Ok(())
 }
 
+/// Go's `CheckID`: why `id` cannot name a session file (`<id>.json` in the session folder), or Ok.
+pub fn check_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("session id is empty".into());
+    }
+    if id.contains(['/', '\0']) {
+        return Err(format!("session id {} cannot name a file: it holds a slash or a NUL byte", gotext::quote(id)));
+    }
+    Ok(())
+}
+
 impl Session {
-    /// Go's `Save`: the session written to `<dir>/<id>.json` (the folder made first); the path.
+    /// Go's `Save`: the session written to `<dir>/<id>.json` (the folder made first); the path. An id that cannot name a
+    /// file is refused before anything is written.
     pub fn save(&self, dir: &str, getenv: &dyn Fn(&str) -> String) -> Result<String, String> {
+        check_id(&self.id)?;
         let data = self.marshal().map_err(|e| e.0)?;
         mkdir_all(dir.as_bytes())?;
         let dest = path(dir, &self.id);
@@ -54,10 +68,12 @@ pub struct MigrateReport {
     pub results: i64,
     /// names of changed files
     pub files: Vec<String>,
+    /// files that needed a change but could not be written ("<name>: why"), left as they were
+    pub failed: Vec<String>,
 }
 
-/// Go's `MigrateDir`: every `*.json` in `dir` brought up to date; with `dry_run` nothing is written. The report so far,
-/// and the error that stopped it.
+/// Go's `MigrateDir`: every `*.json` in `dir` brought up to date; with `dry_run` nothing is written. A file that cannot
+/// be written is reported in `failed` and left as it was; the error is only for a folder that cannot be read.
 pub fn migrate_dir(dir: &str, dry_run: bool, getenv: &dyn Fn(&str) -> String) -> (MigrateReport, Option<String>) {
     let mut r = MigrateReport::default();
     let rd = match std::fs::read_dir(gopath::os_path(dir.as_bytes())) {
@@ -90,27 +106,32 @@ pub fn migrate_dir(dir: &str, dry_run: bool, getenv: &dyn Fn(&str) -> String) ->
         if !m.changed() {
             continue;
         }
+        let name_s = String::from_utf8_lossy(&name).into_owned();
+        if let Err(e) = check_id(&s.id) {
+            r.failed.push(format!("{name_s}: {e}"));
+            continue;
+        }
+        if !dry_run {
+            if let Err(e) = migrate_file(&p, &raw, &s, getenv) {
+                r.failed.push(format!("{name_s}: {e}"));
+                continue;
+            }
+        }
         r.changed += 1;
         r.calls += m.calls;
         r.results += m.results;
-        r.files.push(String::from_utf8_lossy(&name).into_owned());
-        if dry_run {
-            continue;
-        }
-        let mut bak = p.clone();
-        bak.extend_from_slice(b".bak");
-        if std::fs::metadata(gopath::os_path(&bak)).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
-            if let Err(e) = write_file(&bak, &raw, 0o600) {
-                return (r, Some(e));
-            }
-        }
-        let data = match s.marshal() {
-            Ok(d) => d,
-            Err(e) => return (r, Some(e.0)),
-        };
-        if let Err(e) = write_atomic(&p, &s.id, data.as_bytes(), getenv) {
-            return (r, Some(e));
-        }
+        r.files.push(name_s);
     }
     (r, None)
+}
+
+/// Go's `migrateFile`: the original kept as `<path>.bak` the first time, then the migrated session written over it.
+fn migrate_file(p: &[u8], raw: &[u8], s: &Session, getenv: &dyn Fn(&str) -> String) -> Result<(), String> {
+    let mut bak = p.to_vec();
+    bak.extend_from_slice(b".bak");
+    if std::fs::metadata(gopath::os_path(&bak)).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
+        write_file(&bak, raw, 0o600)?;
+    }
+    let data = s.marshal().map_err(|e| e.0)?;
+    write_atomic(p, &s.id, data.as_bytes(), getenv)
 }

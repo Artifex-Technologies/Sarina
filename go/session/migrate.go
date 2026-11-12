@@ -168,10 +168,15 @@ type MigrateReport struct {
 	Scanned, Changed, Skipped int
 	Calls, Results            int
 	Files                     []string // names of changed files
+	// Failed are files that needed a change but could not be written ("<name>: why"); they are left as they were and
+	// the rest of the folder is still brought up to date.
+	Failed []string
 }
 
 // MigrateDir refreshes every <id>.json in dir. With dryRun nothing is written.
-// The first time a file changes, its original is copied to <id>.json.bak.
+// The first time a file changes, its original is copied to <id>.json.bak. A file that cannot be written (its session id
+// cannot name a file, or a write fails) is reported in Failed and left as it was; the others are still migrated. The
+// error is only for a folder that cannot be read.
 func MigrateDir(dir string, dryRun bool) (MigrateReport, error) {
 	var r MigrateReport
 	entries, err := os.ReadDir(dir)
@@ -201,26 +206,35 @@ func MigrateDir(dir string, dryRun bool) (MigrateReport, error) {
 		if !m.Changed() {
 			continue
 		}
+		if err := CheckID(s.ID); err != nil {
+			r.Failed = append(r.Failed, e.Name()+": "+err.Error())
+			continue
+		}
+		if !dryRun {
+			if err := migrateFile(path, raw, s); err != nil {
+				r.Failed = append(r.Failed, e.Name()+": "+err.Error())
+				continue
+			}
+		}
 		r.Changed++
 		r.Calls += m.Calls
 		r.Results += m.Results
 		r.Files = append(r.Files, e.Name())
-		if dryRun {
-			continue
-		}
-		bak := path + ".bak"
-		if _, statErr := os.Stat(bak); os.IsNotExist(statErr) {
-			if err := os.WriteFile(bak, raw, 0o600); err != nil {
-				return r, err
-			}
-		}
-		data, err := s.Marshal()
-		if err != nil {
-			return r, err
-		}
-		if err := writeAtomic(path, s.ID, data); err != nil {
-			return r, err
-		}
 	}
 	return r, nil
+}
+
+// migrateFile keeps the original as <path>.bak the first time, then writes the migrated session over path.
+func migrateFile(path string, raw []byte, s *Session) error {
+	bak := path + ".bak"
+	if _, statErr := os.Stat(bak); os.IsNotExist(statErr) {
+		if err := os.WriteFile(bak, raw, 0o600); err != nil {
+			return err
+		}
+	}
+	data, err := s.Marshal()
+	if err != nil {
+		return err
+	}
+	return writeAtomic(path, s.ID, data)
 }

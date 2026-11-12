@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -67,8 +68,12 @@ func (c *Cache) Get(content string) (any, bool) {
 	return v, ok
 }
 
-// Set stores a JSON-encodable value and persists the cache.
+// Set stores a JSON-encodable value and persists the cache. A value JSON cannot hold (NaN, an infinity) is refused
+// before it is stored, so one bad value never makes the cache unwritable.
 func (c *Cache) Set(content string, value any) error {
+	if _, err := session.EncodeJSON(value); err != nil {
+		return fmt.Errorf("analysiscache: value not stored: %w", err)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries[key(content)] = value

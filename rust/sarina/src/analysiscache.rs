@@ -1,8 +1,7 @@
 //! Go: `analysiscache`: a content-hash-keyed cache for expensive, deterministic analysis, `{sha256(content): value}` as
 //! JSON on disk under a namespace the caller gives; a missing, damaged or other-namespace file is an empty cache.
 //!
-//! As Go: a value Go's encoder refuses (NaN, an infinity) stays in memory once set, so every later `set` of that cache
-//! fails with the same error and the file is not written again.
+//! A value JSON cannot hold (NaN, an infinity) is refused by `set` before it is stored, so the cache stays writable.
 
 use crate::goany::Any;
 use crate::goerr;
@@ -79,8 +78,11 @@ impl Cache {
         self.entries.lock().unwrap_or_else(|e| e.into_inner()).get(&key(content)).cloned()
     }
 
-    /// Stores a value and writes the cache (to a temporary file in the same folder, then moved into place).
+    /// Stores a value (one JSON cannot hold is refused first) and writes the cache (to a temporary file in the same folder, then moved into place).
     pub fn set(&self, content: &[u8], value: Any) -> Result<(), String> {
+        if let Err(e) = gojson::any_json(&value, false) {
+            return Err(format!("analysiscache: value not stored: {e}"));
+        }
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         entries.insert(key(content), value);
         let data = encode_file(&self.namespace, &entries)?;

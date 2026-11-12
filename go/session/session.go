@@ -202,9 +202,24 @@ func FileMode(getenv func(string) string) os.FileMode {
 	return 0o600
 }
 
+// CheckID says why id cannot name a session file, or nil. The id becomes the file name <id>.json in the session folder,
+// so a slash (it would point the file into another folder) or a NUL byte is refused, and so is an empty id.
+func CheckID(id string) error {
+	switch {
+	case id == "":
+		return errors.New("session id is empty")
+	case strings.ContainsAny(id, "/\x00"):
+		return fmt.Errorf("session id %q cannot name a file: it holds a slash or a NUL byte", id)
+	}
+	return nil
+}
+
 // Save writes the session atomically (temp file + rename, mode 0600) to
-// <dir>/<id>.json and returns the path.
+// <dir>/<id>.json and returns the path. An id that cannot name a file is refused before anything is written.
 func (s *Session) Save(dir string) (string, error) {
+	if err := CheckID(s.ID); err != nil {
+		return "", err
+	}
 	data, err := s.Marshal()
 	if err != nil {
 		return "", err
