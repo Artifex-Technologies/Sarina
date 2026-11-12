@@ -144,9 +144,19 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 	s.detail(w, 500, err.Error())
 }
 
+// bodyReadTimeout bounds how long a request's body may take to arrive. net/http's ReadHeaderTimeout covers only the
+// header: without this a client that declared a body and sent less held its connection and handler for ever, also
+// when the handler never read the body (the server drains up to 256 KiB of it after the answer). The read deadline is
+// set only for a request with a body (a deadline reaching the server's background read would cancel the request: an
+// event stream's GET must live on) and cleared once readJSON has the body.
+var bodyReadTimeout = 30 * time.Second
+
 // guard wraps the whole mux with the per-request checks.
 func (s *Server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ContentLength != 0 {
+			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyReadTimeout))
+		}
 		h := w.Header()
 		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
@@ -190,9 +200,17 @@ func (s *Server) guard(next http.Handler) http.Handler {
 func (s *Server) readJSON(w http.ResponseWriter, r *http.Request, into any) bool {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
-		s.detail(w, http.StatusRequestEntityTooLarge, "request body too large")
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			s.detail(w, http.StatusRequestEntityTooLarge, "request body too large")
+		} else {
+			// cut short, too slow (bodyReadTimeout) or badly chunked: what is left of it cannot be told from a next request
+			w.Header().Set("Connection", "close")
+			s.detail(w, http.StatusBadRequest, "request body could not be read")
+		}
 		return false
 	}
+	_ = http.NewResponseController(w).SetReadDeadline(time.Time{})
 	if strings.TrimSpace(string(body)) == "" {
 		body = []byte("{}")
 	}

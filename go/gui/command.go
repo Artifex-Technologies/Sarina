@@ -124,7 +124,7 @@ func command(env *cli.Env, args []string) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 15 * time.Second}
+	hs := httpServer(srv.Handler())
 	errc := make(chan error, 1)
 	go func() { errc <- hs.Serve(ln) }()
 	select {
@@ -153,4 +153,14 @@ func openBrowser(url string) {
 		cmd = exec.Command("xdg-open", url)
 	}
 	_ = cmd.Start()
+}
+
+// idleTimeout bounds how long a kept-alive connection may wait for its next request (net/http falls back to the unset
+// ReadTimeout: an idle connection was kept for ever).
+var idleTimeout = 120 * time.Second
+
+// httpServer is the console's http.Server: the header within 15 s, idle connections closed after idleTimeout, and
+// "OPTIONS *" through the console's own handler (net/http's read its body without any deadline).
+func httpServer(h http.Handler) *http.Server {
+	return &http.Server{Handler: h, ReadHeaderTimeout: 15 * time.Second, IdleTimeout: idleTimeout, DisableGeneralOptionsHandler: true}
 }
