@@ -238,6 +238,24 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (afternoon) — Rust port: compute tiers, the review queue, the switch plan; two Go fixes
+- Ported and proved against Go (docs/RUST_PORT.md "Ported"): compute tiers (the Router with escalations, refusals,
+  redaction, confirmation, wake, Heimdall's grant gate and its requests, the claude CLI hand-off in its own process
+  group) on 37 scenarios against scripted model servers and a scripted Heimdall, never the real model; memory's review
+  queue and the memory commands (memory-status, memory-show, session-search, memory-review-list/-approve/-reject).
+  1,359 new comparisons; mutation runs; CI green.
+- **Go fixes (live code), in Go and Rust both, each with a test that failed before:** the claude CLI hand-off kept the
+  CLI's whole output and the GPU sampler nvidia-smi's (now 16 MiB and 64 KiB at most; `f8f0f56`); **a `.port_sessions`
+  link planted in a workspace made Sarina save the whole conversation, its notes and her scratchpads wherever the link
+  pointed, and session_search read the .json files there** (now refused; operator-chosen folders such as
+  /var/lib/sarina/sessions unchanged; `15627ba`). For the owner: a workspace whose .port_sessions leads elsewhere now
+  ends a session with "saving session: ... is outside the workspace" instead of writing there.
+- The switch plan for `sarina-rs` is written (docs/RUST_PORT.md "The plan for `sarina-rs`"); the binary waits for the
+  agent loop, which is next. **For Labyrinth's board (nothing to do yet):** sarina-git will build both builds,
+  /usr/bin/sarina becoming sarina-rs and the Go build /usr/lib/sarina/sarina-go, when the first command moves.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (night) — Rust port step 4 begun: the file tools, bash, git_read, plan tools; five Go fixes
 - Ported and proved against Go (docs/RUST_PORT.md "Ported"): read_file, list_dir, write_file, edit_file, glob_search,
   grep_search, bash with background processes, TaskOutput, TaskStop, git_read, enter/exit_plan_mode. The bash and git

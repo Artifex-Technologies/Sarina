@@ -15,7 +15,7 @@ equal.
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
-| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory |
+| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; next the agent loop |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
 
@@ -166,6 +166,36 @@ reinstalling the previous package. `sarina-service.service` is switched by the p
 differential run shows no difference. Commands move from Go to Rust one at a time; the Go build is dropped when nothing
 reaches it any more (dead code is a risk).
 
+### The plan for `sarina-rs` (written 2026-11-12; the binary is built once the agent loop is equal)
+
+1. **Start, in Go's order** (`cmd/sarina/main.go`): the name it was started as picks the command (`sarina-service` is
+   `service`, `sarina-gui` is `gui`: the lower-cased base name, `.exe` cut); then **Heimdall's containment lock**
+   (`trust::contained`, already ported): while it is set, everything but `version`, `help` and `--help` prints Go's
+   message and exits 3, before any command runs or is handed over, so a contained Sarina starts neither build.
+2. **Dispatch**: an argument that is not UTF-8, or a command not in the Rust table, is handed over; no command, `help`,
+   `-h` and `--help` are handed over too until the whole table is Rust (the usage lists every command, and only the Go
+   build knows them all). Go's `SARINA_CRYPTO=auto` and math switches are decided from the words given, as in `cli.Main`,
+   before a ported command runs.
+3. **The hand-over is an `execve`, not a child**: the Go build replaces the process, so its exit status, signals, stdio,
+   working folder and environment are exactly the caller's, and nothing of the Rust process stays around. `argv[0]` is
+   passed as it came (Go's alias rule then sees `sarina-service` itself) and the arguments unchanged. The program is
+   `$SARINA_GO_BINARY` when set to an absolute path, else `/usr/lib/sarina/sarina-go`; it is never searched for on PATH.
+   A missing Go build is exit 127 with "sarina: <command> is not in the Rust build yet, and the Go build (<path>) is
+   missing".
+4. **The order commands move in**: first those without a model, each already proved (version; memory-status,
+   memory-show, session-search, memory-review-list/-approve/-reject; limbo-profiles and limbo-validate; session-migrate;
+   tiers status), then `chat` and `resume` once the agent loop is equal against the scripted model, then `service` (the
+   always-on unit) after a differential run of both binaries' services on the same requests, then `gui`, then the
+   optional packages (step 5). `doctor` moves last of the core: it checks everything.
+5. **Proof before a command moves**: its fixture, then a differential run of both binaries on the same arguments,
+   environment and files (`rust/parity/cli-differential.py`, as Limbo's: stdout, stderr, exit status and every file
+   written compared byte for byte; time and random ids normalised; never the real model, the real vault or real
+   sessions).
+6. **Packaging** (`packaging/arch/PKGBUILD`, and Labyrinth's `sarina-git`; CONTRACT: cargo is already a makedepend for
+   the voice programs): both builds; `/usr/bin/sarina` is sarina-rs, `sarina-gui` and `sarina-service` are links to it,
+   the Go build is `/usr/lib/sarina/sarina-go`. `sarina-service.service` stays `ExecStart=/usr/bin/sarina-service`: until
+   `service` is ported that is one extra exec at start (about a millisecond). Going back is the previous package.
+
 ## The proof plan
 
 1. **Go fixtures**: each ported package gets a `parity_test.go` (new test files only; the Go code is not changed) that
@@ -228,6 +258,9 @@ reaches it any more (dead code is a risk).
 | `mcp/config.rs`, `mcp/manager.rs` | `mcp/config.go` (`Load`: ~/.sarina/mcp.json and SARINA_MCP_FILE's files, the workspace's only with the opt-in, the owner's signed list, the 256 KiB bound, `mcpServers` and `servers`, every problem) and `manager.go` (`Connect`, the tools offered as `mcp__<server>__<tool>` with their cleaned and scanned descriptions and classes, `Status`, calls, the result bound, a server restarted after it exits, a listing that fails on a later page, the resource tools), against the client fixture's shell stand-in server | `mcpmanager.json` | 53 comparisons |
 | `limbo.rs` (`tools`) | `limbo/integration.go`'s tools: `limbo_profiles` (the listing, its empty forms with and without skipped files) and `limbo_validate` (blank arguments, the timeout read leniently and clamped to 10..900, an infrastructure failure as an error with its metadata, Limbo's errors, the shell gate, a missing socket), against the scripted agent socket; the `limbo-*` commands come with the CLI | `limbotools.json` | 20 calls and the definitions |
 | `memory.rs` | `memory/runtime.go` and `tools.go`: the two scopes, `Add`/`Replace`/`Remove` with the gate, the limits, duplicates, the files written, the prompt blocks (whole and the most relevant entries for a task), the summary, `memory_add`/`memory_replace`/`memory_remove`/`session_search`, and the files that may not be used (a link out of the workspace, a linked folder, a link to a secret file, a named pipe, one too large, a folder); the review queue (`review.go`) comes with the CLI | `memory.json` | 24 calls, 7 file cases |
+| `tiers/` (config, guard, resource, cli, wake, router), `heimdall.rs` (`request_grant`), `gotime.rs` (formatting) | `tiers`: `Parse` (Go 1.27's struct reading: the type errors, keys in any case, duplicates), `Load`, `FromEscalation`, `RedactSecrets`, `LooksLikeCapture`, `Sanitize`, `Pressure`, the meminfo and nvidia-smi parsers, `BuildPrompt`, `Command`, the claude CLI's and the wake command's environments, `offMachine`, `estimateTokens`; the claude CLI client (its own process group, the timeout and a cancel, every kind of answer, the output bounds) against a stand-in in bash's builtins; the wake runner (URLs, the shell command under the permission model); the `Router` in 37 scenarios against scripted model servers and a scripted Heimdall (health probes and their cache, escalations, refusals, redactions, confirmation, /tier up and down, wake, the grant gate with requests filed, the CLI tier and its cap, status, the session record merged across turns); `heimdall.RequestGrant` | `tiers.json`, `tiersrun.json` | 548 + 328 |
+| `tools/fsutil.rs` (`state_dir`), `memory/mod.rs` (`session_dir`) | `tools.StateDir` on a made-up tree (links out, in, dangling, at each level) | `statedir.json` | 216 |
+| `memory/review.rs`, `cli/memorycmd.rs` | `memory/review.go` (the transcript, the array in a model's answer, proposals with the gate, `Propose` against a scripted model, the queue file through Load, Add, Pending, Get, Approve, Reject and the summary) and `cli/memorycmd.go`'s commands that need no model (memory-status, memory-show, session-search, memory-review-list, -approve, -reject, with their flags, usage errors and help) | `review.json`, `memorycmd.json` | 236 + 31 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -389,6 +422,28 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   on every use (never a secret or private file), only a regular file of at most 1 MiB is read, and a write over one that
   cannot be read is refused ("cannot use the stored memory, so nothing was changed"). `TestAgentMemoryStaysInTheWorkspace`
   saw the key's text in the prompt before the fix; `TestAgentMemoryFileMustBeRegularAndReadable` hung on the pipe.
+- **The claude CLI's and nvidia-smi's output is bounded, in Go and Rust (2026-11-12).** The claude_cli tier kept the
+  CLI's whole standard output and error output, and the GPU sampler read nvidia-smi's whole answer. Now at most 16 MiB of
+  the CLI's answer is read (a larger one fails the hand-off: "claude CLI's output is larger than 16777216 bytes; not
+  read"), only the 2,000-byte preview of its error output is kept, and nvidia-smi's answer is read to 64 KiB (more is no
+  reading) (`TestCLIOutputIsBounded`, `TestNvidiaOutputIsBounded`).
+- **Session files, notes and scratchpads stay in the workspace, in Go and Rust (2026-11-12).** The default session folder
+  (`<workspace>/.port_sessions/agent`) and scratchpad root were joined to the workspace without being resolved: a
+  `.port_sessions` link planted in a workspace made Sarina save the whole conversation, its notes and her scratchpads
+  wherever it pointed, and made session_search read the .json files there. `tools.StateDir` (Rust `state_dir`) now
+  resolves a state folder under the workspace's own .port_sessions as a file tool's write is resolved and refuses one that
+  leads out; folders the operator chose elsewhere are used as given. The operator's own commands (`resume`,
+  `session-search`, `memory-review`, `session-migrate`, `doctor`, `gui`) still take the default folder as it is: the
+  operator runs them on a folder of their choosing (`TestSessionFilesStayInTheWorkspace`, `TestSessionSearchStaysInTheWorkspace`).
+- **The tier router's HTTP probes are gohttp's.** A health probe or wake URL that redirects is not followed (Go follows
+  it); a probe for a context already cancelled is not dialled (as Go). A wake URL Go's `url.Parse` refuses reads "bad
+  wake URL: parse "...": invalid URL" (Go names the parse error). nvidia-smi is waited for at most 2 s after it ends
+  (Go waits for its output without a limit).
+- **The claude CLI hand-off's answer is not redacted.** The previews in the session record are, as in Go; the answer text
+  is the turn's content as the CLI wrote it (kept as Go; the session redactor applies to tool output, not to answers).
+- **The review queue keeps two Go behaviours.** A queue file that does not read as JSON counts as empty, so the next
+  proposal overwrites it (only proposals are lost; memory itself is never written over an unreadable file); and of two
+  entries with the same id only the first can be approved or rejected (ids are 12 random hex digits).
 - **grep_search's patterns are read by `goregexp`.** Go's regexp syntax is translated to the regex crate's with Go's
   meaning, and constructs it does not translate (named groups, POSIX classes, `\pL`, `\Q...\E`) are refused; Go
   accepts them. A pattern Go refuses is refused here too, but the error after "invalid pattern: " is the regex crate's,
@@ -494,12 +549,30 @@ library (`skills/`, its saved indexes byte for byte Go's), with skills.json read
 prompt (`315b10b`). Fixtures this part: `todo` 77, `checks` 124, `skills` 122, `mcpmanager` 53, `limbotools` 21,
 `memory` 31 comparisons; CI green through each push.
 
+Second session of 2026-11-12 (afternoon): compute tiers (`tiers/`: the config with Go 1.27's struct reading, the
+redactor and Sanitize, the sampler, the claude CLI hand-off in its own process group, the wake runner, the Router with
+Heimdall's grant gate and `RequestGrant`), proved on 37 Router scenarios against scripted model servers and a scripted
+Heimdall and on a claude stand-in in bash's builtins (`tiers.json` 548, `tiersrun.json` 328 comparisons; mutation runs 13
+of 14 each, the rest equivalent); `StateDir` (`statedir.json` 216); memory's review queue and the memory commands in a new
+`cli/` module (`review.json` 236, `memorycmd.json` 31; mutation 9 of 9). Go fixes, each in Go and Rust with a Go test that
+failed before: the claude CLI's and nvidia-smi's output bounded (`f8f0f56`); session files, notes and scratchpads kept in
+the workspace against a planted `.port_sessions` link, and session_search kept off the folder it pointed at (`15627ba`).
+The switch plan is written ("The plan for `sarina-rs`" above). CI green through `483a1cf` (`7b40b29` failed only `cargo fmt --check`).
+
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. Tiers (`tiers/`, 2,133 lines: compute tiers, sanitising, hand-offs, the grants gate), then the agent loop (against a
-   scripted fake model only), then memory's review queue with the CLI. Every read from another process keeps its
-   bound (the owner's rule), and a timed fixture case must not depend on how bytes arrive.
-2. The binary (`sarina-rs`) and the switch plan, once the agent loop is equal.
+1. **The agent loop** (`go/agent`, 4,868 lines with claims.go's 1,426), against a scripted fake model only, in four
+   steps, each with its fixture: (a) `claims.go`'s checks, pure functions of the answer, the prompt, the messages and the
+   file history, on a corpus of the Go tests' own inputs (`claims_test.go`, `bugfix_test.go`) plus generated answers;
+   (b) the pure helpers: `prompt.go`, `window.go`, `limits.go`, `secrets.go` (the stream redactor), `lessons.go`,
+   `clear.go`; (c) `compact.go`, `notes.go`, `summarize.go`, `plan.go`, `subagent.go` against the scripted model; (d)
+   `agent.go`'s drive loop: rounds, tool dispatch through the ported registry, the voice no-think rule and the "carry on"
+   nudges (`4490363`), cancellation, budgets and limits, resume. Proof for (c) and (d): the same scripted answers (a
+   RawSeq model server, the tiers fixture's helpers) given to both, and compared are every request body sent, the
+   events, the session file after each turn and the result. The tiers Router is the agent's Completer and TierTracker
+   (`begin_turn`, `record`).
+2. `sarina-rs` as planned above, with `memory-*`, `session-search` and the limbo commands as its first Rust commands,
+   once the agent loop is equal.
 
 Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself
 (it happened to a test's expected string here); build such strings from parts or check them with grep. The timed client
