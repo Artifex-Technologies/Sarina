@@ -238,6 +238,20 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (evening) — Rust port step 3: the model transport with TLS, Anthropic, discovery, MCP; three Go fixes
+- Ported and proved against Go (docs/RUST_PORT.md "Ported"): llm's `Complete` (the retry, fallback models, the timer,
+  cancellation) over a Go-like HTTP client with TLS through rustls (system authorities from Go's file list), the
+  Anthropic client, the context-window discovery, the MCP stdio client. Scripted loopback servers in both languages'
+  tests (`parity.RawSeq`), TLS against an authority each test makes; nothing reaches the internet. 220 new fixture cases
+  (42,486 in all); mutation runs; CI green.
+- **Go fixes (live code), in Go and Rust both:** the Anthropic client's errors never hold the API key now (a server's
+  error in a 200 answer echoing it, and the timeout text with a base URL holding it, kept it; `2170366`). An MCP server
+  that floods requests without reading no longer makes the client start a goroutine per request (at most 8 answers in
+  flight); a dying MCP server's stderr is waited for before naming it (`62f59ef`).
+- Nothing switched; MCP's loader and manager come with step 4's tools.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (later) — vecindex fixed in Go; Rust port step 2 finished but skills' discovery; nothing switched
 - **Go fix (live code):** `go/vecindex` now refuses dimension 65,536 (its block loop never ended) and a vector count the
   file cannot hold (2^32 asked ~52 GB before reading), as the Rust port did; Go tests for both, bounded in time and

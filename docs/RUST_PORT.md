@@ -14,7 +14,7 @@ equal.
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
-| 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **in progress**: `gohttp` (a small Go-like HTTP/1.1 client), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client and the OpenAI-compatible wire format done 2026-11-12 |
+| 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
@@ -394,14 +394,29 @@ began: `gohttp`, Heimdall's review client (`Consult`), `embed` (its answer now b
 bounded in both), `limbo`'s client (its long answers named in both) and the OpenAI-compatible wire format (Go's
 model clients bounded first), proved against Go's client on raw answers from a loopback server (`go/internal/parity/rawserver.go`, `tests/common` `raw_server`).
 
+Second half of 2026-11-12: step 3 finished but MCP's loader and manager. `llm`'s transport (`Complete` with the retry,
+fallbacks, the timer and cancellation, over `gohttp` with TLS through rustls and the system's authorities, proved on
+scripted loopback servers with a test authority each test makes), the Anthropic client, the context-window discovery
+(with Go's `url.Parse` for `serverRoot`), the MCP stdio client against one shell stand-in server; `goctx` (Go's context:
+cancel, deadline, sockets shut on cancel). Fixtures `transport` 45, `anthropic` 80, `discover` 76, `mcp` 19 cases
+(42,486 in all); mutation runs 6/6, 7/7, 8/8, 12/12 after widening; 18 fuzz targets. Bugs fixed in Go and Rust both: the
+Anthropic client's errors never hold the API key now (an error in a 200 answer and the timeout text kept it,
+`2170366`); an MCP server's own requests are answered at most eight at a time (a flood started a goroutine each), and a
+dying server's stderr is waited for (`62f59ef`). CI found two timing-dependent fixture cases on a busy runner; the
+fixtures now settle before counting requests and print the first line that moved (`bae7378`, `6a2ebc1`).
+
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. The rest of step 3: `llm`'s transport (`Complete`: the one retry, the fallback models, the idle timer that each
-   streamed chunk resets, cancellation; `gohttp` gains TLS through `rustls` for the online tiers) on top of
-   `llm/openai.rs`, then the Anthropic client (`anthropic.go`, bounded the same way) and `discover.go`; then `mcp` (stdio
-   servers; already bounded in Go). The limbo tools come with step 4. Every read from another process gets a bound, in Go
-   and Rust both (the owner's rule: security first), with a clear error when it is exceeded.
-2. The rest of `skills` (discovery, the skill tool, the long-skill library) with step 4's tools.
+1. Step 4, starting with what the agent loop needs from the tools: the tools themselves (file tools, bash with its
+   guards already ported, the rest), with `skills`' discovery, the skill tool and the long-skill library, MCP's
+   definitions loader (`mcp/config.go`) and manager (`mcp/manager.go`, which offers the servers' tools through the
+   registry), and the limbo tools; then memory, tiers, the agent loop. Every read from another process keeps its bound
+   (the owner's rule), and a timed fixture case must not depend on how bytes arrive (see the two CI fixes above).
+2. The binary (`sarina-rs`) and the switch plan, once the agent loop is equal.
+
+Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself
+(it happened to a test's expected string here); build such strings from parts or check them with grep. The timed client
+fixtures take about a minute of the Go parity run.
 
 The mutation script used in this session copied the file back with `cp`/`mv`, which leaves the restored file older
 than the last (mutant) build, so cargo did not rebuild the first test run after a series: touch the file after restoring
