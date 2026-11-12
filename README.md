@@ -285,6 +285,10 @@ packaging/arch/   Arch package, systemd unit, env template
 packaging/voice/  sarina-voice (Rust): the spoken-question programs, side-by-side tests with the Python
 ```
 
+## Version
+
+`VERSION` is Sarina's own version (1.0.0 since 2026-11-11, her first numbered release); her package is `sarina-git` `VERSION-<build number>`. How the numbers work and how to make a release: [Labyrinth_OS docs/VERSIONING.md](https://github.com/Artifex-Technologies/Labyrinth_OS/blob/main/docs/VERSIONING.md).
+
 ## License
 
 MPL 2.0. See [LICENSE](LICENSE). The licence covers the current tree, which is a

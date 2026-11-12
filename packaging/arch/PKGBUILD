@@ -9,11 +9,12 @@
 # The optional ML/voice helper is a small separate Python package
 # (python/sarina_helpers) installed alongside.
 #
-# NOTE: pkgver/source/sha256sums below are placeholders until a real
-# tagged GitHub release exists — fill them in before publishing.
+# pkgver is the release this builds: the tag v$pkgver, the version in the VERSION file
+# (Labyrinth_OS's scripts/release.sh writes both; its docs/VERSIONING.md). sha256sums is
+# still SKIP: fill it in from the release's tarball before publishing to the AUR.
 
 pkgname=sarina
-pkgver=0.1.0
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="Local-model security agent for Chymaera OS (Go core, optional Python ML/voice helper)"
 arch=('x86_64' 'aarch64')
