@@ -270,6 +270,25 @@ def wav_checks():
               "bit-exact" if exact else "max difference %.3g (SciPy's resample_poly in double precision, then float32)" % diff)
 
 
+def pcm16_checks():
+    """Each sentence's file: soundfile's 16-bit PCM against the Rust writer, on samples of every size."""
+    import numpy as np
+    import soundfile as sf
+    r = np.random.default_rng(13)
+    levels = np.arange(-31130, 31130, dtype=np.float64) / 32768
+    near = np.concatenate([np.nextafter(levels.astype(np.float32), np.float32(-1)), levels.astype(np.float32),
+                           np.nextafter(levels.astype(np.float32), np.float32(1))])
+    x = np.concatenate([((r.random(300000) * 2 - 1) * 0.95).astype(np.float32), (r.standard_normal(300000) * 1e-3).astype(np.float32), near])
+    d = os.path.join(SCRATCH, "pcm16")
+    os.makedirs(d, exist_ok=True)
+    x.tofile(os.path.join(d, "x.f32"))
+    sf.write(os.path.join(d, "py.wav"), x, 24000, subtype="PCM_16")
+    rust(["pcm16", os.path.join(d, "x.f32"), os.path.join(d, "rs.wav")])
+    with open(os.path.join(d, "py.wav"), "rb") as f1, open(os.path.join(d, "rs.wav"), "rb") as f2:
+        a, b = f1.read(), f2.read()
+    check("sentence files (16-bit PCM): %d samples" % x.size, a == b, "" if a == b else "%d bytes differ" % sum(p != q for p, q in zip(a, b)))
+
+
 SENTENCES = [
     ("Hello, I am checking that the voice still works.", 1234, 0.8),
     ("The backup finished at three, and nothing was skipped this time.", 7, 0.8),
@@ -358,12 +377,13 @@ def request_checks():
     with open(txt, "w") as f:
         f.write(REQUEST)
     voice = v.Voice()
-    voice.load()
-    for seed, plan in [(20261111, []), (5, [(0, 0), (2, 0), (2, 1)]), (77, [(1, 0), (1, 1), (1, 2)])]:
-        run = os.path.join(d, "py-%d" % seed)
+    for seed, plan in [(5, []), (20261111, []), (5, [(0, 0), (2, 0), (2, 1)]), (77, [(1, 0), (1, 1), (1, 2)])]:
+        run = os.path.join(d, "py-%d-%d" % (seed, len(plan)))
         os.makedirs(run, exist_ok=True)
         v.RUN = run
         v.random.getrandbits = lambda bits, s=seed: s
+        voice.unload()
+        voice.load()  # new sessions: the decoder's noise starts from the seed again, as in a new Rust process
         state = {"i": 0, "a": 0}
         real = voice.engine.speak
 
@@ -386,7 +406,7 @@ def request_checks():
             msgs.append({"error": str(e)[:200]})
         voice.engine.speak = real
         for pipeline in ["0", "1"]:
-            rrun = os.path.join(d, "rs-%d-%s" % (seed, pipeline))
+            rrun = os.path.join(d, "rs-%d-%s-%d" % (seed, pipeline, len(plan)))
             os.makedirs(rrun, exist_ok=True)
             out = rust(["request", txt, str(seed)], env={"RUN": rrun, "PIPELINE": pipeline, "SERVICE_DTYPE": "fp32",
                                                         "FAIL": ",".join("%d:%d" % p for p in plan)})
@@ -405,12 +425,25 @@ def request_checks():
 
 PY = None
 
+
+def fixed_clock():
+    """Re-runs this script with the wall clock fixed (tests/fixed_clock.c), so ONNX Runtime seeds the decoder's noise the same
+    in the Python and the Rust process."""
+    if os.environ.get("FIXED_REALTIME_NS"):
+        return
+    so = os.path.join(SCRATCH, "fixed_clock.so")
+    subprocess.run(["cc", "-O2", "-shared", "-fPIC", "-o", so, os.path.join(HERE, "fixed_clock.c"), "-ldl"], check=True)
+    env = dict(os.environ, LD_PRELOAD=so, FIXED_REALTIME_NS="1762905600123456789")
+    os.execve(sys.executable, [sys.executable, "-I"] + sys.argv, env)
+
+
 if __name__ == "__main__":
+    fixed_clock()
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
     if not os.path.exists(BIN):
         sys.exit("build it first: cargo build --release --features parity (in packaging/voiced)")
     PY = python_sources()
-    for name, fn in [("numpy", numpy_checks), ("text", text_checks), ("wav", wav_checks), ("engine", engine_checks), ("request", request_checks)]:
+    for name, fn in [("numpy", numpy_checks), ("text", text_checks), ("wav", wav_checks), ("pcm16", pcm16_checks), ("engine", engine_checks), ("request", request_checks)]:
         if what in (name, "all"):
             fn()
     print("\n%d failed" % len(FAILS) if FAILS else "\nall the same", "(scratch: %s)" % SCRATCH)

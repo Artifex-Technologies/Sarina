@@ -1,7 +1,10 @@
 //! sarina-voiced: Sarina's voice service, the Rust port of labyrinth-voiced (see the crate README).
 
 use sarina_voice::py::{self, Env};
-use sarina_voiced::{server, voice};
+use sarina_voiced::{client, server, voice};
+
+const DEFAULT_CHECK: &str = "The backup finished at three, and nothing was skipped this time. The snapshot from this morning is \
+                             still there if you need it. Your fan curve is back to normal, so the noise should stop.";
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -23,6 +26,10 @@ being made.
   of clean speech; it never leaves this computer). ONNX Runtime and the CUDA libraries come from the voice's venv,
   ~/.local/share/labyrinth/tts/gpu-venv (LABYRINTH_VOICE_VENV; LABYRINTH_VOICE_ORT names the library itself).
   LABYRINTH_VOICE_PIPELINE=0 makes the sentences one after the other instead of writing the next while one is decoded.
+
+  sarina-voiced check [TEXT]: asks the running voice service (this one or the Python one: the same socket) to say TEXT,
+  plays nothing, and prints when each sentence arrived, how long it is, the time to the first one and the gaps a listener
+  would have heard; each file is deleted.
 ";
 
 fn main() {
@@ -32,6 +39,7 @@ fn main() {
         return;
     }
     let env = Env::from_process();
+    let check = args.len() > 1 && args[1] == "check";
     let run = PathBuf::from(py::join(
         &match env.truthy("XDG_RUNTIME_DIR") {
             Some(d) => d.to_string(),
@@ -41,6 +49,10 @@ fn main() {
     ));
     let sock =
         env.get("LABYRINTH_VOICED_SOCKET").map(|s| s.to_string()).unwrap_or_else(|| run.join("voiced.sock").to_string_lossy().into_owned());
+    if check {
+        let text = if args.len() > 2 { args[2..].join(" ") } else { DEFAULT_CHECK.to_string() };
+        std::process::exit(client::check(&sock, &text));
+    }
     let dir = py::expanduser(env.get_or("LABYRINTH_VOICE_DIR", "~/.local/share/labyrinth/tts/chatterbox"), &env);
     let idle = match py::parse_float(env.get_or("LABYRINTH_VOICE_IDLE", "600")) {
         Some(v) => v,

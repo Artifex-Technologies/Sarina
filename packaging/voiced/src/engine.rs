@@ -123,6 +123,25 @@ fn environment(venv: &Path) -> Result<&'static ort::environment::Environment, St
     r.as_ref().map(|(e, _)| e).map_err(|e| e.clone())
 }
 
+/// Sets ONNX Runtime's seed for the random numbers inside graphs (the decoder draws noise: unseeded RandomNormalLike and
+/// RandomUniformLike nodes, which take this seed when a session is made). The Python service never set it, so its noise
+/// came from the clock; this is for the side-by-side checks, as Python's onnxruntime.set_seed. Err: this ONNX Runtime has
+/// no way to set it.
+pub fn set_graph_seed(venv: &Path, seed: i64) -> Result<(), String> {
+    environment(venv)?;
+    let api = ort::api();
+    let training = unsafe { (api.GetTrainingApi)(ort::sys::ORT_API_VERSION) };
+    if training.is_null() {
+        return Err("this ONNX Runtime has no training API, so no SetSeed".into());
+    }
+    let status = unsafe { ((*training).SetSeed)(seed) };
+    if status.0.is_null() {
+        Ok(())
+    } else {
+        Err("SetSeed failed".into())
+    }
+}
+
 /// The ONNX Runtime library this process loaded, if it did.
 pub fn loaded_library() -> Option<PathBuf> {
     ENV.get().and_then(|r| r.as_ref().ok()).map(|(_, p)| p.clone())

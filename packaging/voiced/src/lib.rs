@@ -6,6 +6,7 @@
 //! - `wav`: the reference recording in, each sentence out;
 //! - `voice`: one request, sentence by sentence, the next one written while the last is decoded;
 //! - `server`: the socket.
+pub mod client;
 pub mod engine;
 pub mod npy;
 pub mod server;

@@ -3,6 +3,7 @@
 //!   numpy exp IN OUT | numpy expall (stdin) | numpy sum FILE | numpy rng FILE    NumPy's numbers, compared
 //!   text            JSON lines on stdin, one answer per line (the text functions)
 //!   engine CASES OUTDIR       {"text","seed","temperature"} per line: tokens, timings and OUTDIR/N.wav + N.f32
+//!   pcm16 IN.f32 OUT.wav      a sentence's file as the service writes it
 //!   load WAV OUT.f32          the reference recording as the engine reads it (raw float32)
 //!   request TEXTFILE SEED     a whole speak request through the service (LABYRINTH_VOICE_* as the service reads them),
 //!                             the messages printed with the time each arrived; FAIL="i:a,i:a" makes decodes fail
@@ -290,7 +291,7 @@ fn request_cmd(textfile: &str, seed: u128) {
     };
     match svc.speak(&text, &mut send) {
         Ok(()) => println!("{:.1}\t{{\"done\": true}}", voice::elapsed_ms(t0)),
-        Err(e) => println!("{:.1}\t{{\"error\": {}}}", voice::elapsed_ms(t0), json::dumps(&json::s(&e))),
+        Err(e) => println!("{:.1}\t{{\"error\": {}}}", voice::elapsed_ms(t0), json::dumps(&json::s(&e.chars().take(200).collect::<String>()))),
     }
     println!("rss_kb\t{}", hwm_kb());
 }
@@ -302,6 +303,22 @@ fn main() {
         Some("text") => text_cmd(),
         Some("engine") => engine_cmd(&a[1], &a[2]),
         Some("request") => request_cmd(&a[1], a[2].parse().unwrap()),
+        Some("ortseed") => println!("{:?}", sarina_voiced::engine::set_graph_seed(&cfg().venv, 42)),
+        Some("gpuprobe") => {
+            // The CUDA path up to the point where a device is needed, with no device visible: the provider library, CUDA and
+            // cuDNN must load, and the error must be "no device". Refuses to run with a device visible.
+            if std::env::var("CUDA_VISIBLE_DEVICES").map(|v| !v.is_empty()).unwrap_or(true) {
+                eprintln!("gpuprobe runs only with CUDA_VISIBLE_DEVICES= (empty)");
+                std::process::exit(2);
+            }
+            let c = Config { gpu: true, dtype: "fp16".into(), venv: PathBuf::from(home(&env_or("VENV", "~/.local/share/labyrinth/tts/gpu-venv"))), ..cfg() };
+            match Engine::load(&c) {
+                Ok(_) => println!("loaded (unexpected with no device)"),
+                Err(e) => println!("{}", e),
+            }
+            println!("library: {:?}", sarina_voiced::engine::loaded_library());
+        }
+        Some("pcm16") => sarina_voiced::wav::write_pcm16(&a[2], &f32s(&a[1])).unwrap(),
         Some("load") => {
             // the reference recording as the engine reads it, as raw float32
             let v = sarina_voiced::wav::load_audio(&a[1]).unwrap();

@@ -1,6 +1,6 @@
 //! Wav files the way the Python engine read and wrote them with soundfile (libsndfile): the reference recording read as
 //! 32-bit floats (all channels averaged, brought to 24 kHz with SciPy's `resample_poly` when it has another rate), and each
-//! sentence written as 16-bit PCM, mono, 24 kHz, with libsndfile's 44-byte header and its conversion (`floor(x * 32768)`).
+//! sentence written as 16-bit PCM, mono, 24 kHz, with libsndfile's 44-byte header and its conversion (`lrintf(x * 2**31) >> 16`).
 
 use std::f64::consts::PI;
 
@@ -104,8 +104,10 @@ fn parse_wav(d: &[u8]) -> Result<(Vec<f32>, usize, u32), String> {
 }
 
 /// The sentence as libsndfile writes it for soundfile.write(path, wav, 24000, subtype="PCM_16"): a 44-byte header and
-/// each sample as floor(x * 32768), which is what soundfile's libsndfile (1.2.2) gives for every input measured (the
-/// samples are within ±0.95, so nothing clips).
+/// each sample as libsndfile (1.2.2, the one soundfile carries) converts it: to a 32-bit integer, lrintf(x * 2**31), whose top 16
+/// bits are kept (so it is floor(x * 32768) except within a hair below a step, which rounds up). Measured against soundfile on
+/// 900,000 random samples and on every value a few steps either side of each 16-bit level: no difference. The samples are
+/// within ±0.95, so nothing clips.
 pub fn write_pcm16(path: &str, wav: &[f32]) -> std::io::Result<()> {
     let data_len = (wav.len() * 2) as u32;
     let mut out = Vec::with_capacity(44 + wav.len() * 2);
@@ -122,8 +124,8 @@ pub fn write_pcm16(path: &str, wav: &[f32]) -> std::io::Result<()> {
     out.extend_from_slice(b"data");
     out.extend_from_slice(&data_len.to_le_bytes());
     for &x in wav {
-        let v = (x * 32768.0f32).floor();
-        let v = v.clamp(-32768.0, 32767.0) as i16;
+        let v = ((x * 2147483648.0f32).round_ties_even() as i64) >> 16;
+        let v = v.clamp(-32768, 32767) as i16;
         out.extend_from_slice(&v.to_le_bytes());
     }
     std::fs::write(path, out)
