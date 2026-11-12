@@ -250,6 +250,38 @@ proptest! {
         fuzzing::policy_file(format!("{{{}}}", body.join(",")).as_bytes());
     }
 
+    #[test]
+    fn guard_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::guard(&data);
+    }
+
+    /// Phrase-shaped text: the gate's own words in any case and order, with spaces, dots, format characters and bytes
+    /// that are not UTF-8 between them.
+    #[test]
+    fn guard_shaped(words in prop::collection::vec(
+        "(ignore|disregard|you|are|now|no longer|all|previous|instructions|system prompt|reveal|token|password|sk-[a-z]{20}|AKIA[A-Z]{16}|: |=|\\.|\n|\u{200B}|\u{FEFF}|\u{E0041}|é|K)",
+        0..10,
+    ), sep in "( |  |\t|\u{A0})") {
+        fuzzing::guard(words.join(&sep).as_bytes());
+    }
+
+    #[test]
+    fn cache_file_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::cache_file(&data);
+    }
+
+    /// Cache-shaped files: a namespace and entries of any JSON value, through the round trip.
+    #[test]
+    fn cache_file_shaped(ns in "(ns|NS|)", vals in prop::collection::vec(any_value(), 0..4)) {
+        let entries: Vec<String> = vals
+            .iter()
+            .enumerate()
+            .map(|(i, v)| format!("\"k{i}\":{}", sarina::gojson::any_json(v, false).unwrap_or_else(|_| "null".into())))
+            .collect();
+        let doc = format!(r#"{{"namespace":"{ns}","entries":{{{}}}}}"#, entries.join(","));
+        fuzzing::cache_file(doc.as_bytes());
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

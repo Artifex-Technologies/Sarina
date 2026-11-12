@@ -201,6 +201,8 @@ reaches it any more (dead code is a risk).
 | `trust.rs`, `gostruct.rs` | `trust` (Go's base64, `ed25519.Verify` through `ring` with small-order and non-canonical keys and S+L, the signed list read once, `Refuse` on a made-up tree, `Contained`), Go 1.27's `json.Unmarshal` into a struct (case-insensitive keys with Go's two special folds, merging duplicates, null, the first type error) | `trust.json` | 134 (47 trust folders x 21 paths) |
 | `heimdall.rs`, `gotime.rs`, `config.rs` | `heimdall/grants.go` (`LoadGrants`: link, owner, others' write, the folder, unreadable, a folder, a path under a file; `TierCap`, `EscalationAllowed`), `config.AccessTierFromEnv` (19 values of SARINA_ACCESS_TIER against 66 grants states), Go's `time.Parse(time.RFC3339)` as JSON reads a time, with its error texts | `accesstier.json` | 131 (1,584 answers) |
 | `policy.rs` | `policy` (`Load`: operator files, SARINA_POLICY_FILE's list with duplicates, missing files, folders, unreadable and oversized files, the tighten-only workspace file, the trust check; `Denied`, `DenyRules`, `ApplyBudget` on three starting budgets); each case run 60 times in Go, every distinct answer kept (map order) | `policy.json` | 93 (25 tools, 3 budgets each) |
+| `guard.rs`, `gotext/cf.rs` | `guard`'s local checks (`Gate.Scan` before the Heimdall call): invisible and format characters (Go's `unicode.Cf` table, written by the Go test), the leading BOM, the 15 instruction patterns with the match quoted, the 12 credential shapes; on the Go tests' inputs of guard, memory, skills and the vault, seeds changed in case, spacing and length, every gap at its limit, bytes that are not UTF-8 | `guard.json` | 3,347 (two gates each) |
+| `analysiscache.rs`, `goos.rs` | `analysiscache` (`New` over files of every shape, `Get`, `Set`'s file byte for byte, its mode, its errors: `MkdirAll`, `CreateTemp`) | `analysiscache.json` | 39 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -259,6 +261,10 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   `time.Parse`'s ("cannot parse \"z\" as \"Z07:00\"", "day out of range", "extra text: ..."). `gotime.rs` follows it.
   Heimdall's `gotime.rs` (where this one comes from) refuses `+24:00` and a one-digit hour and words its errors
   differently (for its board: it writes and reads the grants file Sarina reads).
+- **analysiscache keeps a value Go cannot write.** `Set` puts the value in memory before encoding the file, so after a
+  NaN or an infinity every later `Set` of that cache fails with "json: unsupported value: NaN" and nothing more is
+  written in that process. The port does the same (the fixture records it); worth fixing in both when the cache is next
+  touched.
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such

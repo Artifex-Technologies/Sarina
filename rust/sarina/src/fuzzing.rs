@@ -203,3 +203,33 @@ fn policy_tightens(operator: &[u8], data: &[u8]) {
     assert!(le(b.max_session_turns, a.max_session_turns));
     assert!(b.max_total_cost_usd.unwrap_or(f64::MAX) <= a.max_total_cost_usd.unwrap_or(f64::MAX));
 }
+
+/// Any bytes through the text gate's local checks: no panic; the verdict does not depend on the gate's leading-BOM switch
+/// unless the text starts with a BOM; a zero-width space anywhere is always refused; a refused instruction quotes text
+/// that is in the input.
+pub fn guard(data: &[u8]) {
+    use crate::guard::Gate;
+    let plain = Gate::default().scan_local(data);
+    let bom = Gate::default_gate().scan_local(data);
+    assert_eq!(plain.blocked, !plain.reason.is_empty());
+    if !data.starts_with("\u{FEFF}".as_bytes()) {
+        assert_eq!(plain, bom);
+    }
+    let cut = data.len() / 2;
+    let mut zw = data[..cut].to_vec();
+    zw.extend_from_slice("\u{200B}".as_bytes());
+    zw.extend_from_slice(&data[cut..]);
+    assert!(Gate::default_gate().scan_local(&zw).blocked);
+}
+
+/// Any bytes as an analysis cache file: no panic, and what reads is written back so that it reads the same (the cache
+/// survives its own round trip).
+pub fn cache_file(data: &[u8]) {
+    use crate::analysiscache::{encode_file, read_entries};
+    for ns in ["ns", ""] {
+        let entries = read_entries(data, ns);
+        if let Ok(text) = encode_file(ns, &entries) {
+            assert_eq!(read_entries(text.as_bytes(), ns), entries);
+        }
+    }
+}

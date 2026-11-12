@@ -79,3 +79,17 @@ path = "fuzz_targets/policy_file.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "guard"
+path = "fuzz_targets/guard.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cache_file"
+path = "fuzz_targets/cache_file.rs"
+test = false
+doc = false
+bench = false

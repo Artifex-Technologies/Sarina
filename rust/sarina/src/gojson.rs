@@ -64,7 +64,7 @@ const MAX_DEPTH: usize = 10_000;
 const REPLACEMENT: char = char::REPLACEMENT_CHARACTER;
 
 /// Go's `strconv.Quote` of bytes that may not be UTF-8 (each bad byte as `\x..`).
-fn quote_bytes(b: &[u8]) -> String {
+pub fn quote_bytes(b: &[u8]) -> String {
     let mut out = String::from("\"");
     let mut rest = b;
     while !rest.is_empty() {

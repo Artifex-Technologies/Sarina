@@ -58,3 +58,18 @@ impl Check {
         eprintln!("{name}: {} comparisons equal", self.n);
     }
 }
+
+/// A Go `any` as the fixture's typed form holds it (parity.Typed).
+pub fn typed(v: &sarina::goany::Any) -> Value {
+    use sarina::goany::Any;
+    match v {
+        Any::Null => Value::Null,
+        Any::Bool(b) => Value::Bool(*b),
+        Any::Number(f) => json!({ "f": format!("{:x}", f.to_bits()) }),
+        Any::Num(n) => json!({ "n": n }),
+        Any::Int(i) => json!({ "i": i.to_string() }),
+        Any::String(s) => json!({ "s": text(s.as_bytes()) }),
+        Any::Array(items) => Value::Array(items.iter().map(typed).collect()),
+        Any::Object(m) => json!({ "o": m.iter().map(|(k, x)| (k.clone(), typed(x))).collect::<serde_json::Map<_, _>>() }),
+    }
+}

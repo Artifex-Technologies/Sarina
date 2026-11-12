@@ -6,6 +6,7 @@
 //! its regular expressions and its JSON encoder see them: each byte that does not start a valid UTF-8 sequence becomes one
 //! U+FFFD.
 
+mod cf;
 mod parsefloat;
 mod tables;
 
@@ -113,6 +114,30 @@ pub fn lossy(b: &[u8]) -> String {
             }
         }
     }
+}
+
+/// Go's `unicode.Is(unicode.Cf, c)`: a format character (Go's table, written by go/guard's parity test).
+pub fn is_format(c: char) -> bool {
+    in_table(cf::CF, c)
+}
+
+/// [`lossy`] with where each part came from: the string, and for every byte offset of it that starts a character (and its
+/// end) the offset in `b` (the other offsets hold their character's), so a match in the string maps back to Go's bytes.
+pub fn lossy_with_offsets(b: &[u8]) -> (String, Vec<usize>) {
+    let mut out = String::with_capacity(b.len() + 8);
+    let mut at = Vec::with_capacity(b.len() + 8);
+    let mut i = 0;
+    while i < b.len() {
+        let (c, n) = decode_rune(&b[i..]);
+        let c = c.unwrap_or('\u{FFFD}');
+        for _ in 0..c.len_utf8() {
+            at.push(i);
+        }
+        out.push(c);
+        i += n.max(1);
+    }
+    at.push(b.len());
+    (out, at)
 }
 
 /// Go's `strconv.Quote` (`%q`) of a valid string.
