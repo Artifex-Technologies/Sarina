@@ -246,17 +246,21 @@ SARINA_PARITY_UPDATE=1 go test ./... -run Parity   # after a deliberate change: 
 
 ## Resume here
 
-Done (2026-11-11 night): phase 0; the workspace and the fixture writer; `shellparse`, the bash guards and `ValidateArgs`
-with ParseFloat, `testguard` (and Go's filepath), `pyfmt`, `flagx` (and Go's flag package), `version`, each with its
-fixture and a mutation run, properties and fuzz targets for the parsers; the CI job (`.github/workflows/rust.yml`:
-the Go fixtures current, fmt, clippy `-D warnings`, the tests). No existing Go file was changed.
+Done (2026-11-11 night): phase 0; the workspace and the fixture writer; `shellparse`, the bash guards (`CheckDestructive`,
+`CheckPrivileged`), `ValidateArgs` with ParseFloat, the file tools' guards (`secret.go`, `exfil.go`, `private.go`) and
+path resolution (`fsutil.go`), `testguard` (with Go's filepath), `pyfmt`, `flagx` (with Go's flag package), `version`:
+each with its fixture (23,729 cases in all) and a mutation run, properties and fuzz targets for everything that parses
+outside input; the CI job (`.github/workflows/rust.yml`: the Go fixtures current, fmt, clippy `-D warnings`, the tests;
+green). No existing Go file was changed: only new `*parity_test.go` files and the test-only `go/internal/parity`.
 
-Next, in this order:
+Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. (Done: `pyfmt`, `testguard` with Go's filepath on a made-up tree, `version`, `flagx` with Go's flag package.)
-2. (Done: the file tools' guards `secret.go`, `exfil.go`, `private.go`, and `fsutil.go`'s path resolution.) Next in
-   `tools`: the registry's permission gate (`permission.go`) and the tool definitions' JSON (what the model is offered:
-   byte for byte, it is part of every request), which needs `gojson`'s writer (item 3) first.
-3. Step 2's formats, starting with what Heimdall reads: llm's message types, `config`'s data structures and tolerant
-   loaders, `session` (writer byte for byte, reader of every file Go reads), `session/redact.go`. This needs a `gojson`
-   module (Go's decoder and encoder: take Limbo's `gojson.rs`, which already has Go's error texts and escaping).
+1. `gojson` (Go's JSON decoder and encoder: take Limbo's `rust/limbo/src/gojson.rs`, which has Go's error texts,
+   escaping, field order and `null` against `[]`), proved by its own fixture of Go's `json.Marshal`/`Unmarshal`.
+2. Step 2's formats, starting with what Heimdall reads: llm's message types (`llm/types.go`), `config`'s data structures
+   and tolerant loaders, `session` (the writer byte for byte, the reader for every file Go reads, `migrate.go`),
+   `session/redact.go`; then a read-only run over a **copy** of real sessions (never committed) comparing Go's and Rust's
+   re-marshalled bytes.
+3. In `tools`: the permission gate (`permission.go`) and the tool definitions' JSON (part of every request to the model).
+4. Then the order in "Port order": vecindex (with Go's math/rand), trust, policy, analysiscache, guard, agents, skills,
+   sessionsearch, llm's pure parts.

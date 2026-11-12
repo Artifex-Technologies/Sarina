@@ -238,6 +238,23 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-11 — The Rust port of the Go core started (`rust/`, docs/RUST_PORT.md); nothing switched
+- Phase 0 in `docs/RUST_PORT.md`: every Go package (lines, purpose, imports, what touches the outside), the dependency
+  levels, the port order (leaves first), crates for what Go's standard library gives, the risky parts (agent loop, bash
+  guards, access ladder, session files Heimdall reads, Go's math/rand behind vecindex, containment), the switch (one
+  `sarina-rs` binary handing unported commands to the Go build, as Limbo) and the proof plan.
+- Ported and proved byte for byte against Go fixtures (`testdata/parity/*.json`, written by new `*parity_test.go` files
+  through `go/internal/parity`; `SARINA_PARITY_UPDATE=1 go test ./... -run Parity` after a deliberate change): shellparse,
+  CheckDestructive/CheckPrivileged, ValidateArgs (with Go's ParseFloat), the file tools' secret/exfil/private guards and
+  path resolution, testguard, pyfmt, flagx (with Go's flag package), version: 23,729 cases. Mutation runs, proptest
+  properties and cargo-fuzz targets for the parsers. CI: `.github/workflows/rust.yml`.
+- **No existing Go file was changed**; a change to a ported Go function now needs its fixture rewritten (the Go test fails
+  otherwise) and the Rust side kept equal (`cd rust && scripts/nicecargo.sh test --offline`).
+- **For Heimdall, Limbo, Labyrinth_OS:** nothing changes (no binary yet, no package change). For Limbo's board: its flag
+  port kept a bool flag's old value after an invalid one (Go stores false); harmless there, fixed in Sarina's copy.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-10 — The spoken-question programs in Rust (`packaging/voice`, `sarina-voice`); the switch waits on a Labyrinth branch
 - `labyrinth-ask-sarina`, `labyrinth-sarina-checkup` and `labyrinth-sarina-speak-voiced` (Labyrinth's image, Python) ported to one
   Rust binary that answers to their names: same command lines, files, environment, output and exit status. `labyrinth-voiced`
