@@ -26,9 +26,11 @@ if [ "$1" != "serve" ]; then
 fi
 dir="$3"
 case "$(basename "$dir")" in
-  bad) echo '{"ok":false,"error":"no model.onnx in bad"}'; exit 1;;
+  # bad and silent read the ping first: answering (or ending) before it is written raced with the write (a broken pipe
+  # instead of the answer on a busy CI runner, 2026-11-12); the real helper reads its request before it answers
+  bad) read -r _; echo '{"ok":false,"error":"no model.onnx in bad"}'; exit 1;;
   noisy) i=0; while [ $i -lt 3000 ]; do echo "warning: unimportant line $i" >&2; i=$((i+1)); done; echo "fatal: noisy" >&2; exit 1;;
-  silent) exit 0;;
+  silent) read -r _; exit 0;;
 esac
 n=0
 while IFS= read -r line; do
