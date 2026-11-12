@@ -367,6 +367,34 @@ proptest! {
         fuzzing::skill_file(&d);
     }
 
+    /// Any answer a local server may give, as raw bytes on a real loopback socket: the client neither panics nor waits
+    /// past its deadline, and a body is never longer than the limit asked for.
+    #[test]
+    fn http_reply_any_shape(parts in prop::collection::vec(
+        "(HTTP/1\\.1 |HTTP/1\\.0 |HTTP/2\\.0 |XTTP |[0-9]{1,4}| OK|\r\n|\n|Content-Length: ?[0-9x]{0,3}|Transfer-Encoding: (chunked|gzip)|Content-Encoding: gzip|[0-9a-fZ]{1,3}(;x)?\r\n|\\{\"decision\":\"deny\"\\}|0\r\n\r\n|[a-z ]{0,6})",
+        0..14,
+    ), limit in 1usize..64) {
+        let raw = parts.concat().into_bytes();
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = ln.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            if let Ok((mut c, _)) = ln.accept() {
+                let _ = c.set_read_timeout(Some(std::time::Duration::from_millis(200)));
+                let mut buf = [0u8; 4096];
+                let _ = c.read(&mut buf);
+                let _ = c.write_all(&raw);
+            }
+        });
+        let start = std::time::Instant::now();
+        let r = sarina::gohttp::post(&format!("http://{addr}/x"), "application/json", b"{}", std::time::Duration::from_secs(2), limit);
+        prop_assert!(start.elapsed() < std::time::Duration::from_secs(3));
+        if let Ok(reply) = r {
+            prop_assert!(reply.body.len() <= limit);
+        }
+        server.join().unwrap();
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

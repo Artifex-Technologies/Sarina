@@ -73,3 +73,52 @@ pub fn typed(v: &sarina::goany::Any) -> Value {
         Any::Object(m) => json!({ "o": m.iter().map(|(k, x)| (k.clone(), typed(x))).collect::<serde_json::Map<_, _>>() }),
     }
 }
+
+/// The Go test's RawServer: one connection, one request read, the bytes answered after `delay`; with `open` the
+/// connection is held until `release` is dropped.
+pub fn raw_server(
+    response: Vec<u8>,
+    delay: std::time::Duration,
+    open: bool,
+) -> (String, std::sync::mpsc::Receiver<Value>, std::sync::mpsc::Sender<()>) {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = ln.local_addr().unwrap().to_string();
+    let (tx, rx) = mpsc::channel();
+    let (release, wait) = mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let Ok((c, _)) = ln.accept() else { return };
+        c.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        let mut r = BufReader::new(c.try_clone().unwrap());
+        let mut line = String::new();
+        r.read_line(&mut line).unwrap();
+        let (mut ctype, mut n) = (String::new(), 0usize);
+        loop {
+            let mut h = String::new();
+            if r.read_line(&mut h).unwrap_or(0) == 0 || h == "\r\n" {
+                break;
+            }
+            if let Some((k, v)) = h.split_once(':') {
+                match k.to_ascii_lowercase().as_str() {
+                    "content-type" => ctype = v.trim().to_string(),
+                    "content-length" => n = v.trim().parse().unwrap_or(0),
+                    _ => {}
+                }
+            }
+        }
+        let mut body = vec![0u8; n.min(1 << 20)];
+        let _ = r.read_exact(&mut body);
+        let parts: Vec<&str> = line.trim_end().splitn(3, ' ').collect();
+        let _ = tx.send(json!({"method": parts[0], "uri": parts.get(1).copied().unwrap_or(""), "contentType": ctype,
+            "body": text(&body)}));
+        std::thread::sleep(delay);
+        let mut c = c;
+        let _ = c.write_all(&response);
+        if open {
+            let _ = wait.recv();
+        }
+    });
+    (addr, rx, release)
+}

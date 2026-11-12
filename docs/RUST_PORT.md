@@ -14,7 +14,7 @@ equal.
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
-| 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | open |
+| 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **in progress**: `gohttp` (a small Go-like HTTP/1.1 client), Heimdall's review (`Consult`) and `embed` done 2026-11-12 |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
@@ -208,6 +208,8 @@ reaches it any more (dead code is a risk).
 | `sessionsearch.rs`, `gomath.rs` (`log`), `gotext/letters.rs` | `sessionsearch` (`Search`: files newest first, the lenient reading of messages, the phrase BM25 and the word count, snippets), Go's amd64 `math.Log` (math/log_amd64.s, 1,700 values), Go's letter and digit tables (written by the Go test) | `sessionsearch.json` | 174 |
 | `agents.rs` | `agents` (`Parse`: the front matter, its keys, quotes, lists, switches and limits, each document 30 times for Go's map order; `Load`: operator folders, SARINA_AGENTS_DIR, overrides of the built-ins, duplicates, links, folders, oversized and unreadable files, the trust check, the text gate; `Get` with Go's case folding) | `agents.json` | 162 |
 | `skills/parse.rs` | `skills/parse.go` (`Parse`: the front matter with scalars, quotes as `strconv.Unquote` reads them, inline, block and comma lists, the switches, the name rule; `ValidName`, `Expand`) | `skillparse.json` | 215 |
+| `gohttp.rs`, `heimdall.rs` (`consult`, `url`) | `heimdall/heimdall.go` (`Consult`, `URL`): the request byte for byte (method, URI with query, Content-Type, body) and the verdict made of 43 scripted raw answers from a loopback server (deny, allow, odd reasons, statuses, redirects, chunked with extensions and trailers, cut short, too big, not HTTP, odd status lines and versions, bare `\n` lines, duplicate and bad lengths, unsupported encodings, silent past the 2 s deadline), and the settings | `consult.json` | 52 |
+| `embed.rs`, `gostruct.rs` (float32) | `embed` (`Default`'s settings; `Embed`: the request, vectors as float32 bits, Ollama's errors, counts that differ, type errors, the first value of a longer body, a body cut short after a whole value, chunk errors, a refused connection with Go's text) | `embed.json` | 34 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -282,6 +284,14 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **Texts that are not UTF-8 in profiles become U+FFFD when read.** Go keeps a profile's name, description, prompt and
   tools as the file's bytes; the port keeps strings, so a byte that is not UTF-8 is U+FFFD at once, which is what Go's
   JSON encoder writes when those texts reach the model. Error texts quote the original bytes as Go does.
+- **The HTTP client (`gohttp`) is not all of Go's.** It speaks plain `http://` to loopback services: `https://` is
+  refused (TLS comes with the model clients), redirects are not followed (Go follows them; an answer is then taken only
+  from the configured address), and a body with a `Content-Encoding` reads as an error (Go asks for gzip and unpacks it;
+  Heimdall's and Ollama's servers never send one). Everything else Sarina's code can see was compared with Go's client
+  on raw answers: statuses, framings, odd heads, cut-short bodies, the deadline. For `Consult` these differences all end
+  as "no verdict" (fail open), as an unusable answer does in Go.
+- **embed reads Ollama's answer without a size limit, as Go does.** A program pretending to be Ollama on its port could
+  make Sarina read without end; worth a limit in both (open for the owner).
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such
@@ -326,15 +336,17 @@ cases widened where one got through), fuzz targets for every reader (15 now). CI
 changed: `go/vecindex` (dimension 65,536 and counts past the file refused, with tests: commit `28b9c3f`), otherwise only
 new `*parity_test.go` files and the test-only `go/internal/parity`.
 
+Later on 2026-11-12: two bugs the port found were fixed in Go and Rust (`261834a`: session ids that cannot name a file
+are refused by Save and skipped and reported by MigrateDir; analysiscache refuses values JSON cannot hold), and step 3
+began: `gohttp`, Heimdall's review client (`Consult`) and `embed`, proved against Go's client on raw answers from a
+loopback server (`go/internal/parity/rawserver.go`, `tests/common` `raw_server`).
+
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. The rest of `skills`: discovery (`discover.go`: the roots, `~/.sarina/skills.json`, the trust check, collisions), the
-   skill tool and the long-skill library (`library.go`, `recall.go` with vecindex) — these lean on `tools` and `llm`, so
-   they may wait for step 4.
-2. Step 3, the clients, starting with `heimdall` (the review client: `Consult`, which `guard`'s full scan needs) and
-   `embed`.
-3. Which tools a session offers (the providers' switches and their order) comes with the tools in step 4; `defs.json`
-   already holds every definition.
+1. `guard`'s full scan: `scan_local` plus `heimdall::consult` for a gate with a Heimdall kind (a small step now).
+2. The rest of step 3: `llm` (the OpenAI-compatible and Anthropic clients, streaming; TLS with `rustls` for the online
+   tiers), `limbo` (the agent socket), `mcp` (stdio servers), `helpers`.
+3. The rest of `skills` (discovery, the skill tool, the long-skill library) with step 4's tools.
 
 The mutation script used in this session copied the file back with `cp`/`mv`, which leaves the restored file older
 than the last (mutant) build, so cargo did not rebuild the first test run after a series: touch the file after restoring

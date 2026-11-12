@@ -16,6 +16,8 @@ pub enum Ty {
     /// int / int64
     Int,
     Float,
+    /// float32: a number read straight to the nearest float32 (Go's ParseFloat(s, 32))
+    Float32,
     Time,
     /// `any`: what Go puts in an interface
     Any,
@@ -38,6 +40,7 @@ pub enum Val {
     Bool(bool),
     Int(i64),
     Float(f64),
+    Float32(f32),
     Time(Time),
     Any(Any),
     /// None: nil
@@ -54,6 +57,7 @@ pub fn zero(t: &Ty) -> Val {
         Ty::Bool => Val::Bool(false),
         Ty::Int => Val::Int(0),
         Ty::Float => Val::Float(0.0),
+        Ty::Float32 => Val::Float32(0.0),
         Ty::Time => Val::Time(Time::default()),
         Ty::Any => Val::Any(Any::Null),
         Ty::Slice(_) => Val::Slice(None),
@@ -69,6 +73,7 @@ fn type_name(t: &Ty) -> String {
         Ty::Bool => "bool".into(),
         Ty::Int => "int".into(),
         Ty::Float => "float64".into(),
+        Ty::Float32 => "float32".into(),
         Ty::Time => "time.Time".into(),
         Ty::Any => "interface {}".into(),
         Ty::Slice(e) => format!("[]{}", type_name(e)),
@@ -119,7 +124,7 @@ struct Ctx {
 fn mismatch(v: &Value, t: &Ty, field: &str, top: &str) -> Error {
     let what = match v {
         // Go names the number only when it failed to read into a number type ("number 0.5" into int; "number" into string)
-        Value::Number(n) if matches!(t, Ty::Int | Ty::Float) => format!("number {n}"),
+        Value::Number(n) if matches!(t, Ty::Int | Ty::Float | Ty::Float32) => format!("number {n}"),
         other => kind(other).to_string(),
     };
     let ty = type_name(t);
@@ -170,6 +175,11 @@ fn read(t: &Ty, v: &Value, into: &mut Val, field: &str, cx: &mut Ctx) {
         (Ty::Float, Value::Number(n)) => match crate::gotext::parse_float(n) {
             Ok(x) => *into = Val::Float(x),
             Err(_) => fail!(mismatch(v, t, field, top)),
+        },
+        // Rust's parse rounds correctly to float32 as Go's does; a number past float32's range is Go's error
+        (Ty::Float32, Value::Number(n)) => match n.parse::<f32>() {
+            Ok(x) if x.is_finite() => *into = Val::Float32(x),
+            _ => fail!(mismatch(v, t, field, top)),
         },
         (Ty::Time, Value::String(s)) => match Time::parse_rfc3339(s) {
             Ok(x) => *into = Val::Time(x),
@@ -222,6 +232,18 @@ fn read(t: &Ty, v: &Value, into: &mut Val, field: &str, cx: &mut Ctx) {
         }
         _ => fail!(mismatch(v, t, field, top)),
     }
+}
+
+/// Reads an already parsed value into a zero value of `t` (Go's `json.Decoder.Decode` after reading the value).
+pub fn read_value(t: &Ty, v: &Value) -> (Val, Option<Error>) {
+    let mut out = zero(t);
+    let top = match t {
+        Ty::Struct(_, short, _) => short,
+        _ => "",
+    };
+    let mut cx = Ctx { top, first: None };
+    read(t, v, &mut out, "", &mut cx);
+    (out, cx.first)
 }
 
 /// Reads a whole document into a zero value of `t` (Go's `json.Unmarshal`): the value read (as far as it read) and the

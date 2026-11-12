@@ -253,6 +253,13 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   offsets up to +24:60, a comma before the fraction); Heimdall's `gotime.rs` refuses `+24:00` and a one-digit hour and
   words its errors differently. It writes the grants file Sarina reads, so worth a fixture there.
 
+- **Two of those quirks fixed in Go and Rust** (the owner's rule: a real bug the port finds is fixed in both; `261834a`):
+  Save refuses a session id with a slash or a NUL byte before writing anything; MigrateDir reports such a file (and any
+  file it cannot write) in `Failed`, leaves it as it was and migrates the rest (`sarina session-migrate` prints the
+  failures and exits non-zero); analysiscache refuses NaN/Inf at Set and stays writable.
+- Step 3 begun: Heimdall's review client (`Consult`) and `embed` in Rust over a small HTTP client, proved against Go's on
+  raw answers. **For Heimdall's board (nothing to change):** the review request is byte for byte Go's.
+
 Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-12 — Rust port, step 2: JSON, the session file, the permission gate, vecindex; nothing switched

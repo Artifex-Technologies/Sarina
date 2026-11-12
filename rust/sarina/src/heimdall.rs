@@ -1,9 +1,14 @@
-//! Go: `heimdall` (`grants.go`, the grant gate; the review client comes with step 3). Sarina may ask for more than she
-//! has and never give it to herself: the owner answers with `sudo heimdalld grant ...`, which writes
+//! Go: `heimdall`: the review client (`heimdall.go`: `Consult`, an out-of-process second opinion on text, POST /v1/review)
+//! and the grant gate (`grants.go`). The review fails open: with HEIMDALL_REVIEW_URL unset, or Heimdall unreachable or
+//! misbehaving, there is no verdict and the caller's own checks stand; an actual "deny" fails closed.
+//!
+//! The grant gate: Sarina may ask for more than she has and never give it to herself: the owner answers with `sudo heimdalld grant ...`, which writes
 //! /etc/heimdall/grants.json, a file only root can write. The gate is on while the file exists; a file that is a link, not
 //! root's, writable by others, in a folder others can write, or that does not read, turns it on with nothing allowed.
 
+use crate::goany::Any;
 use crate::goerr;
+use crate::gojson;
 use crate::gopath;
 use crate::gostruct::{self, Field, Ty, Val};
 use crate::gotime::Time;
@@ -145,4 +150,58 @@ impl Grants {
     pub fn escalation_allowed(&self, tier: &str, session_id: &str, now: &Time) -> bool {
         self.escalations.iter().any(|e| e.tier == tier && (e.session_id.is_empty() || e.session_id == session_id) && now.before(&e.until))
     }
+}
+
+/// The full review URL, e.g. http://127.0.0.1:8930/v1/review.
+pub const ENV_VAR: &str = "HEIMDALL_REVIEW_URL";
+/// The name before the rename, still read when ENV_VAR is unset.
+pub const LEGACY_ENV_VAR: &str = "SENTRY_REVIEW_URL";
+/// One consultation's bound (Go's `Timeout`).
+pub const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Go's `URL`: ENV_VAR, else LEGACY_ENV_VAR, trimmed.
+pub fn url(getenv: &dyn Fn(&str) -> String) -> String {
+    let v = crate::gotext::trim_space(&getenv(ENV_VAR)).to_string();
+    if !v.is_empty() {
+        return v;
+    }
+    crate::gotext::trim_space(&getenv(LEGACY_ENV_VAR)).to_string()
+}
+
+/// What Heimdall answered (Go's `Verdict`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Verdict {
+    pub denied: bool,
+    /// None: Go's nil (no reason given)
+    pub reasons: Option<Vec<String>>,
+}
+
+/// Go's `Consult`: Heimdall's verdict on `text`, or None when Heimdall is not configured or gave no usable answer.
+pub fn consult(text: &str, kind: &str, session_id: &str, getenv: &dyn Fn(&str) -> String) -> Option<Verdict> {
+    let u = url(getenv);
+    if u.is_empty() {
+        return None;
+    }
+    let payload = gojson::Obj::new(true).str("kind", kind).str("session_id", session_id).str("text", text).end().ok()?;
+    let reply = crate::gohttp::post(&u, "application/json", payload.as_bytes(), TIMEOUT, 1 << 20).ok()?;
+    if reply.body_err.is_some() || reply.status >= 300 {
+        return None;
+    }
+    let (body, err) = gojson::unmarshal_any(&reply.body);
+    if err.is_some() {
+        return None;
+    }
+    let Ok(m) = body.into_object() else { return None };
+    let mut v = Verdict { denied: matches!(m.get("decision"), Some(Any::String(d)) if d == "deny"), reasons: None };
+    if let Some(Any::Array(rs)) = m.get("reasons") {
+        for r in rs {
+            let text = match r {
+                Any::String(s) => s.clone(),
+                Any::Null => continue,
+                other => gojson::marshal_any(other).unwrap_or_default(),
+            };
+            v.reasons.get_or_insert_with(Vec::new).push(text);
+        }
+    }
+    Some(v)
 }

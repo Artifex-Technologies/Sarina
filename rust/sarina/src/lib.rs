@@ -4,11 +4,13 @@
 pub mod agents;
 pub mod analysiscache;
 pub mod config;
+pub mod embed;
 pub mod flagx;
 pub mod fuzzing;
 pub mod goany;
 pub mod goerr;
 pub mod goflag;
+pub mod gohttp;
 pub mod gojson;
 pub mod gomath;
 pub mod goos;
