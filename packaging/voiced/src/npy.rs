@@ -7,7 +7,11 @@
 //!   rational polynomial), which is not the C library's `expf` and differs from it in about a third of all inputs;
 //! - `sum_f32`: NumPy's pairwise summation, the order `ndarray.sum()` adds a float32 array in.
 //!
+//! The constants of `exp_f32` are written as NumPy's source writes them (more digits than a float32 holds), hence the allow.
+//!
 //! Each is checked against NumPy itself (`sarina-voiced-parity numpy`, tests/parity.py).
+
+#![allow(clippy::excessive_precision)]
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // SeedSequence and PCG64
@@ -131,7 +135,7 @@ impl Generator {
 
     /// `rng.integers(0, n)` for 1 <= n <= 2**32 (Lemire's method on 32-bit draws, as NumPy does for such a range).
     pub fn below(&mut self, n: u64) -> u64 {
-        assert!(n >= 1 && n <= 1 << 32);
+        assert!((1..=1 << 32).contains(&n));
         let rng = (n - 1) as u32;
         if rng == 0 {
             return 0;

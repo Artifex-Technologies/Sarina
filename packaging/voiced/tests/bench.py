@@ -74,9 +74,7 @@ v = importlib.util.module_from_spec(spec)
 loader.exec_module(v)
 seed = int(os.environ.get("BENCH_SEED", "0"))
 v.random.getrandbits = lambda bits: seed
-import onnxruntime
-if hasattr(onnxruntime, "preload_dlls"):
-    onnxruntime.preload_dlls = lambda *a, **k: None   # the CPU venv has no CUDA libraries of its own; never load any
+# (onnxruntime is imported late, by the service itself, as in real use; the CPU build's preload_dlls loads nothing)
 v.serve()
 '''
 
@@ -189,17 +187,34 @@ def wait_socket(sock, proc, limit=60):
 
 
 def start_service(who, src, run_dir, pipeline="1"):
+    # the socket path must stay under 108 bytes: it goes in a short folder of my own runtime folder (never the real service's)
+    sock_dir = tempfile.mkdtemp(prefix="vb-", dir=os.environ.get("XDG_RUNTIME_DIR") or "/tmp")
+    sock = os.path.join(sock_dir, "voiced.sock")
     env = env_base()
-    env.update(XDG_RUNTIME_DIR=run_dir, BENCH_SEED=str(SEED), LABYRINTH_VOICE_SEED=str(SEED), LABYRINTH_VOICE_PIPELINE=pipeline,
+    env.update(XDG_RUNTIME_DIR=run_dir, LABYRINTH_VOICED_SOCKET=sock, LABYRINTH_VOICE_DIR=DIR, BENCH_SEED=str(SEED), LABYRINTH_VOICE_SEED=str(SEED), LABYRINTH_VOICE_PIPELINE=pipeline,
                HOME=run_dir)  # no pronunciations file of mine is read
     if who == "py":
         argv = [PY, "-I", os.path.join(src, "run_service.py"), src]
     else:
         argv = [RUST]
+    os.makedirs(os.path.join(run_dir, "labyrinth-sarina"), mode=0o700, exist_ok=True)
     p = subprocess.Popen(["nice", "-n", "19"] + argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
-    sock = os.path.join(run_dir, "labyrinth-sarina", "voiced.sock")
     wait_socket(sock, p)
     return p, sock
+
+
+def stop_service(p, sock):
+    p.terminate()
+    p.wait()
+    for f in [sock]:
+        try:
+            os.unlink(f)
+        except OSError:
+            pass
+    try:
+        os.rmdir(os.path.dirname(sock))
+    except OSError:
+        pass
 
 
 def wav_seconds(path):
@@ -219,12 +234,15 @@ def bench_service(runs, src):
             s = ask(sock, {"op": "warm"})
             s.makefile().readline()
             s.close()
+            t_warm = time.time()
             while True:
                 s = ask(sock, {"op": "ping"})
                 if json.loads(s.makefile().readline()).get("loaded"):
                     s.close()
                     break
                 s.close()
+                if time.time() - t_warm > 180:
+                    raise RuntimeError("%s: the voice did not load" % m)
                 time.sleep(0.2)
             with open("/proc/%d/status" % p.pid) as f:
                 rss = [int(l.split()[1]) for l in f if l.startswith("VmRSS")][0] / 1024
@@ -255,8 +273,7 @@ def bench_service(runs, src):
                     break
             s.close()
         finally:
-            p.terminate()
-            p.wait()
+            stop_service(p, sock)
         if i < 3:
             continue  # warm-up
         res[m]["first"].append(first)
@@ -287,13 +304,12 @@ def bench_idle(src):
     out = {}
     for who in ["py", "rs"]:
         run_dir = tempfile.mkdtemp(prefix="idle-", dir=SCRATCH)
-        p, _ = start_service(who, src, run_dir)
+        p, sock = start_service(who, src, run_dir)
         time.sleep(5)
         c0, _, _, w0 = proc_tree_cpu_and_mem(p.pid)
         time.sleep(60)
         c1, rss, pss, w1 = proc_tree_cpu_and_mem(p.pid)
-        p.terminate()
-        p.wait()
+        stop_service(p, sock)
         out[who] = {"cpu_ms_per_min": (c1 - c0) * 1000, "wakeups_per_min": w1 - w0, "rss_mb": rss, "pss_mb": pss}
         print("idle %s: %s" % (who, out[who]), flush=True)
     return out

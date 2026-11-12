@@ -238,6 +238,24 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-11 — The voice service in Rust (`packaging/voiced`, `sarina-voiced`); the switch waits on a Labyrinth branch
+- `labyrinth-voiced` and `chatterbox_engine.py` (Labyrinth's image, Python) ported to `sarina-voiced`: the same socket
+  (`$XDG_RUNTIME_DIR/labyrinth-sarina/voiced.sock`), requests, answers, files and environment variables, so the voice client
+  (`sarina-voice speak-voiced`) and `labyrinth-sarina-warm` need no change. ONNX Runtime is loaded at run time from the voice
+  venv (`ort` load-dynamic; nothing downloaded or linked at build time), with the venv's CUDA libraries, as the Python did.
+- Same speech for the same seed, bit for bit, checked on the processor (`packaging/voiced/tests/parity.py`): the sampling
+  repeats NumPy's arithmetic (PCG64, its own float32 `exp`, pairwise sums); the decoder's internal noise is seeded by ONNX
+  Runtime from the clock, so the check fixes the clock. Pipeline: the next sentence is written while one is decoded, after
+  the first sentence is out.
+- Found, not changed (it changes what Sarina says): a joke's ` [chuckle]` at the end of a sentence indexes past the speech
+  embedding table (fails on the processor; probably garbage on the card). Fixed by the port: a long part with no comma or
+  space hung the Python service; a failed background load left it locked.
+- **For Labyrinth's board:** branch `voiced-rust-switch` builds `sarina-voiced` in `sarina-git` (CONTRACT: a second cargo
+  crate; optdepends `onnxruntime-cpu`) and points `labyrinth-voiced.service` at `/usr/bin/sarina-voiced`; the Python stays
+  for a rollback. Not on main until the owner has run it on the card (`packaging/voiced/README.md`).
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-11 — The Rust port of the Go core started (`rust/`, docs/RUST_PORT.md); nothing switched
 - Phase 0 in `docs/RUST_PORT.md`: every Go package (lines, purpose, imports, what touches the outside), the dependency
   levels, the port order (leaves first), crates for what Go's standard library gives, the risky parts (agent loop, bash

@@ -1,8 +1,9 @@
 //! One speak request: the text cut into sentences, each made into a wav file and handed to the caller as soon as it is
 //! ready (the `Voice` of labyrinth-voiced).
 //!
-//! **Pipelined** (the default): one thread writes the speech tokens of sentence N+1 while this one decodes sentence N, writes
-//! its file and sends it, with at most one finished sentence waiting between them. The random draws stay in the order the
+//! **Pipelined** (the default): once the first sentence is out, one thread writes the speech tokens of sentence N+1 while this
+//! one decodes sentence N, writes its file and sends it, with at most one finished sentence waiting between them. (The first
+//! sentence is made alone: it is the one the listener waits for.) The random draws stay in the order the
 //! Python made them, so a seed gives the same speech either way: the writer draws for each sentence in turn, and when the
 //! decoder finds invalid audio (the Python's ValueError, tried again up to three times), the writer is sent back to that
 //! sentence with the generator as it stood right after that sentence's tokens, which is where the Python's retry drew from.
@@ -262,10 +263,7 @@ impl Service {
             if made.epoch != epoch {
                 continue; // made before a retry was asked for: thrown away
             }
-            let tokens = match made.result {
-                Ok(t) => t,
-                Err(m) => return Err(m),
-            };
+            let tokens = made.result?;
             debug_assert_eq!(made.index, next);
             match self.decode(dec, voice, &tokens, made.index, made.attempt) {
                 Ok(wav) => {
@@ -273,6 +271,10 @@ impl Service {
                         return Ok(());
                     }
                     next += 1;
+                    if next == 1 {
+                        ctl.state.lock().unwrap_or_else(|e| e.into_inner()).first_out = true;
+                        ctl.cv.notify_all();
+                    }
                 }
                 Err(Fail::Retry(m)) => {
                     if made.attempt == 2 {
@@ -316,6 +318,8 @@ struct CtlState {
     epoch: u64,
     restart: Option<Restart>,
     finished: bool,
+    /// the first sentence has been sent: from then on the writer works ahead
+    first_out: bool,
 }
 
 struct Ctl {
@@ -353,7 +357,10 @@ fn write_ahead(
                     rng = r.rng;
                     spoken = Some(r.spoken);
                 }
-                if i < sentences.len() {
+                // The first sentence alone, then ahead: writing the second while the first is decoded made the first one
+                // later by about a second on the processor (both want every core), and the first one is what the
+                // listener waits for.
+                if i < sentences.len() && (i == 0 || st.first_out) {
                     break;
                 }
                 st = ctl.cv.wait(st).unwrap_or_else(|e| e.into_inner());

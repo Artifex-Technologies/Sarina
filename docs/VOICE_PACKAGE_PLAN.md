@@ -8,6 +8,7 @@ not built until I can.
 **Status 2026-11-10:** the conversation, the check-up and the voice client are ported to Rust in `packaging/voice/`
 (`sarina-voice`, one binary under the old names), side by side with the Python in tests; the switch is on Labyrinth's branch
 `voice-rust-switch` until I have tried Super+S with it. See `docs/VOICE_RUST_PORT.md`. The moves below are still to do.
+**2026-11-11:** the voice service too: `packaging/voiced/` (`sarina-voiced`), switch on Labyrinth's branch `voiced-rust-switch`.
 
 ## Why
 

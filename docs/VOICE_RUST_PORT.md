@@ -12,7 +12,8 @@ Three programs that lived as Python in Labyrinth's image (`Labyrinth_OS/profile/
 
 `sarina-voice` answers to the name it is started as (a link named `labyrinth-ask-sarina` and so on), or to its first argument
 (`sarina-voice ask-sarina ...`). The command lines, standard input and output, files, environment variables and exit statuses are
-the Python ones. `labyrinth-voiced` and the Chatterbox engine stay Python (machine learning). The shell scripts
+the Python ones. The voice service (`labyrinth-voiced` and the Chatterbox engine) was ported afterwards, separately:
+`packaging/voiced` (`sarina-voiced`, 2026-11-11; its README). The shell scripts
 (`labyrinth-sarina-ask`, `-speak`, `-warm`, `-setting`) are not ported yet: see the end.
 
 Standard library plus two crates already in Arch (`regex`, `libc`); `cargo build --offline --release` in `packaging/voice`.

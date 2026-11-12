@@ -291,7 +291,9 @@ fn request_cmd(textfile: &str, seed: u128) {
     };
     match svc.speak(&text, &mut send) {
         Ok(()) => println!("{:.1}\t{{\"done\": true}}", voice::elapsed_ms(t0)),
-        Err(e) => println!("{:.1}\t{{\"error\": {}}}", voice::elapsed_ms(t0), json::dumps(&json::s(&e.chars().take(200).collect::<String>()))),
+        Err(e) => {
+            println!("{:.1}\t{{\"error\": {}}}", voice::elapsed_ms(t0), json::dumps(&json::s(&e.chars().take(200).collect::<String>())))
+        }
     }
     println!("rss_kb\t{}", hwm_kb());
 }
@@ -311,7 +313,12 @@ fn main() {
                 eprintln!("gpuprobe runs only with CUDA_VISIBLE_DEVICES= (empty)");
                 std::process::exit(2);
             }
-            let c = Config { gpu: true, dtype: "fp16".into(), venv: PathBuf::from(home(&env_or("VENV", "~/.local/share/labyrinth/tts/gpu-venv"))), ..cfg() };
+            let c = Config {
+                gpu: true,
+                dtype: "fp16".into(),
+                venv: PathBuf::from(home(&env_or("VENV", "~/.local/share/labyrinth/tts/gpu-venv"))),
+                ..cfg()
+            };
             match Engine::load(&c) {
                 Ok(_) => println!("loaded (unexpected with no device)"),
                 Err(e) => println!("{}", e),
