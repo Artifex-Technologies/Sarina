@@ -28,6 +28,7 @@ pub mod heimdall;
 pub mod helpers;
 pub mod limbo;
 pub mod llm;
+pub mod mcp;
 pub mod policy;
 pub mod pyfmt;
 pub mod session;

@@ -2,7 +2,11 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -223,5 +227,51 @@ func TestCloseIsIdempotentAndPrompt(t *testing.T) {
 	c.Close()
 	if time.Since(start) > 2*time.Second {
 		t.Fatal("Close was slow")
+	}
+}
+
+// A server that floods requests while never reading its stdin must not make the client start a writer per request: the
+// answers in flight are bounded (maxReplies), the rest are dropped (found by the Rust port, 2026-11-12).
+func TestFloodOfServerRequestsIsBounded(t *testing.T) {
+	sr, sw := io.Pipe() // the server's output, which the client reads
+	_, cw := io.Pipe()  // the client's output, which nobody reads: every write blocks
+	before := runtime.NumGoroutine()
+	c := NewPipeClient("flood", sr, cw)
+	defer func() { cw.Close(); sw.Close(); c.Close() }()
+	go func() {
+		for i := 0; i < 5000; i++ {
+			fmt.Fprintf(sw, "{\"jsonrpc\":\"2.0\",\"id\":%d,\"method\":\"ping\"}\n", i)
+		}
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && c.Alive() {
+		if n := runtime.NumGoroutine() - before; n > maxReplies+20 {
+			t.Fatalf("%d goroutines for a flood of requests", n)
+		}
+		time.Sleep(10 * time.Millisecond)
+		if c.dropped.Load() > 4000 {
+			break
+		}
+	}
+	if c.dropped.Load() == 0 {
+		t.Fatal("no answer was dropped although nobody reads them")
+	}
+}
+
+// A server that writes its reason to stderr and exits during a call: the error names the reason every time, not only
+// when stderr happened to be read first (a race before 2026-11-12, found by the Rust port; as go/helpers had).
+func TestDyingServerReasonIsNotLost(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "dies")
+	os.WriteFile(script, []byte("#!/bin/sh\nread line\nhead -c 300000 /dev/zero | tr '\\0' x >&2\necho >&2\necho 'fatal: the reason' >&2\nexit 3\n"), 0o755)
+	for i := 0; i < 20; i++ {
+		c, err := Spawn(ServerDef{Name: "dies", Command: script}, os.Environ())
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = c.Initialize(t.Context(), wait)
+		c.Close()
+		if err == nil || !strings.Contains(err.Error(), "fatal: the reason") {
+			t.Fatalf("run %d: %v", i, err)
+		}
 	}
 }

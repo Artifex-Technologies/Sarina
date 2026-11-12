@@ -334,3 +334,8 @@ pub fn model_answer(data: &[u8]) {
         assert!(r.is_err(), "an answer past its bound was read");
     }
 }
+
+/// Any bytes as a line from an MCP server (see `mcp::client::fuzz_line`).
+pub fn mcp_line(data: &[u8]) {
+    crate::mcp::client::fuzz_line(data);
+}

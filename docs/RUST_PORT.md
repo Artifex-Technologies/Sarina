@@ -217,6 +217,7 @@ reaches it any more (dead code is a risk).
 | `llm/client.rs`, `gohttp.rs` (TLS, bodies as they come), `goctx.rs` | `llm/client.go`'s `Complete`: the one retry (connections, 429, 5xx), the fallback models (after those, a 404 or a timeout; the turn names the model that answered), the timer (the whole call, a second more per 40 tokens allowed when not streamed; reset by every streamed line), cancellation (also during the retry's wait) and a context deadline, the error texts (`cannot reach backend at`, `timed out after`), the answer's bounds, a header value with control characters refused before sending; 45 scripted servers (the same answers and pauses in both tests), TLS against an authority each test makes (trusted, another authority, a wrong address, names only) | `transport.json` | 45 |
 | `llm/anthropic.rs` | `llm/anthropic.go`: `BuildBody` (system texts joined, roles merged, a user turn first, tool calls with their arguments read as Go reads them into a map, tool ids in the API's characters, the schema in the system text, tools and tool_choice, the default max_tokens, temperature only above 0), `parseAnthropic` (blocks, thinking, tool use, stop reasons, usage, errors), the endpoints, and `Complete` on 22 scripted servers (the retry, the key scrubbed from every error, the timer not extended by max_tokens, cancellation, the replay as events, TLS) | `anthropic.json` | 80 |
 | `llm/discover.rs`, `gourl.rs` | `llm/discover.go`: `serverRoot` (Go 1.27's `url.Parse` and `String` as far as it uses them: schemes, user information, IPv6 hosts, ports and the strict colons, escapes kept or rewritten), `sameModel`, `ContextWindow` on 35 scripted servers (the four probes in order, Go's struct reading of each answer, the num_ctx line, the 4 MiB bound just past, at and with junk, a transport failure ending the round, the cache and its TTL, a cancelled caller not cached) | `discover.json` | 76 |
+| `mcp/client.rs` | `mcp/client.go`: `Spawn` (Go's LookPath on the parent's PATH, the overlay environment, the folder, its own process group, Go's start errors), the handshake, `ListTools` and `ListResources` with pages, `CallTool` and `ReadResource` rendered as text (binary named, not inlined; structured content indented), raw calls (the result as the server wrote it), JSON-RPC errors, the server's own requests answered (ping) or refused, noise and odd ids, timeouts and cancels with notifications/cancelled, a dying server's last stderr lines, the 8 MiB line bound at, under and over, a flood of requests, `Close` (a stubborn server's group killed after a second); against one shell stand-in server both tests run (10 scenarios, 44 calls) | `mcp.json` | 19 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -333,6 +334,15 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such
   lines 400 times and accepts any reason Go gave. Whether something is refused never depends on the order.
+- **An MCP server's own requests are answered at most eight at a time, in Go and Rust (2026-11-12).** Go wrote each
+  answer from a goroutine of its own, so a server that sent requests without reading its input made the client start
+  goroutines without bound (5,000 requests: 5,001 goroutines, measured); both now keep at most `maxReplies` (8) answers in
+  flight and drop the rest (`TestFloodOfServerRequestsIsBounded`; the fixture's flood scenario). Both also wait (at most
+  2 s) for a dying server's stderr before naming it, as `go/helpers` does (a race there was seen; here it could not be
+  made to fail on my PC, `TestDyingServerReasonIsNotLost` guards it).
+- **The MCP client passes the child an environment as names and values.** Go hands `execve` the list as it is; the port
+  sets each `NAME=value` entry, so an entry without `=` or with an empty name is left out, and of two entries with the
+  same name the last wins (C's getenv finds the first). The environment Sarina builds has neither.
 - **Discovery's model_info in map order.** Go walks `/api/show`'s `model_info` in random order and takes the first key
   ending in `.context_length` with a plausible number; the port takes the first in sorted order. Only a server naming two
   different plausible windows there could tell (none does); the fixture avoids that case.

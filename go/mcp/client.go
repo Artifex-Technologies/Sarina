@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/internal/version"
@@ -27,6 +28,9 @@ const (
 	MaxLineBytes = 8 << 20
 	// stderrKeep is how much of a server's stderr is remembered for errors.
 	stderrKeep = 2048
+	// maxReplies bounds the answers to a server's own requests that are being written at once; a request that comes
+	// while that many are still blocked (the server is not reading) gets none.
+	maxReplies = 8
 )
 
 type rpcError struct {
@@ -55,18 +59,23 @@ type Client struct {
 	pending map[int64]chan *rpcMessage
 	next    int64
 
-	closed chan struct{} // closed when the server's output ends
-	cmd    *exec.Cmd     // nil for a pipe-backed client (tests)
-	exited chan struct{} // closed once the process has been reaped
-	once   sync.Once
+	closed  chan struct{} // closed when the server's output ends
+	cmd     *exec.Cmd     // nil for a pipe-backed client (tests)
+	exited  chan struct{} // closed once the process has been reaped
+	errDone chan struct{} // closed once the server's stderr has been read to its end
+	once    sync.Once
 
 	tailMu sync.Mutex
 	tail   string
+
+	replies chan struct{} // one slot per answer being written (maxReplies)
+	dropped atomic.Int64  // answers not written because every slot was taken
 }
 
 // newClient wraps a reader/writer pair and starts the read loop.
 func newClient(name string, r io.Reader, w io.WriteCloser) *Client {
-	c := &Client{name: name, w: w, pending: map[int64]chan *rpcMessage{}, closed: make(chan struct{}), exited: make(chan struct{})}
+	c := &Client{name: name, w: w, pending: map[int64]chan *rpcMessage{}, closed: make(chan struct{}), exited: make(chan struct{}),
+		errDone: make(chan struct{}), replies: make(chan struct{}, maxReplies)}
 	go c.readLoop(r)
 	return c
 }
@@ -76,6 +85,7 @@ func newClient(name string, r io.Reader, w io.WriteCloser) *Client {
 func NewPipeClient(name string, r io.Reader, w io.WriteCloser) *Client {
 	c := newClient(name, r, w)
 	close(c.exited)
+	close(c.errDone)
 	return c
 }
 
@@ -104,7 +114,7 @@ func Spawn(def ServerDef, env []string) (*Client, error) {
 	}
 	c := newClient(def.Name, stdout, stdin)
 	c.cmd = cmd
-	errDone := make(chan struct{})
+	errDone := c.errDone
 	go func() {
 		defer close(errDone)
 		buf := make([]byte, 1024)
@@ -217,13 +227,24 @@ func (c *Client) handle(line []byte) {
 		// A request from the server. The client offers no capabilities, so the only
 		// thing worth answering is ping. The answer is written from its own
 		// goroutine: the read loop must never block on a write, or a server that
-		// is itself blocked writing to us would deadlock both ends.
+		// is itself blocked writing to us would deadlock both ends. At most
+		// maxReplies are in flight: a server that floods requests without reading
+		// the answers gets none for the rest (before 2026-11-12 each one started a
+		// goroutine, without bound).
 		id := json.RawMessage(append([]byte(nil), m.ID...))
-		if m.Method == "ping" {
-			go c.send(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{}})
-		} else {
-			go c.send(map[string]any{"jsonrpc": "2.0", "id": id,
-				"error": map[string]any{"code": -32601, "message": "method not supported by this client"}})
+		reply := map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{}}
+		if m.Method != "ping" {
+			reply = map[string]any{"jsonrpc": "2.0", "id": id,
+				"error": map[string]any{"code": -32601, "message": "method not supported by this client"}}
+		}
+		select {
+		case c.replies <- struct{}{}:
+			go func() {
+				defer func() { <-c.replies }()
+				_ = c.send(reply)
+			}()
+		default:
+			c.dropped.Add(1)
 		}
 	case m.Method != "":
 		// notification: nothing to do
@@ -298,6 +319,12 @@ func (c *Client) Call(ctx context.Context, method string, params any, timeout ti
 			}
 		case m, ok := <-ch:
 			if !ok {
+				// the server's last words on stderr may still be on their way: wait for them (at most 2 s), or the
+				// error would name no reason (a race, as in go/helpers; fixed in Go and Rust 2026-11-12)
+				select {
+				case <-c.errDone:
+				case <-time.After(2 * time.Second):
+				}
 				return nil, c.failure("server exited during %s", method)
 			}
 			if m.Error != nil {

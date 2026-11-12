@@ -21,6 +21,8 @@ ring = { version = "=0.17.14", default-features = false }
 sha2 = { version = "=0.10.9", default-features = false, features = ["std"] }
 # TLS for the model clients (gohttp): ring's crypto, TLS 1.3 and 1.2 as Go's client offers; the same crate and version as
 # Heimdall's
+# kill(2) on an MCP server's process group (Go's syscall.Kill(-pid, SIGKILL)); the same version as Heimdall's
+libc = { version = "=0.2.186", default-features = false }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 
 [dev-dependencies]

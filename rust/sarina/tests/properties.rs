@@ -421,6 +421,20 @@ proptest! {
         fuzzing::model_answer(&data);
     }
 
+    #[test]
+    fn mcp_line_any_bytes(data in prop::collection::vec(any::<u8>(), 0..160)) {
+        fuzzing::mcp_line(&data);
+    }
+
+    /// JSON-RPC-shaped lines: requests, answers, errors with odd ids and members, cut anywhere.
+    #[test]
+    fn mcp_line_shaped(id in r#"(1|"7"|null|\{\}|\[1,2\]|"\\"x"|-0|1e3)"#, key in "(id|ID|result|Result|method|error)",
+        val in r#"(\{\}|\[\]|"ping"|5|null|\{"code":1,"message":"m"\})"#, cut in 0usize..60) {
+        let line = format!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"{key}\":{val}}}");
+        fuzzing::mcp_line(line.as_bytes());
+        fuzzing::mcp_line(&line.as_bytes()[..cut.min(line.len())]);
+    }
+
     /// Stream-shaped answers: data lines with deltas, tool-call fragments, usage, errors, blank lines and [DONE].
     #[test]
     fn model_answer_shaped(lines in prop::collection::vec(
