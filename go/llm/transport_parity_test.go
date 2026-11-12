@@ -106,7 +106,7 @@ func transportCases() []transportCase {
 		{name: "streamCutShort", script: [][]S{{{Send: sseHead}, {Send: sseEvent("a")}, {Send: "40\r\ndata: {\"cho"}}}, stream: true},
 		{name: "streamBadChunk", script: [][]S{{{Send: sseHead}, {Send: sseEvent("a")}, {Send: "zz\r\n"}}}, stream: true},
 		{name: "tooLarge", script: [][]S{okJSON(answerOK)}, maxResp: 64},
-		{name: "streamTooLarge", script: [][]S{streamOK}, stream: true, maxResp: 100},
+		{name: "streamTooLarge", script: [][]S{streamOK}, stream: true, maxResp: 30}, // under the first line: the same however the bytes arrive
 		{name: "notJSON", script: [][]S{okJSON("not json")}},
 		{name: "closeDelimited", script: [][]S{{{Send: "HTTP/1.1 200 OK\r\n\r\n" + answerOK}}}},
 		{name: "tlsOK", script: [][]S{okJSON(answerOK)}, tls: "trusted"},
