@@ -439,13 +439,29 @@ Anthropic client's errors never hold the API key now (an error in a 200 answer a
 dying server's stderr is waited for (`62f59ef`). CI found two timing-dependent fixture cases on a busy runner; the
 fixtures now settle before counting requests and print the first line that moved (`bae7378`, `6a2ebc1`).
 
+Late on 2026-11-12, step 4 began with the tools: the file tools (`read_file`, `list_dir`, `write_file`, `edit_file`,
+`glob_search`, `grep_search`, with Go's `WalkDir`, `ReadDir` and `path.Match`), `bash` with background processes,
+`TaskOutput` and `TaskStop` (the child read with poll(2) and its pidfd, bounded, its group killed), `git_read` (against
+a stand-in git in bash's builtins) and the plan-mode tools. The registry has `execute_stream` now, and `Context` the
+workspace, output limit, step, file state, cancel context, timeout, environment layers, process manager and plan-mode
+probe. Fixtures `files` 178 calls + 770 glob matches, `bash` 46 calls + 3 environments, `git` 40 calls, `plantools` 21;
+mutation runs 13/14, 11/11, 6/6 (the rest equivalent); a fuzz target for glob patterns (19 now). Faults found and fixed
+in Go and Rust both: a refused `write_file` (or a failed `edit_file`) let the same write replace a file never read; a
+line-range read held every line asked for; `write_file` onto a named pipe and `grep_search` given one waited forever
+(`b6fb83e`); bash's timeout message said "0s" for the default 30 s (`2859309`); `git_read` read git's output and the
+config listing without a bound and ran rev-parse before the risky-settings check, unfiltered and without a time limit
+(`280d48b`). The bash and git fixtures run bash's builtins only, with nothing but bash (or the stand-in) on PATH.
+
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. Step 4, starting with what the agent loop needs from the tools: the tools themselves (file tools, bash with its
-   guards already ported, the rest), with `skills`' discovery, the skill tool and the long-skill library, MCP's
-   definitions loader (`mcp/config.go`) and manager (`mcp/manager.go`, which offers the servers' tools through the
-   registry), and the limbo tools; then memory, tiers, the agent loop. Every read from another process keeps its bound
-   (the owner's rule), and a timed fixture case must not depend on how bytes arrive (see the two CI fixes above).
+1. The rest of step 4's tools: the to-do tools (`todo.go`, 1,228 lines: task_list/create/update, todo_write,
+   plan_get/update_plan; the JSON files under `.port_sessions/`, timestamps and random ids to be written as placeholders
+   in the fixture), then `verify.go` with `check_code` (the checks after a code change run go, python3, bash -n, node,
+   cargo and bubblewrap: prove them against stand-ins on PATH that print what they were given, never the real tools;
+   `files.rs`'s `verify_code` says "not ported yet" until then). Then `skills`' discovery with the skill tool and the
+   long-skill library, MCP's definitions loader (`mcp/config.go`) and manager (`mcp/manager.go`), and the limbo tools;
+   then memory, tiers, the agent loop (against a scripted fake model only). Every read from another process keeps its
+   bound (the owner's rule), and a timed fixture case must not depend on how bytes arrive.
 2. The binary (`sarina-rs`) and the switch plan, once the agent loop is equal.
 
 Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself

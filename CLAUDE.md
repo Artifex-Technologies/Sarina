@@ -238,6 +238,21 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (night) — Rust port step 4 begun: the file tools, bash, git_read, plan tools; five Go fixes
+- Ported and proved against Go (docs/RUST_PORT.md "Ported"): read_file, list_dir, write_file, edit_file, glob_search,
+  grep_search, bash with background processes, TaskOutput, TaskStop, git_read, enter/exit_plan_mode. The bash and git
+  fixtures run bash's builtins only (a stand-in git; nothing else on PATH; temporary workspaces). 1,055 new comparisons;
+  mutation runs; CI green.
+- **Go fixes (live code), in Go and Rust both, each with a test that failed before:** a refused write_file (or a failed
+  edit_file) let the same write replace a file never read; a line-range read_file held every line asked for (now 32 MiB
+  at most), and whole reads, rewrites and read-backs stop at 32 MiB; write_file onto a named pipe and grep_search given
+  one waited forever (`b6fb83e`); bash said "timed out after 0s" for the default 30 s (`2859309`); git_read read git's
+  output and the config listing without a bound, and ran `git rev-parse` before the risky-settings check with the whole
+  environment and no time limit (`280d48b`).
+- Nothing switched; the to-do tools, verify/check_code, skills, MCP's loader and manager and the limbo tools are next.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (evening) — Rust port step 3: the model transport with TLS, Anthropic, discovery, MCP; three Go fixes
 - Ported and proved against Go (docs/RUST_PORT.md "Ported"): llm's `Complete` (the retry, fallback models, the timer,
   cancellation) over a Go-like HTTP client with TLS through rustls (system authorities from Go's file list), the
