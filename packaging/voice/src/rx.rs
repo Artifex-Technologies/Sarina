@@ -104,7 +104,7 @@ pub fn split_sentences_not_numbers(text: &str) -> Vec<&str> {
     })
 }
 
-fn split_at_runs<'a>(text: &'a str, splits: impl Fn(&str) -> bool) -> Vec<&'a str> {
+fn split_at_runs(text: &str, splits: impl Fn(&str) -> bool) -> Vec<&str> {
     let mut out = Vec::new();
     let mut start = 0;
     for m in SPACES.find_iter(text) {

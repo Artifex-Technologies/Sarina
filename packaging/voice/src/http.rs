@@ -6,6 +6,10 @@ use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+/// The request failed (no connection, a status outside 2xx, a broken answer): urlopen's exception, without the detail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RequestFailed;
+
 pub struct Url {
     host: String,
     port: u16,
@@ -38,10 +42,10 @@ fn parse(url: &str) -> Option<Url> {
 }
 
 /// GET or POST; the body (at most `limit` bytes) when the status is 2xx.
-pub fn request(url: &str, body: Option<(&[u8], &str)>, timeout: f64, limit: usize) -> Result<Vec<u8>, ()> {
-    let u = parse(url).ok_or(())?;
+pub fn request(url: &str, body: Option<(&[u8], &str)>, timeout: f64, limit: usize) -> Result<Vec<u8>, RequestFailed> {
+    let u = parse(url).ok_or(RequestFailed)?;
     let t = Duration::from_secs_f64(timeout);
-    let addrs: Vec<_> = (u.host.as_str(), u.port).to_socket_addrs().map_err(|_| ())?.collect();
+    let addrs: Vec<_> = (u.host.as_str(), u.port).to_socket_addrs().map_err(|_| RequestFailed)?.collect();
     let mut stream = None;
     for a in addrs {
         if let Ok(s) = TcpStream::connect_timeout(&a, t) {
@@ -49,9 +53,9 @@ pub fn request(url: &str, body: Option<(&[u8], &str)>, timeout: f64, limit: usiz
             break;
         }
     }
-    let mut s = stream.ok_or(())?;
-    s.set_read_timeout(Some(t)).map_err(|_| ())?;
-    s.set_write_timeout(Some(t)).map_err(|_| ())?;
+    let mut s = stream.ok_or(RequestFailed)?;
+    s.set_read_timeout(Some(t)).map_err(|_| RequestFailed)?;
+    s.set_write_timeout(Some(t)).map_err(|_| RequestFailed)?;
     let host = if u.port == 80 { u.host.clone() } else { format!("{}:{}", u.host, u.port) };
     let mut req = format!(
         "{} {} HTTP/1.1\r\nAccept-Encoding: identity\r\nHost: {}\r\nUser-Agent: sarina-voice\r\nConnection: close\r\n",
@@ -67,14 +71,14 @@ pub fn request(url: &str, body: Option<(&[u8], &str)>, timeout: f64, limit: usiz
     if let Some((b, _)) = body {
         wire.extend_from_slice(b);
     }
-    s.write_all(&wire).map_err(|_| ())?;
+    s.write_all(&wire).map_err(|_| RequestFailed)?;
     let mut r = Reader { s, buf: Vec::new(), pos: 0 };
     let status = r.line()?;
     let mut parts = status.splitn(3, ' ');
     let proto = parts.next().unwrap_or("");
-    let code: u16 = parts.next().and_then(|c| c.parse().ok()).ok_or(())?;
+    let code: u16 = parts.next().and_then(|c| c.parse().ok()).ok_or(RequestFailed)?;
     if !proto.starts_with("HTTP/") {
-        return Err(());
+        return Err(RequestFailed);
     }
     let mut length: Option<usize> = None;
     let mut chunked = false;
@@ -94,13 +98,13 @@ pub fn request(url: &str, body: Option<(&[u8], &str)>, timeout: f64, limit: usiz
         }
     }
     if !(200..300).contains(&code) {
-        return Err(());
+        return Err(RequestFailed);
     }
     let mut out = Vec::new();
     if chunked {
         loop {
             let l = r.line()?;
-            let n = usize::from_str_radix(l.split(';').next().unwrap_or("").trim(), 16).map_err(|_| ())?;
+            let n = usize::from_str_radix(l.split(';').next().unwrap_or("").trim(), 16).map_err(|_| RequestFailed)?;
             if n == 0 {
                 break;
             }
@@ -126,14 +130,14 @@ struct Reader {
 }
 
 impl Reader {
-    fn fill(&mut self) -> Result<bool, ()> {
+    fn fill(&mut self) -> Result<bool, RequestFailed> {
         let mut b = [0u8; 8192];
-        let n = self.s.read(&mut b).map_err(|_| ())?;
+        let n = self.s.read(&mut b).map_err(|_| RequestFailed)?;
         self.buf.extend_from_slice(&b[..n]);
         Ok(n > 0)
     }
 
-    fn line(&mut self) -> Result<String, ()> {
+    fn line(&mut self) -> Result<String, RequestFailed> {
         loop {
             if let Some(i) = self.buf[self.pos..].iter().position(|&c| c == b'\n') {
                 let l = &self.buf[self.pos..self.pos + i];
@@ -143,15 +147,15 @@ impl Reader {
                 return Ok(s);
             }
             if !self.fill()? {
-                return Err(());
+                return Err(RequestFailed);
             }
         }
     }
 
-    fn take(&mut self, n: usize) -> Result<Vec<u8>, ()> {
+    fn take(&mut self, n: usize) -> Result<Vec<u8>, RequestFailed> {
         while self.buf.len() - self.pos < n {
             if !self.fill()? {
-                return Err(());
+                return Err(RequestFailed);
             }
         }
         let v = self.buf[self.pos..self.pos + n].to_vec();
@@ -159,7 +163,7 @@ impl Reader {
         Ok(v)
     }
 
-    fn rest(&mut self, limit: usize) -> Result<Vec<u8>, ()> {
+    fn rest(&mut self, limit: usize) -> Result<Vec<u8>, RequestFailed> {
         while self.buf.len() - self.pos < limit && self.fill()? {}
         Ok(self.buf[self.pos..].to_vec())
     }

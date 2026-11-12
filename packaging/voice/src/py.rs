@@ -798,7 +798,7 @@ pub fn float_repr(x: f64) -> String {
     if neg {
         out.push('-');
     }
-    if decpt > 16 || decpt < -3 {
+    if !(-3..=16).contains(&decpt) {
         out.push_str(&digits[..1]);
         if digits.len() > 1 {
             out.push('.');

@@ -80,23 +80,27 @@ impl Value {
     }
 }
 
+/// json.loads failed: Python's ValueError (JSONDecodeError), without the detail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecodeError;
+
 /// json.loads(text); Err is a ValueError (JSONDecodeError).
-pub fn loads(text: &str) -> Result<Value, ()> {
+pub fn loads(text: &str) -> Result<Value, DecodeError> {
     let b: Vec<char> = text.chars().collect();
     let mut p = Parser { s: &b, i: 0, depth: 0 };
     p.ws();
-    let v = p.value()?;
+    let v = p.value().map_err(|()| DecodeError)?;
     p.ws();
     if p.i != b.len() {
-        return Err(());
+        return Err(DecodeError);
     }
     Ok(v)
 }
 
 /// json.loads(bytes): UTF-8 (a leading byte-order mark is skipped).
-pub fn loads_bytes(b: &[u8]) -> Result<Value, ()> {
+pub fn loads_bytes(b: &[u8]) -> Result<Value, DecodeError> {
     let b = b.strip_prefix(b"\xef\xbb\xbf").unwrap_or(b);
-    let s = std::str::from_utf8(b).map_err(|_| ())?;
+    let s = std::str::from_utf8(b).map_err(|_| DecodeError)?;
     loads(s)
 }
 

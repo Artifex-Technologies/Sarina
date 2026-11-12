@@ -161,9 +161,9 @@ pub fn persona_text(ctx: &Ctx) -> PyResult<String> {
 }
 
 fn drop_front_matter(text: &str) -> &str {
-    if text.starts_with("---\n") {
-        if let Some(i) = text[4..].find("\n---") {
-            return &text[4 + i + 4..];
+    if let Some(rest) = text.strip_prefix("---\n") {
+        if let Some(i) = rest.find("\n---") {
+            return &rest[i + 4..];
         }
     }
     text
@@ -704,7 +704,7 @@ pub fn learned(ctx: &Ctx, vault: &str, today_days: i64, n: usize) -> PyResult<Ve
             out.push((seen, s(c.get(1).unwrap().as_str())));
         }
     }
-    out.sort_by(|a, b| b.0.cmp(&a.0));
+    out.sort_by_key(|x| std::cmp::Reverse(x.0));
     Ok(out.into_iter().take(n).map(|(_, t)| t).collect())
 }
 
@@ -1713,9 +1713,9 @@ fn run(ctx: &Ctx, prog: &str, args: &[String], timing: &mut Timing) -> PyResult<
             if let Some(st) = &state {
                 save_turn(st, &said_q, &answer);
             }
-            if state.is_some() && resume.is_none() {
+            if let (Some(st), None) = (&state, &resume) {
                 if let Some(sid) = new_session(ctx, &before, state.as_deref()) {
-                    let _ = py::write_text(state.as_ref().unwrap(), &sid);
+                    let _ = py::write_text(st, &sid);
                 }
             }
             return Ok(Some(if !answer.is_empty() || code != 0 { code } else { 4 }));
@@ -1771,9 +1771,9 @@ fn run(ctx: &Ctx, prog: &str, args: &[String], timing: &mut Timing) -> PyResult<
     } else {
         rc = proc::run_inherit(&cmd, Some(&env)).map_err(|_| Crash::new("OSError: sarina could not be started"))?;
     }
-    if state.is_some() && resume.is_none() {
+    if let (Some(st), None) = (&state, &resume) {
         if let Some(sid) = new_session(ctx, &before, state.as_deref()) {
-            let _ = py::write_text(state.as_ref().unwrap(), &sid);
+            let _ = py::write_text(st, &sid);
         }
     }
     Ok(Some(rc))

@@ -168,7 +168,7 @@ fn call(f: &str, a: &[Value], streamers: &mut HashMap<i64, Streamer>, next: &mut
         })),
         "json_roundtrip" => match json::loads(&arg_str(a, 0)) {
             Ok(v) => json::s(&json::dumps(&v)),
-            Err(()) => Value::Null,
+            Err(json::DecodeError) => Value::Null,
         },
         "splitlines" => strs(&py::splitlines(&arg_str(a, 0)).into_iter().map(|s| s.to_string()).collect::<Vec<_>>()),
         "split_ws" => strs(&py::split_ws(&arg_str(a, 0)).into_iter().map(|s| s.to_string()).collect::<Vec<_>>()),
