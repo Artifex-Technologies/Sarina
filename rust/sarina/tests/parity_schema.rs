@@ -36,6 +36,7 @@ fn value(a: &Any) -> Value {
         Any::Null => Value::Null,
         Any::Bool(b) => json!(b),
         Any::Number(f) => json!(f),
+        Any::Num(n) => serde_json::from_str(n).expect("number"),
         Any::String(s) => json!(s),
         Any::Array(xs) => Value::Array(xs.iter().map(value).collect()),
         Any::Object(m) => Value::Object(m.iter().map(|(k, x)| (k.clone(), value(x))).collect()),

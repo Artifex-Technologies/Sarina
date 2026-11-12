@@ -5,6 +5,8 @@ pub mod fuzzing;
 pub mod goany;
 pub mod gopath;
 pub mod gotext;
+pub mod pyfmt;
 pub mod shellparse;
 pub mod testguard;
 pub mod tools;
+pub mod version;
