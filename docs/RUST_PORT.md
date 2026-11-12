@@ -14,7 +14,7 @@ equal.
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
-| 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **in progress**: `gohttp` (a small Go-like HTTP/1.1 client), Heimdall's review (`Consult`), `embed`, `helpers` and `limbo`'s client done 2026-11-12 |
+| 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **in progress**: `gohttp` (a small Go-like HTTP/1.1 client), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client and the OpenAI-compatible wire format done 2026-11-12 |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
@@ -213,6 +213,7 @@ reaches it any more (dead code is a risk).
 | `guard.rs` (`scan`) | `guard`'s full `Gate.Scan`: the local checks first (no request then), Heimdall's verdict for a gate with a kind (memory, a session id), "Heimdall flagged this independently: ..." with the reasons, failing open on an absent or broken Heimdall; the default gate never asks | `guardconsult.json` | 145 |
 | `helpers.rs` | `helpers` (`Python`, `Command`, `Available`, `Passthrough`, the `serve` client: ping and protocol, classify, group, the helper's errors, damaged, exact and over-long answer lines, a helper that dies or speaks last after closing its output, Close's exit status, the requests byte for byte), against one shell stand-in for the interpreter that both tests run | `helpers.json` | 18 |
 | `limbo.rs`, `gohttp.rs` (unix sockets, any method) | `limbo/limbo.go` (the agent-socket client: `ListProfiles`, `DescribeProfilesAndSkipped` with the capped skipped list, `Validate` and `ValidateBundle` with polling, `RunResult` and its text for the model, the cleaning of guest output, the socket-name rule, Limbo's errors, damaged and over-long answers), against a scripted unix socket (`RawUnixServer`) | `limbo.json` | 32 |
+| `llm/openai.rs` | `llm/client.go`'s wire format: `BuildBody` (every request shape, the encoder keeping a tool's own HTML-escaped JSON, `/no_think`), `parseResponse` (content parts, reasoning, finish reasons of any kind, usage, tool calls and the old function_call, the server's errors), `readStream` (server-sent events: data lines, comments, `[DONE]`, tool-call fragments merged by index and id, cumulative usage, every event handed on) and its bounds at, under and over | `openai.json` | 74 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -308,8 +309,8 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **Limbo's over-long answer has its own error, in Go and Rust (2026-11-12).** Go read 1 MiB and cut the rest, so a
   long answer read as "Limbo returned something that is not JSON"; both now say "Limbo's answer is larger than 1048576
   bytes; not read". The limbo tools and commands (`integration.go`) come with step 4's tools.
-- **The model clients' answers are bounded with their own errors, in Go now (2026-11-12); the Rust llm port must do the
-  same.** Go cut a non-streamed answer at 256 MiB silently (it then read as damaged JSON) and read a streamed answer
+- **The model clients' answers are bounded with their own errors, in Go now (2026-11-12); the Rust llm port does the
+  same (`llm/openai.rs`).** Go cut a non-streamed answer at 256 MiB silently (it then read as damaged JSON) and read a streamed answer
   without any bound, line or total. Now an answer past `maxResponseBytes` (256 MiB) is refused, streamed or not ("the
   model's answer is larger than ... bytes; not read"), and so is a streamed line past `maxStreamLine` (16 MiB); the
   model-description probe (`discover.go`) treats an answer past 4 MiB as none. The MCP client was already bounded (a
@@ -353,22 +354,26 @@ and the registry, the tool definitions, vecindex with Go's math/rand and math.Ex
 `trust` (ed25519 through `ring`), Heimdall's grants gate with `AccessTierFromEnv`, `policy`, `guard`'s detectors,
 `analysiscache`, `llm`'s repair and normaliser, `session.Save` and `MigrateDir`, `sessionsearch` (with Go's amd64
 `math.Log`), `agents`, the skill file format, plus `gostruct` (Go 1.27's Unmarshal into a struct), `gotime` (Go's loose
-RFC 3339) and `goos` (MkdirAll, CreateTemp, WriteFile). 41,826 fixture cases in all, a mutation run for each piece (the
-cases widened where one got through), fuzz targets for every reader (15 now). CI green through the last push. Go code
-changed: `go/vecindex` (dimension 65,536 and counts past the file refused, with tests: commit `28b9c3f`), otherwise only
-new `*parity_test.go` files and the test-only `go/internal/parity`.
+RFC 3339) and `goos` (MkdirAll, CreateTemp, WriteFile). About 42,000 fixture cases in all, a mutation run for each piece (the
+cases widened where one got through), fuzz targets for every reader (17 now). CI green through the last push.
+Go code changed, each a bug the port found, fixed in Go and Rust both: `go/vecindex` (`28b9c3f`), session ids and
+MigrateDir, analysiscache's non-finite values (`261834a`), embed's answer bound (`a4a6f72`), the Python helper's pipes
+(`f013ceb`), Limbo's over-long answer (`49b598e`), the model clients' bounds (`9aba2f6`); otherwise only new
+`*parity_test.go` files and the test-only `go/internal/parity`.
 
 Later on 2026-11-12: two bugs the port found were fixed in Go and Rust (`261834a`: session ids that cannot name a file
 are refused by Save and skipped and reported by MigrateDir; analysiscache refuses values JSON cannot hold), and step 3
-began: `gohttp`, Heimdall's review client (`Consult`), `embed` (its answer now bounded in both) `helpers` (its pipes
-bounded in both) and `limbo`'s client (its long answers named in both), proved against Go's client on raw answers from a
-loopback server (`go/internal/parity/rawserver.go`, `tests/common` `raw_server`).
+began: `gohttp`, Heimdall's review client (`Consult`), `embed` (its answer now bounded in both), `helpers` (its pipes
+bounded in both), `limbo`'s client (its long answers named in both) and the OpenAI-compatible wire format (Go's
+model clients bounded first), proved against Go's client on raw answers from a loopback server (`go/internal/parity/rawserver.go`, `tests/common` `raw_server`).
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. The rest of step 3 (guard's full scan and embed's answer limit are done): `llm` (the OpenAI-compatible and Anthropic clients, streaming; TLS with `rustls` for the online
-   tiers; with Go's new answer bounds), `mcp` (stdio servers; already bounded); the limbo tools with step 4. Every read from another process gets a bound,
-   in Go and Rust both (the owner's rule: security first), with a clear error when it is exceeded.
+1. The rest of step 3: `llm`'s transport (`Complete`: the one retry, the fallback models, the idle timer that each
+   streamed chunk resets, cancellation; `gohttp` gains TLS through `rustls` for the online tiers) on top of
+   `llm/openai.rs`, then the Anthropic client (`anthropic.go`, bounded the same way) and `discover.go`; then `mcp` (stdio
+   servers; already bounded in Go). The limbo tools come with step 4. Every read from another process gets a bound, in Go
+   and Rust both (the owner's rule: security first), with a clear error when it is exceeded.
 2. The rest of `skills` (discovery, the skill tool, the long-skill library) with step 4's tools.
 
 The mutation script used in this session copied the file back with `cp`/`mv`, which leaves the restored file older

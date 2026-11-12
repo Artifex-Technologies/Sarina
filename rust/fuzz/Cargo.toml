@@ -128,3 +128,10 @@ path = "fuzz_targets/limbo_answer.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "model_answer"
+path = "fuzz_targets/model_answer.rs"
+test = false
+doc = false
+bench = false

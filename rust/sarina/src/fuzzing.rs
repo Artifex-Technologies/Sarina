@@ -311,3 +311,23 @@ pub fn skill_file(data: &[u8]) {
 pub fn limbo_answer(data: &[u8]) {
     crate::limbo::fuzz_answer(data);
 }
+
+/// Any bytes as a model server's answer, streamed and not: no panic; a refused answer is a backend error with a message;
+/// within tight bounds, an answer past them is always refused.
+pub fn model_answer(data: &[u8]) {
+    use crate::llm::openai::{parse_response, read_stream};
+    if let Err(e) = parse_response(data) {
+        assert!(!e.message.is_empty());
+    }
+    let mut events = 0;
+    let r = read_stream(data, 1 << 20, 1 << 16, &mut || {}, &mut |_| events += 1);
+    assert!(events >= 1, "message_start always comes first");
+    if let Err(e) = &r {
+        assert!(!e.message.is_empty());
+    }
+    let tight = data.len().saturating_sub(1);
+    if !data.is_empty() {
+        let r = read_stream(data, tight, 1 << 16, &mut || {}, &mut |_| {});
+        assert!(r.is_err(), "an answer past its bound was read");
+    }
+}

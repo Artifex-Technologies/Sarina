@@ -416,6 +416,21 @@ proptest! {
         fuzzing::limbo_answer(&data);
     }
 
+    #[test]
+    fn model_answer_any_bytes(data in prop::collection::vec(any::<u8>(), 0..160)) {
+        fuzzing::model_answer(&data);
+    }
+
+    /// Stream-shaped answers: data lines with deltas, tool-call fragments, usage, errors, blank lines and [DONE].
+    #[test]
+    fn model_answer_shaped(lines in prop::collection::vec(
+        "(data: \\{\"choices\":\\[\\{\"delta\":\\{\"content\":\"[a-z]{0,3}\"\\}\\}\\]\\}|data: \\{\"choices\":\\[\\{\"delta\":\\{\"tool_calls\":\\[\\{\"index\":[0-2],\"id\":\"[ab]?\",\"function\":\\{\"name\":\"[a-z]{0,3}\",\"arguments\":\"[{}a]{0,3}\"\\}\\}\\]\\}\\}\\]\\}|data: \\{\"usage\":\\{\"prompt_tokens\":[0-9]\\}\\}|data: \\{\"error\":\"x\"\\}|data: \\[DONE\\]|: c||data: ?[{}]?)",
+        0..10,
+    ), crlf in any::<bool>()) {
+        let nl = if crlf { "\r\n" } else { "\n" };
+        fuzzing::model_answer(lines.join(nl).as_bytes());
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]
