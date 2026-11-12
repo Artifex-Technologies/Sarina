@@ -211,6 +211,16 @@ fn set_nonblocking(fd: i32) {
 struct Pump<'a> {
     pipes: Vec<(Option<std::fs::File>, &'static str)>,
     sink: &'a mut dyn FnMut(&'static str, &[u8]),
+    /// the child's pidfd: readable once it has ended, so the wait for its end wakes at once
+    pidfd: Option<std::os::fd::OwnedFd>,
+}
+
+/// pidfd_open(2) for our own child (None on a kernel without it: the loop then wakes every few milliseconds).
+fn pidfd(child: &Child) -> Option<std::os::fd::OwnedFd> {
+    use std::os::fd::FromRawFd;
+    // SAFETY: pidfd_open(2) on our own child's pid, which is not reaped yet; the fd it returns is owned here.
+    let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, child.id() as libc::pid_t, 0) };
+    (fd >= 0).then(|| unsafe { std::os::fd::OwnedFd::from_raw_fd(fd as i32) })
 }
 
 impl Pump<'_> {
@@ -226,13 +236,20 @@ impl Pump<'_> {
             .filter_map(|(p, _)| p.as_ref())
             .map(|f| libc::pollfd { fd: f.as_raw_fd(), events: libc::POLLIN, revents: 0 })
             .collect();
+        let open = fds.len();
+        if let Some(p) = &self.pidfd {
+            fds.push(libc::pollfd { fd: p.as_raw_fd(), events: libc::POLLIN, revents: 0 });
+        }
         if fds.is_empty() {
-            std::thread::sleep(wait);
+            std::thread::sleep(wait.min(Duration::from_millis(5)));
             return;
         }
         // SAFETY: poll(2) on a buffer of pollfd this function owns, of the length given.
         unsafe {
             libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, wait.as_millis().min(1000) as i32);
+        }
+        if open == 0 {
+            return;
         }
         let mut buf = [0u8; 32 * 1024];
         for (slot, stream) in self.pipes.iter_mut() {
@@ -257,6 +274,7 @@ impl Pump<'_> {
 
     /// After the process ended: read until every pipe is closed, for at most WAIT_DELAY.
     fn drain(&mut self) {
+        self.pidfd = None;
         let until = Instant::now() + WAIT_DELAY;
         while self.open() {
             let now = Instant::now();
@@ -322,6 +340,7 @@ pub fn run_foreground(command: &str, tc: &Context, timeout: Duration, emit: Opti
         let mut pump = Pump {
             pipes: vec![(child.stdout.take().map(pipe_file), "stdout"), (child.stderr.take().map(pipe_file), "stderr")],
             sink: &mut sink,
+            pidfd: pidfd(&child),
         };
         let deadline = Instant::now() + timeout;
         loop {
@@ -355,6 +374,110 @@ pub fn run_foreground(command: &str, tc: &Context, timeout: Duration, emit: Opti
     res.stderr = errb.text();
     res.exit_code = status.map(exit_code).unwrap_or(-1);
     Ok(res)
+}
+
+/// Go's `*exec.ExitError` text for a status that is not success ("exit status 3", "signal: killed"), or None.
+pub(crate) fn exit_error(st: std::process::ExitStatus) -> Option<String> {
+    use std::os::unix::process::ExitStatusExt;
+    if st.success() {
+        return None;
+    }
+    if let Some(c) = st.code() {
+        return Some(format!("exit status {c}"));
+    }
+    let sig = st.signal().unwrap_or(0);
+    let name = match sig {
+        1 => "hangup".to_owned(),
+        2 => "interrupt".to_owned(),
+        3 => "quit".to_owned(),
+        6 => "aborted".to_owned(),
+        9 => "killed".to_owned(),
+        11 => "segmentation fault".to_owned(),
+        13 => "broken pipe".to_owned(),
+        15 => "terminated".to_owned(),
+        n => format!("signal {n}"),
+    };
+    Some(format!("signal: {name}"))
+}
+
+/// What a program run by `run_program` left: the first bytes of its output (stdout and stderr in one pipe when both are
+/// asked for), whether more came, and its end.
+pub(crate) struct Captured {
+    pub out: Vec<u8>,
+    pub over: bool,
+    pub status: Option<std::process::ExitStatus>,
+}
+
+/// Which outputs of a program `run_program` keeps (the others go to the null device).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Capture {
+    None,
+    Stdout,
+    /// stdout and stderr in one pipe, in the order written
+    Both,
+}
+
+/// Go's `exec.CommandContext(...).Run()` for a short-lived program: `path args` with `env` (stdin from the null device),
+/// the first `max` bytes of what it writes to the outputs asked for kept and the rest read and dropped, killed at
+/// `deadline` or when `ctx` ends (only the process, as Go's CommandContext does), its pipe read for at most 2 s after it
+/// ends.
+pub(crate) fn run_program(
+    path: &str,
+    args: &[String],
+    env: &[Vec<u8>],
+    capture: Capture,
+    max: usize,
+    deadline: Instant,
+    ctx: &crate::goctx::Ctx,
+) -> Result<Captured, String> {
+    use std::os::unix::ffi::OsStrExt;
+    let (reader, writer) = std::io::pipe().map_err(|e| e.to_string())?;
+    let mut child = {
+        // the write end lives only in this block: the parent's copies must be closed for the pipe to end with the child
+        let writer = writer;
+        let mut cmd = Command::new(path);
+        cmd.args(args).env_clear().stdin(Stdio::null());
+        for kv in env {
+            if let Some(i) = kv.iter().skip(1).position(|&c| c == b'=').map(|i| i + 1) {
+                cmd.env(std::ffi::OsStr::from_bytes(&kv[..i]), std::ffi::OsStr::from_bytes(&kv[i + 1..]));
+            }
+        }
+        let w2 = writer.try_clone().map_err(|e| e.to_string())?;
+        cmd.stdout(if capture != Capture::None { Stdio::from(writer) } else { Stdio::null() });
+        cmd.stderr(if capture == Capture::Both { Stdio::from(w2) } else { Stdio::null() });
+        cmd.spawn().map_err(|e| goerr::path("fork/exec", path.as_bytes(), &e))?
+    };
+    let mut cap = Captured { out: Vec::new(), over: false, status: None };
+    {
+        let mut sink = |_: &'static str, b: &[u8]| {
+            let room = max.saturating_sub(cap.out.len());
+            if b.len() > room {
+                cap.over = true;
+            }
+            cap.out.extend_from_slice(&b[..b.len().min(room)]);
+        };
+        let mut pump = Pump { pipes: vec![(Some(pipe_file(reader)), "out")], sink: &mut sink, pidfd: pidfd(&child) };
+        loop {
+            if let Ok(Some(st)) = child.try_wait() {
+                cap.status = Some(st);
+                break;
+            }
+            let now = Instant::now();
+            if now >= deadline || ctx.err().is_some() {
+                let _ = child.kill();
+                cap.status = child.wait().ok();
+                break;
+            }
+            pump.step((deadline - now).min(Duration::from_millis(50)));
+        }
+        pump.drain();
+    }
+    Ok(cap)
+}
+
+/// Go's `exec.LookPath` for a bare name, with its error text.
+pub(crate) fn look_path_go(name: &str) -> Result<String, String> {
+    look_path(name).ok_or_else(|| format!("exec: {}: executable file not found in $PATH", gotext::quote(name)))
 }
 
 // ---- background processes ------------------------------------------------------------------------------------------------
@@ -524,7 +647,7 @@ fn watch(mut child: Child, reader: std::fs::File, p: Arc<BackgroundProc>) {
     let status;
     {
         let mut sink = |_: &'static str, b: &[u8]| p.lock().out.write(b);
-        let mut pump = Pump { pipes: vec![(Some(reader), "out")], sink: &mut sink };
+        let mut pump = Pump { pipes: vec![(Some(reader), "out")], sink: &mut sink, pidfd: pidfd(&child) };
         loop {
             if let Ok(Some(st)) = child.try_wait() {
                 status = Some(st);

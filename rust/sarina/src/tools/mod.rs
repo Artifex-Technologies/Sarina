@@ -6,6 +6,7 @@ pub mod exec;
 pub mod exfil;
 pub mod files;
 pub mod fsutil;
+pub mod git;
 pub mod private;
 pub mod registry;
 pub mod schema;
