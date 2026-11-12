@@ -6,4 +6,5 @@ pub mod goany;
 pub mod gopath;
 pub mod gotext;
 pub mod shellparse;
+pub mod testguard;
 pub mod tools;
