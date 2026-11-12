@@ -238,6 +238,20 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 — Rust port, step 2: JSON, the session file, the permission gate, vecindex; nothing switched
+- Ported and proved against Go fixtures (docs/RUST_PORT.md "Ported"): Go 1.27's encoding/json, the session file Heimdall
+  reads (read and written byte for byte; a read-only run over a private copy of 9,839 real sessions gave the same bytes
+  for every one, copy deleted), config's loaders, llm's types, the permission gate and tool registry, the 35 tool
+  definitions, vecindex with Go's math/rand and amd64 math.Exp. 33,207 fixture cases in all; CI green.
+- **Go faults found, not changed in Go** (for whoever owns vecindex): `vecindex.New(65536, ...)` never ends and eats
+  memory (also through `Load` of a damaged file), and `Load` allocates by the file's vector count before reading (2^32
+  passes its check: ~52 GB). Hit on my PC by the first fixture writer (OOM kill, 2026-11-11 23:34); the port avoids both.
+- **For Heimdall's and Limbo's boards:** Go 1.27 runs encoding/json on the v2 engine (GOEXPERIMENT=jsonv2 is default):
+  a bad escape is "invalid escape sequence `\x` in string", not v1's "in string escape code", a number out of range reads
+  as 0 with the error, the depth error is "exceeded max depth". Their gojson ports follow v1 there; worth a fixture.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-11 — The voice service in Rust (`packaging/voiced`, `sarina-voiced`); the switch waits on a Labyrinth branch
 - `labyrinth-voiced` and `chatterbox_engine.py` (Labyrinth's image, Python) ported to `sarina-voiced`: the same socket
   (`$XDG_RUNTIME_DIR/labyrinth-sarina/voiced.sock`), requests, answers, files and environment variables, so the voice client

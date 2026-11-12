@@ -13,7 +13,7 @@ equal.
 | --- | --- | --- |
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
-| 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | open |
+| 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **in progress**: gojson, the session file, config's loaders, llm's types, the permission gate and registry, the tool definitions, vecindex (with Go's math/rand and math.Exp) done 2026-11-12 |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | open |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
@@ -193,6 +193,11 @@ reaches it any more (dead code is a risk).
 | `pyfmt.rs` | `chymaera/internal/pyfmt` | `pyfmt.json` | 681 |
 | `flagx.rs`, `goflag.rs` | `flagx` and Go's `flag` package (syntax, values, error texts, the usage on an error) | `flagx.json` | 1,513 |
 | `version.rs` | `internal/version` (VERSION read at build time; a test checks the Go constant) | | |
+| `gojson.rs` | Go 1.27's `encoding/json` (the v1 API on the v2 engine): Unmarshal and Decoder into `any` with Go's error texts, Marshal, an Encoder without HTML escaping, MarshalIndent's layout, float64 and string writing; iterative (10,000 levels on a 256 KiB stack) | `gojson.json` | 1,689 |
+| `session/`, `config.rs`, `llm/types.rs` | `session` (Parse, Marshal byte for byte, MessageFromMap, the retired-tool migration, plan state, RepairPairing, NotRunMessage, ToolResultBody, Mutate, Redact, FileMode), `config` (ModelFromMap, RuntimeFromMap, ModelFromEnv, ContextConfig.Settings, AsInt/AsFloat with amd64's float to int), `llm/types.go` (Usage both ways, UsageFromProvider, wire messages, replayed arguments, ToolSpec) | `session.json`, `config.json`, `llmtypes.json` | 3,505 + 135 + 338 |
+| `tools/registry.rs` | `permission.go`, `registry.go`, `ForMode` (the gate, needsApproval, deny, hidden tools, Filter, the Builder's order, Execute's order) | `registry.json` | 3,716 |
+| `tools/defs.rs`, `tools/defs.json` | the 35 tool definitions the model sees (written from the Go tools by go/cmd/sarina's parity test) | `tooldefs.json` | 61 definitions |
+| `vecindex.rs`, `gorand.rs`, `gomath.rs` | `vecindex` (rotation, levels, Add, Remove, Search with container/heap's tie order, the SVEC1 file), `math/rand` with a seeded source (table generated from the Go source), amd64 `math.Exp` on both its paths | `vecindex.json` | 93 (1,029 comparisons) |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -224,6 +229,25 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 
 ## Differences from Go, on purpose or accepted
 
+- **Go 1.27's JSON is not v1's.** Go 1.27 builds with `GOEXPERIMENT=jsonv2` on, so `encoding/json` runs on the v2
+  engine: a bad escape reads "invalid escape sequence `\x` in string" (v1 and Limbo's and Heimdall's ports: "invalid
+  character 'x' in string escape code"), a number cut short "in numeric literal" without the place, the depth limit
+  "exceeded max depth", the session reader's type error names `map[string]jsontext.Value`, and a number out of float64's
+  range reads as 0 (not null) with the error while the rest is still read. `gojson.rs` follows Go 1.27; the siblings'
+  ports may differ from their own Go builds in these texts (for their boards).
+- **vecindex, two Go faults not carried over.** `New(65536, ...)` passes Go's dimension check and never ends (its block
+  loop appends blocks of size 0 until memory runs out; a damaged index file with that dimension does the same to `Load`):
+  the port refuses 65,536 as an unsupported dimension. Go's `Load` allocates the slices for the file's vector count
+  before reading (2^32 vectors pass its size check: about 52 GB); the port checks the count against the bytes that
+  follow first, with the same error. Both hit the owner's PC through the first fixture writer (killed by the kernel's
+  OOM killer, 2026-11-11 23:34); the fixture now stays clear of them.
+- **vecindex levels depend on the CPU.** Go's amd64 `math.Exp` has an FMA path and a plain one, which differ in the last
+  bit now and then; the levels (not saved in the file) follow, so Go itself can search a moved index very slightly
+  differently. The port takes Go's path on the same CPU (AVX and FMA), so the fixture holds on this PC and on CI.
+- **Deep JSON.** Go reads 10,000 levels; a recursive Rust reader needed over 4 MB of stack for that (release), so the
+  reader, the conversion to `any`, the writer and the drops of `Value` and `Any` are loops. `Any` therefore has its own
+  `Drop` (parts are taken out with `into_object`/`into_array`/`into_string`); `Clone` and `==` are still recursive.
+
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such
@@ -236,31 +260,43 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 
 ## Running the tests
 
+Every build, test and fixture run goes under a memory cap (a fixture writer once took 26 GB and the kernel's OOM killer
+took the editor with it):
+
 ```bash
+CAP="systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 nice -n 19"
 cd rust
-scripts/nicecargo.sh test --offline          # every fixture, the properties, the fuzz bodies
-scripts/nicecargo.sh clippy --all-targets -- -D warnings
-cd ../go && go test ./... -run Parity         # the fixtures are current with the Go code
-SARINA_PARITY_UPDATE=1 go test ./... -run Parity   # after a deliberate change: rewrite them, review the diff
+$CAP cargo test -j4 --offline                 # every fixture, the properties, the fuzz bodies
+$CAP cargo clippy -j4 --offline --all-targets -- -D warnings
+cd ../go && $CAP go test -p 4 ./... -run Parity               # the fixtures are current with the Go code
+$CAP env SARINA_PARITY_UPDATE=1 go test -p 4 ./... -run Parity  # after a deliberate change: rewrite them, review the diff
+```
+
+Never set `RUST_MIN_STACK` around cargo: rustc reads it too (a small value made it crash on 2026-11-11).
+
+```bash
 ```
 
 ## Resume here
 
-Done (2026-11-11 night): phase 0; the workspace and the fixture writer; `shellparse`, the bash guards (`CheckDestructive`,
-`CheckPrivileged`), `ValidateArgs` with ParseFloat, the file tools' guards (`secret.go`, `exfil.go`, `private.go`) and
-path resolution (`fsutil.go`), `testguard` (with Go's filepath), `pyfmt`, `flagx` (with Go's flag package), `version`:
-each with its fixture (23,729 cases in all) and a mutation run, properties and fuzz targets for everything that parses
-outside input; the CI job (`.github/workflows/rust.yml`: the Go fixtures current, fmt, clippy `-D warnings`, the tests;
-green). No existing Go file was changed: only new `*parity_test.go` files and the test-only `go/internal/parity`.
+Done (2026-11-11 night and 2026-11-12): phase 0; the workspace and the fixture writer; step 1's leaves (`shellparse`, the
+bash guards, `ValidateArgs`, the file tools' guards and path resolution, `testguard`, `pyfmt`, `flagx`, `version`); then
+`gojson` (Go 1.27's JSON), the session file with config's loaders and llm's types (and a read-only run over a private copy
+of 9,839 real session files: Go and Rust wrote the same bytes for every one; the copy was deleted), the permission gate
+and the registry, the tool definitions, and vecindex with Go's math/rand and math.Exp. 33,207 fixture cases in all, a
+mutation run for each piece, fuzz targets for every reader (`json`, `session`, `vecindex` new). CI green through
+`180d0de`. Go files changed: only new `*parity_test.go` files and the test-only `go/internal/parity`.
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. `gojson` (Go's JSON decoder and encoder: take Limbo's `rust/limbo/src/gojson.rs`, which has Go's error texts,
-   escaping, field order and `null` against `[]`), proved by its own fixture of Go's `json.Marshal`/`Unmarshal`.
-2. Step 2's formats, starting with what Heimdall reads: llm's message types (`llm/types.go`), `config`'s data structures
-   and tolerant loaders, `session` (the writer byte for byte, the reader for every file Go reads, `migrate.go`),
-   `session/redact.go`; then a read-only run over a **copy** of real sessions (never committed) comparing Go's and Rust's
-   re-marshalled bytes.
-3. In `tools`: the permission gate (`permission.go`) and the tool definitions' JSON (part of every request to the model).
-4. Then the order in "Port order": vecindex (with Go's math/rand), trust, policy, analysiscache, guard, agents, skills,
-   sessionsearch, llm's pure parts.
+1. The rest of step 2: `trust` (ed25519 against Heimdall's signed list: `ring`), `policy`, `analysiscache`, `guard`'s
+   detectors, the `agents` and `skills` file formats, `sessionsearch`, `llm`'s pure parts (`repair.go`, `normalize.go`),
+   `session.Save` (the atomic write) and `MigrateDir`, `config.AccessTierFromEnv` with Heimdall's grants cap
+   (`go/heimdall/grants.go`: a fixture of every tier against the cap missing, damaged, lower, higher).
+2. Step 3, the clients, starting with `heimdall` (review) and `embed`.
+3. Which tools a session offers (the providers' switches and their order) comes with the tools in step 4; `defs.json`
+   already holds every definition.
+
+Rules for whoever continues: every build, test and fixture run under the memory cap above (`-j4`, `-p 4`, nice 19);
+keep fixtures small and bounded (no input that makes Go allocate by a count it reads); pull before each commit (another
+helper works in `packaging/`); stage by explicit path.
