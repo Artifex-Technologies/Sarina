@@ -116,3 +116,44 @@ func TestNullLabelIsEmpty(t *testing.T) {
 		t.Fatalf("%q %v", label, err)
 	}
 }
+
+// An answer line past the limit stops the helper with a clear error instead of being read on without end.
+func TestOverlongAnswerStopsTheHelper(t *testing.T) {
+	useFake(t)
+	t.Setenv(fakehelper.EnvBig, "5000")
+	s, err := startServer("model", 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, _, err := s.Classify("x"); err == nil || !strings.Contains(err.Error(), "longer than 4096 bytes") {
+		t.Fatalf("err %v", err)
+	}
+	if _, _, err := s.Classify("x"); err == nil {
+		t.Fatal("a stopped helper must not answer")
+	}
+	t.Setenv(fakehelper.EnvBig, "3000")
+	s2, err := startServer("model", 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	if label, _, err := s2.Classify("x"); err != nil || len(label) != 3000 {
+		t.Fatalf("an answer under the limit must be read: %d %v", len(label), err)
+	}
+}
+
+// The helper's error output is kept only to its last part, and its last line still explains a failure.
+func TestHelperErrorOutputIsBounded(t *testing.T) {
+	useFake(t)
+	_, err := StartServer("noisy")
+	if err == nil || !strings.Contains(err.Error(), "fatal: the model folder is noisy") {
+		t.Fatalf("err %v", err)
+	}
+	tl := &tail{max: 10}
+	tl.Write([]byte("0123456789abc"))
+	tl.Write([]byte("XY"))
+	if tl.String() != "56789abcXY" {
+		t.Fatalf("%q", tl.String())
+	}
+}

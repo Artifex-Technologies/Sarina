@@ -10,12 +10,14 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Environment variables.
@@ -26,6 +28,14 @@ const (
 
 // ProtocolVersion is the JSON-lines protocol version this build speaks.
 const ProtocolVersion = 1
+
+// MaxAnswerBytes bounds one answer line read from the helper (64 MiB). Its answers are small (a label, groups of capture
+// names, a few vectors); the bound is there so a broken or hostile helper cannot make Sarina read without end. A longer
+// line stops the helper.
+const MaxAnswerBytes = 64 << 20
+
+// stderrKeep is how much of the helper's error output is kept (the end of it; only its last line is ever shown).
+const stderrKeep = 64 << 10
 
 // InstallHint tells the operator how to get the helper.
 const InstallHint = "pip install python/sarina_helpers[ml,voice] (or set " + PythonEnv + " / " + PathEnv + ")"
@@ -70,8 +80,8 @@ func Available() error {
 	if err != nil {
 		return err
 	}
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
+	out := &tail{max: stderrKeep}
+	cmd.Stdout, cmd.Stderr = out, out
 	_ = cmd.Run()
 	if strings.Contains(out.String(), "usage: python -m sarina_helpers") {
 		return nil
@@ -113,11 +123,15 @@ func Passthrough(stdin io.Reader, stdout, stderr io.Writer, args ...string) int 
 
 // Server is a running `sarina_helpers serve --model-dir D` process.
 type Server struct {
-	cmd    *exec.Cmd
-	in     io.WriteCloser
-	out    *bufio.Reader
-	stderr *bytes.Buffer
-	mu     sync.Mutex
+	cmd     *exec.Cmd
+	in      io.WriteCloser
+	out     *bufio.Reader
+	stderr  *tail
+	maxLine int           // answer line limit; 0 = MaxAnswerBytes (tests set it lower)
+	done    chan struct{} // closed when the helper has exited and its output has been copied
+	waitErr error
+	broken  error // once the helper is gone (or stopped), every later call answers this
+	mu      sync.Mutex
 	// Prototypes is the helper's category-prototype fingerprint (from ping).
 	Prototypes string
 }
@@ -136,11 +150,15 @@ type response struct {
 // StartServer launches the embedding server and pings it. The error says why
 // the helper is unavailable (not installed, extra missing, bad model directory).
 func StartServer(modelDir string) (*Server, error) {
+	return startServer(modelDir, 0)
+}
+
+func startServer(modelDir string, maxLine int) (*Server, error) {
 	cmd, err := Command("serve", "--model-dir", modelDir)
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cmd: cmd, stderr: &bytes.Buffer{}}
+	s := &Server{cmd: cmd, stderr: &tail{max: stderrKeep}, maxLine: maxLine}
 	cmd.Stderr = s.stderr
 	if s.in, err = cmd.StdinPipe(); err != nil {
 		return nil, err
@@ -153,6 +171,8 @@ func StartServer(modelDir string) (*Server, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+	s.done = make(chan struct{})
+	go func() { s.waitErr = cmd.Wait(); close(s.done) }()
 	r, err := s.call(map[string]any{"op": "ping"})
 	if err != nil {
 		s.Close()
@@ -169,13 +189,28 @@ func StartServer(modelDir string) (*Server, error) {
 func (s *Server) call(req map[string]any) (*response, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.broken != nil {
+		return nil, s.broken
+	}
 	b, _ := json.Marshal(req)
 	if _, err := s.in.Write(append(b, '\n')); err != nil {
-		return nil, s.dead(err)
+		s.broken = s.dead(err)
+		return nil, s.broken
 	}
-	line, err := s.out.ReadBytes('\n')
+	max := s.maxLine
+	if max <= 0 {
+		max = MaxAnswerBytes
+	}
+	line, err := readLine(s.out, max)
+	if err == errTooLong {
+		// the stream is mid-line now: the helper cannot be talked to any more
+		s.cmd.Process.Kill()
+		s.broken = fmt.Errorf("helper answer is longer than %d bytes; the helper was stopped", max)
+		return nil, s.broken
+	}
 	if err != nil && len(bytes.TrimSpace(line)) == 0 {
-		return nil, s.dead(err)
+		s.broken = s.dead(err)
+		return nil, s.broken
 	}
 	var r response
 	if err := json.Unmarshal(line, &r); err != nil {
@@ -188,6 +223,12 @@ func (s *Server) call(req map[string]any) (*response, error) {
 }
 
 func (s *Server) dead(err error) error {
+	// the reason is the helper's last line of error output: wait (briefly) until it has exited and that output is copied,
+	// or the line may not be there yet
+	select {
+	case <-s.done:
+	case <-time.After(2 * time.Second):
+	}
 	if msg := lastLine(s.stderr.String()); msg != "no output" {
 		return fmt.Errorf("helper exited: %s", msg)
 	}
@@ -218,5 +259,46 @@ func (s *Server) Group(captures []map[string]any, threshold float64) ([][]string
 // Close ends the helper (closing stdin makes it exit).
 func (s *Server) Close() error {
 	s.in.Close()
-	return s.cmd.Wait()
+	<-s.done
+	return s.waitErr
+}
+
+var errTooLong = errors.New("line too long")
+
+// readLine reads up to and including the next newline, refusing a line longer than max bytes.
+func readLine(r *bufio.Reader, max int) ([]byte, error) {
+	var line []byte
+	for {
+		part, err := r.ReadSlice('\n')
+		if len(line)+len(part) > max {
+			return nil, errTooLong
+		}
+		line = append(line, part...)
+		if err != bufio.ErrBufferFull {
+			return line, err
+		}
+	}
+}
+
+// tail keeps the last max bytes written to it (the helper's error output); safe for the copying goroutine and readers.
+type tail struct {
+	mu  sync.Mutex
+	b   []byte
+	max int
+}
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.b = append(t.b, p...)
+	if len(t.b) > t.max {
+		t.b = append([]byte(nil), t.b[len(t.b)-t.max:]...)
+	}
+	return len(p), nil
+}
+
+func (t *tail) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return string(t.b)
 }

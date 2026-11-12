@@ -23,6 +23,7 @@ pub mod gotext;
 pub mod gotime;
 pub mod guard;
 pub mod heimdall;
+pub mod helpers;
 pub mod llm;
 pub mod policy;
 pub mod pyfmt;

@@ -21,6 +21,7 @@ const (
 	EnvLabel       = "SARINA_FAKE_LABEL"       // classify label (empty: null)
 	EnvLog         = "SARINA_FAKE_LOG"         // file receiving every request line
 	EnvExit        = "SARINA_FAKE_EXIT"        // exit code for memory-search / voice-chat
+	EnvBig         = "SARINA_FAKE_BIG"         // classify's label padded to this many bytes (an over-long answer)
 )
 
 // MaybeRun runs the fake and exits if this process was started as the helper.
@@ -58,6 +59,13 @@ func serve(args []string, in io.Reader, out io.Writer) int {
 		fmt.Fprintln(out, `{"ok":false,"error":"no model.onnx in bad"}`)
 		return 1
 	}
+	if len(args) >= 2 && args[1] == "noisy" { // a lot of error output, then the reason, then gone
+		for i := 0; i < 4000; i++ {
+			fmt.Fprintln(os.Stderr, "warning: something unimportant happened here, line", i)
+		}
+		fmt.Fprintln(os.Stderr, "fatal: the model folder is noisy")
+		return 1
+	}
 	var logf *os.File
 	if p := os.Getenv(EnvLog); p != "" {
 		logf, _ = os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
@@ -83,6 +91,10 @@ func serve(args []string, in io.Reader, out io.Writer) int {
 			var label any
 			if l := os.Getenv(EnvLabel); l != "" {
 				label = l
+			}
+			if n := 0; os.Getenv(EnvBig) != "" {
+				fmt.Sscan(os.Getenv(EnvBig), &n)
+				label = strings.Repeat("x", n)
 			}
 			resp = map[string]any{"ok": true, "label": label, "score": 0.9}
 		case "group":

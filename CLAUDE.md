@@ -261,6 +261,9 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   raw answers. **For Heimdall's board (nothing to change):** the review request is byte for byte Go's.
 - **embed's answer is now bounded in Go and Rust** (64 MiB, `MaxAnswerBytes`; the largest plausible answer is ~24 MiB): a
   larger answer is refused with a clear error. guard's full scan (local checks, then Heimdall) is ported too.
+- **The Python helper (`go/helpers`) is bounded too, in Go and Rust:** an answer line of at most 64 MiB (a longer one stops
+  the helper), the last 64 KiB of its error output kept, and a dying helper's reason no longer lost to a race. The Rust
+  workspace now needs Rust 1.87 (`std::io::pipe`).
 
 Signed: Sarina / Claude Opus 5.5
 

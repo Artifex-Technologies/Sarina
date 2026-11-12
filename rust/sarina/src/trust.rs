@@ -24,7 +24,7 @@ pub const ENV_CONTAINED: &str = "SARINA_CONTAINED_PATH";
 pub fn std_base64(s: &[u8]) -> Option<Vec<u8>> {
     const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let b: Vec<u8> = s.iter().copied().filter(|c| *c != b'\r' && *c != b'\n').collect();
-    if b.len() % 4 != 0 {
+    if !b.len().is_multiple_of(4) {
         return None;
     }
     let mut out = Vec::with_capacity(b.len() / 4 * 3);
