@@ -319,6 +319,9 @@ pub fn model_answer(data: &[u8]) {
     if let Err(e) = parse_response(data) {
         assert!(!e.message.is_empty());
     }
+    if let Err(e) = crate::llm::anthropic::parse_anthropic(data) {
+        assert!(!e.message.is_empty());
+    }
     let mut events = 0;
     let r = read_stream(data, 1 << 20, 1 << 16, &mut || {}, &mut |_| events += 1);
     assert!(events >= 1, "message_start always comes first");

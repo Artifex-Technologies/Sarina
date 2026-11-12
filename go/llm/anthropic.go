@@ -27,7 +27,8 @@ const defaultAnthropicMaxTokens = 8192
 // Complete method as Client, translating the OpenAI-shaped Request (system
 // messages, tool_calls, tool results) to Messages blocks and the reply back.
 // The API key lives only in Config.APIKey (which is never serialised) and is
-// scrubbed from every error message.
+// scrubbed from every error message, the server's own included (an error in a
+// 200 answer was not scrubbed before 2026-11-12).
 type AnthropicClient struct {
 	Config     config.ModelConfig
 	HTTPClient *http.Client
@@ -242,10 +243,11 @@ func (c *AnthropicClient) once(ctx context.Context, body []byte) (*Turn, bool, e
 			return nil, false, ctx.Err()
 		}
 		if errors.Is(rctx.Err(), context.DeadlineExceeded) {
-			return nil, false, &BackendError{Message: fmt.Sprintf("request to %s timed out after %s", c.endpoint(), timeout)}
+			return nil, false, &BackendError{Message: c.scrub(fmt.Sprintf("request to %s timed out after %s", c.endpoint(), timeout))}
 		}
 		var be *BackendError
 		if errors.As(err, &be) {
+			be.Message = c.scrub(be.Message)
 			return nil, retryable, err
 		}
 		return nil, retryable, &BackendError{Message: c.scrub(fmt.Sprintf("cannot reach backend at %s: %v", c.base(), err))}
@@ -277,6 +279,11 @@ func (c *AnthropicClient) once(ctx context.Context, body []byte) (*Turn, bool, e
 	}
 	turn, err := parseAnthropic(b)
 	if err != nil {
+		// the server's own error text may echo the key (a 200 with "type":"error" as much as an error status)
+		var be *BackendError
+		if errors.As(err, &be) {
+			be.Message = c.scrub(be.Message)
+		}
 		return nil, false, err
 	}
 	return turn, false, nil

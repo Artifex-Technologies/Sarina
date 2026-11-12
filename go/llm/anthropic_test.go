@@ -217,6 +217,26 @@ func TestAnthropicErrorsScrubTheKeyAndRetryOnce(t *testing.T) {
 	}
 }
 
+// An error the server writes in a 200 answer ("type":"error") echoing the key, a bad answer after the key, and a base
+// URL holding the key are scrubbed too: no error text ever holds the key (found by the Rust port, 2026-11-12).
+func TestAnthropicErrorsInAnswersScrubTheKey(t *testing.T) {
+	s := newAnthServer(t, func(n int, w http.ResponseWriter) {
+		io.WriteString(w, `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key `+anthKey+`"}}`)
+	})
+	c := &AnthropicClient{Config: config.ModelConfig{Model: "m", BaseURL: s.URL, APIKey: anthKey, TimeoutSeconds: 5}}
+	_, err := c.Complete(context.Background(), Request{Messages: []Message{{Role: "user", Content: "x"}}}, nil)
+	if err == nil || strings.Contains(err.Error(), anthKey) || !strings.Contains(err.Error(), "invalid x-api-key [redacted-key]") {
+		t.Fatalf("key leaked or error lost: %v", err)
+	}
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { time.Sleep(time.Second) }))
+	t.Cleanup(slow.Close)
+	c = &AnthropicClient{Config: config.ModelConfig{Model: "m", BaseURL: slow.URL + "/" + anthKey, APIKey: anthKey, TimeoutSeconds: 0.05}}
+	_, err = c.Complete(context.Background(), Request{Messages: []Message{{Role: "user", Content: "x"}}}, nil)
+	if err == nil || strings.Contains(err.Error(), anthKey) || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("key leaked in a timeout: %v", err)
+	}
+}
+
 func TestAnthropicEndpoints(t *testing.T) {
 	c := &AnthropicClient{}
 	if c.endpoint() != "https://api.anthropic.com/v1/messages" || c.ModelsEndpoint() != "https://api.anthropic.com/v1/models" {
