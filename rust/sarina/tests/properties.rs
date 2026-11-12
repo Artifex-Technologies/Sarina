@@ -299,6 +299,32 @@ proptest! {
         fuzzing::model_text(&s.as_bytes()[..cut]);
     }
 
+    /// Whatever the session id (it comes from a file on disk), Save writes inside the folder it is given or nowhere, and
+    /// what it wrote reads back as the same session.
+    #[test]
+    fn save_stays_in_its_folder(id in "[a-z./*é \\\\-]{1,10}") {
+        let base = std::env::temp_dir().join(format!("sarina-save-prop-{}", std::process::id()));
+        let dir = base.join("in");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&dir).unwrap();
+        let doc = format!(
+            r#"{{"session_id":{},"model_config":{{"model":"m"}},"runtime_config":{{"cwd":"/w"}},"system_prompt_parts":[],"user_context":{{}},"system_context":{{}},"messages":[],"turns":0,"tool_calls":0}}"#,
+            sarina::gotext::quote(&id)
+        );
+        let s = sarina::session::parse(doc.as_bytes()).unwrap();
+        let r = s.save(dir.to_str().unwrap(), &|_| String::new());
+        let outside: Vec<_> = std::fs::read_dir(&base).unwrap().flatten().map(|e| e.file_name()).collect();
+        prop_assert_eq!(outside.len(), 1, "something was written next to the folder for {:?}", id);
+        if let Ok(p) = r {
+            prop_assert!(p.starts_with(&format!("{}/", dir.to_str().unwrap())), "{} outside", p);
+            let back = sarina::session::parse(&std::fs::read(&p).unwrap()).unwrap();
+            prop_assert_eq!(back.marshal().unwrap(), s.marshal().unwrap());
+        } else {
+            prop_assert!(id.contains('/'), "{:?} refused: {:?}", id, r);
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

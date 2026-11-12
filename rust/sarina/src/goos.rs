@@ -1,12 +1,19 @@
-//! Go's `os` functions the ported code writes files with, with Go's error texts: `MkdirAll`, `CreateTemp`.
+//! Go's `os` functions the ported code writes files with, with Go's error texts: `MkdirAll`, `CreateTemp`, `WriteFile`.
 
 use crate::goerr;
 use crate::gopath;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 
-/// Go's `os.CreateTemp(dir, prefix+"*"+suffix)`: a new file, mode 0600, its name made of Go's random number; the error
-/// names the last name tried.
-pub fn create_temp(dir: &[u8], prefix: &str, suffix: &str) -> Result<(std::fs::File, Vec<u8>), String> {
+/// Go's `os.CreateTemp(dir, pattern)`: a new file, mode 0600, named by the pattern with its last `*` replaced by Go's
+/// random number; a pattern with a slash is refused as Go refuses it; the error names the last name tried.
+pub fn create_temp(dir: &[u8], pattern: &str) -> Result<(std::fs::File, Vec<u8>), String> {
+    if pattern.contains('/') {
+        return Err(format!("createtemp {pattern}: pattern contains path separator"));
+    }
+    let (prefix, suffix) = match pattern.rfind('*') {
+        Some(i) => (&pattern[..i], &pattern[i + 1..]),
+        None => (pattern, ""),
+    };
     let mut tries = 0;
     loop {
         let mut r = [0u8; 4];
@@ -18,6 +25,19 @@ pub fn create_temp(dir: &[u8], prefix: &str, suffix: &str) -> Result<(std::fs::F
             Err(e) => return Err(goerr::path("open", &name, &e)),
         }
     }
+}
+
+/// Go's `os.WriteFile(path, data, perm)`: created with `perm` (before the umask) or truncated, with Go's error texts.
+pub fn write_file(path: &[u8], data: &[u8], perm: u32) -> Result<(), String> {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(perm)
+        .open(gopath::os_path(path))
+        .map_err(|e| goerr::path("open", path, &e))?;
+    f.write_all(data).map_err(|e| goerr::path("write", path, &e))
 }
 
 /// Random bytes from the kernel (ring's generator, the one Heimdall's keys use).

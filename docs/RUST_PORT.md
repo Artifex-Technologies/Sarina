@@ -204,6 +204,7 @@ reaches it any more (dead code is a risk).
 | `guard.rs`, `gotext/cf.rs` | `guard`'s local checks (`Gate.Scan` before the Heimdall call): invisible and format characters (Go's `unicode.Cf` table, written by the Go test), the leading BOM, the 15 instruction patterns with the match quoted, the 12 credential shapes; on the Go tests' inputs of guard, memory, skills and the vault, seeds changed in case, spacing and length, every gap at its limit, bytes that are not UTF-8 | `guard.json` | 3,347 (two gates each) |
 | `analysiscache.rs`, `goos.rs` | `analysiscache` (`New` over files of every shape, `Get`, `Set`'s file byte for byte, its mode, its errors: `MkdirAll`, `CreateTemp`) | `analysiscache.json` | 39 |
 | `llm/repair.rs`, `llm/normalize.rs` | `llm/repair.go` (`RepairJSON`: fences, trailing commas, single quotes, raw control characters, closing what was cut off; `ParseArguments`) and `normalize.go` (`<think>` split, `<tool_call>` blocks, the python tag, bare JSON calls, cut-off arguments on a length stop, unique ids), on the Go tests' inputs, tool calls in every shape, every cut of each, generated damage | `repair.json` | 4,021 |
+| `session/save.rs`, `goos.rs` | `session.Save` and `writeAtomic` (the folder made, the temporary file, the mode from SARINA_SESSION_FILE_MODE, the rename; 12 sessions with odd ids x 6 modes x 4 folders) and `MigrateDir` (dry and real runs twice, backups, skipped files, a link, a `.bak` folder, an id with a slash), compared as whole folder listings | `save.json` | 301 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -269,6 +270,12 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **Normalize renames a server's own id.** Ids are made unique in order, and a generated `call_<i>` (or `call_<i>_<n>`)
   can take an id a later call brought itself, which is then renamed too (`call_1`, ``, `call_1_1` becomes `call_1`,
   `call_1_1`, `call_2`). Harmless (the ids only pair calls with results within the message); kept as Go does it.
+- **Saving a session id with a slash fails, by accident, and MigrateDir stops there.** `Save` joins the id into the path
+  (`../x` would leave the folder) but Go's `CreateTemp` refuses the pattern `<id>.*.tmp` because it has a slash, so
+  nothing is written: the property test `save_stays_in_its_folder` holds the port to that. `MigrateDir` meets such a file
+  after writing its backup and stops with the error, every run, so the files after it are never brought up to date.
+  Also as Go: a `.bak` that exists as anything (a folder too) means no new backup, and a session file that is a link is
+  replaced by a regular file. All kept; worth an explicit id check in both later.
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such

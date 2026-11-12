@@ -6,6 +6,7 @@
 pub mod message;
 pub mod migrate;
 pub mod redact;
+pub mod save;
 
 pub use message::Message;
 

@@ -86,7 +86,7 @@ impl Cache {
         let data = encode_file(&self.namespace, &entries)?;
         let dir = gopath::dir(&self.path);
         mkdir_all(&dir)?;
-        let (mut f, name) = create_temp(&dir, ".cache-", ".tmp")?;
+        let (mut f, name) = create_temp(&dir, ".cache-*.tmp")?;
         let werr = f.write_all(data.as_bytes()).map_err(|e| goerr::path("write", &name, &e));
         drop(f);
         if let Err(e) = werr {
