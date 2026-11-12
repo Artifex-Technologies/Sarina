@@ -13,6 +13,8 @@ pub enum Kind {
     Int,
     /// a `flag.Var` whose `Set` appends (each use adds a value; Go's usage calls it "value")
     List,
+    /// float64 (its value kept as Go's `strconv.FormatFloat(v, 'g', -1, 64)`)
+    Float,
 }
 
 struct Flag {
@@ -30,6 +32,8 @@ pub struct FlagSet {
     header: Option<String>,
     /// the values a List flag was given
     lists: Vec<(&'static str, Vec<String>)>,
+    /// the flags set on the command line (Go's `actual`)
+    set: Vec<&'static str>,
 }
 
 /// What a parse failed with: Go's error text. The usage has already gone to `stderr`.
@@ -37,7 +41,7 @@ pub const HELP: &str = "flag: help requested";
 
 impl FlagSet {
     pub fn new(name: &'static str) -> FlagSet {
-        FlagSet { name, flags: vec![], header: None, lists: vec![] }
+        FlagSet { name, flags: vec![], header: None, lists: vec![], set: vec![] }
     }
 
     /// A `fs.Usage` that prints `line` and then the flags.
@@ -68,6 +72,28 @@ impl FlagSet {
     pub fn int(&mut self, name: &'static str, default: i64, usage: &'static str) {
         let d = default.to_string();
         self.flags.push(Flag { name, kind: Kind::Int, usage, default: d.clone(), value: d });
+    }
+
+    pub fn float(&mut self, name: &'static str, default: f64, usage: &'static str) {
+        let d = format_g(default);
+        self.flags.push(Flag { name, kind: Kind::Float, usage, default: d.clone(), value: d });
+    }
+
+    /// A float flag's value.
+    pub fn f64(&self, name: &str) -> f64 {
+        crate::gotext::parse_float(&self.get(name).value).unwrap_or(0.0)
+    }
+
+    /// The flags given on the command line (Go's `fs.Visit`), sorted by name.
+    pub fn given(&self) -> Vec<&'static str> {
+        let mut v = self.set.clone();
+        v.sort_unstable();
+        v
+    }
+
+    /// Whether a flag was given on the command line.
+    pub fn is_set(&self, name: &str) -> bool {
+        self.set.contains(&name)
     }
 
     fn get(&self, name: &str) -> &Flag {
@@ -116,7 +142,7 @@ impl FlagSet {
             let zero = match f.kind {
                 Kind::Str | Kind::List => "",
                 Kind::Bool => "false",
-                Kind::Int => "0",
+                Kind::Int | Kind::Float => "0",
             };
             if f.default != zero {
                 match f.kind {
@@ -192,6 +218,17 @@ impl FlagSet {
                             vals.push(v.clone());
                         }
                         self.flags[i].value = v;
+                    } else if kind == Kind::Float {
+                        // Go's float64Value.Set stores what ParseFloat returned (±Inf on a range error, 0 on a syntax one)
+                        match crate::gotext::parse_float(&v) {
+                            Ok(x) => self.flags[i].value = format_g(x),
+                            Err(e) => {
+                                let range = e.message.ends_with(RANGE);
+                                self.flags[i].value = if range { format_g(e.value) } else { "0".into() };
+                                let why = if range { RANGE } else { "parse error" };
+                                return Err(self.fail(format!("invalid value {} for flag -{name}: {why}", quote(&v)), stderr));
+                            }
+                        }
                     } else if kind == Kind::Int {
                         match parse_int(&v) {
                             Ok(x) => self.flags[i].value = x.to_string(),
@@ -210,7 +247,46 @@ impl FlagSet {
                     }
                 }
             }
+            let n = self.flags[i].name;
+            if !self.set.contains(&n) {
+                self.set.push(n);
+            }
         }
+    }
+}
+
+/// Go's `strconv.FormatFloat(v, 'g', -1, 64)` (and `%v` of a float64): the shortest digits that read back as `v`, with an
+/// exponent (`1e+06`, `1e-05`) when the decimal exponent is below -4 or at least 6.
+pub fn format_g(v: f64) -> String {
+    if v.is_nan() {
+        return "NaN".into();
+    }
+    if v.is_infinite() {
+        return if v > 0.0 { "+Inf".into() } else { "-Inf".into() };
+    }
+    if v == 0.0 {
+        return if v.is_sign_negative() { "-0".into() } else { "0".into() };
+    }
+    // Rust's {:e} is the shortest round-trip digits: "d.ddde-N"
+    let e = format!("{v:e}");
+    let (mant, exp) = e.split_once('e').unwrap_or((&e, "0"));
+    let exp: i32 = exp.parse().unwrap_or(0);
+    let neg = mant.starts_with('-');
+    let digits: String = mant.chars().filter(char::is_ascii_digit).collect();
+    let sign = if neg { "-" } else { "" };
+    if !(-4..6).contains(&exp) {
+        let rest = if digits.len() > 1 { format!(".{}", &digits[1..]) } else { String::new() };
+        let es = if exp < 0 { '-' } else { '+' };
+        return format!("{sign}{}{rest}e{es}{:02}", &digits[..1], exp.abs());
+    }
+    if exp < 0 {
+        return format!("{sign}0.{}{digits}", "0".repeat((-exp - 1) as usize));
+    }
+    let point = exp as usize + 1;
+    if digits.len() <= point {
+        format!("{sign}{digits}{}", "0".repeat(point - digits.len()))
+    } else {
+        format!("{sign}{}.{}", &digits[..point], &digits[point..])
     }
 }
 
@@ -229,6 +305,7 @@ fn unquote_usage(f: &Flag) -> (String, String) {
         Kind::Int => "int",
         Kind::Bool => "",
         Kind::List => "value",
+        Kind::Float => "float",
     };
     (name.to_owned(), u.to_owned())
 }
