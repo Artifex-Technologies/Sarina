@@ -62,8 +62,16 @@ fn gojson_matches_go() {
                         format!("{}{}", "[".repeat(n), "]".repeat(n))
                     }
                 };
-                let (_, u) = gojson::unmarshal_any(doc.as_bytes());
-                let d = gojson::parse_first(doc.as_bytes()).0.err().map(|e| e.0).unwrap_or_default();
+                // on a thread with a small, known stack: reading, converting and dropping 10,000 levels must not recurse
+                let (u, d) = std::thread::Builder::new()
+                    .stack_size(256 * 1024)
+                    .spawn(move || {
+                        let (_, u) = gojson::unmarshal_any(doc.as_bytes());
+                        (u, gojson::parse_first(doc.as_bytes()).0.err().map(|e| e.0).unwrap_or_default())
+                    })
+                    .unwrap()
+                    .join()
+                    .unwrap();
                 check.eq(format!("nesting {input}"), &json!({"unmarshal": err_text(&u), "decode": d}), &c["out"]);
             }
             "doc" => {

@@ -127,3 +127,15 @@ pub fn session(data: &[u8]) {
     let mut twice = migrated.clone();
     assert_eq!(twice.migrate_retired_tools(), session::migrate::Migration::default(), "the migration is idempotent");
 }
+
+/// Any bytes as a vector index file: no panic and no allocation beyond what the file holds; a file that reads writes
+/// back as its own first bytes, and searching it works.
+pub fn vecindex(data: &[u8]) {
+    use crate::vecindex::Index;
+    let Ok(x) = Index::from_bytes(data) else { return };
+    let back = x.to_bytes();
+    assert_eq!(&data[..back.len()], &back[..], "a file reads back to itself");
+    let q = vec![1.0f32; x.dim()];
+    let hits = x.search(&q, 3, None).expect("a query of the right size");
+    assert!(hits.len() <= 3.min(x.len()));
+}

@@ -192,6 +192,28 @@ proptest! {
         fuzzing::session(&data);
     }
 
+    /// A saved index with bytes changed or cut, through the fuzz body (the header of a real file keeps most inputs
+    /// reading past the magic).
+    #[test]
+    fn vecindex_damaged(at in 0usize..200, byte in any::<u8>(), cut in 0usize..220) {
+        let mut x = sarina::vecindex::Index::new(5, 2, 9).unwrap();
+        for i in 0..6u64 {
+            x.add(i, &[i as f32, 1.0, -2.0, 0.5, 3.0]).unwrap();
+        }
+        let mut data = x.to_bytes();
+        let at = at % data.len();
+        data[at] = byte;
+        fuzzing::vecindex(&data);
+        fuzzing::vecindex(&data[..cut.min(data.len())]);
+    }
+
+    #[test]
+    fn vecindex_any_bytes(data in prop::collection::vec(any::<u8>(), 0..80)) {
+        let mut d = b"SVEC1\n".to_vec();
+        d.extend(data);
+        fuzzing::vecindex(&d);
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]
