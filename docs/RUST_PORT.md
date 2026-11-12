@@ -12,7 +12,7 @@ equal.
 | Step | What | State |
 | --- | --- | --- |
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
-| 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs (see "Ported"); CI since 2026-11-11 |
+| 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | open |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | open |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
@@ -187,6 +187,10 @@ reaches it any more (dead code is a risk).
 | `shellparse.rs` | `tools/shellparse` | `shellparse.json` | 7,475 |
 | `tools/destructive.rs`, `gopath.rs` | `tools/destructive.go`, `realRoot` and `within` (`fsutil.go`), `filepath.Rel` | `destructive.json` | 10,154 (about 46,000 verdicts) |
 | `tools/schema.rs`, `goany.rs`, `gotext/parsefloat.rs` | `tools/schema.go` (`ValidateArgs`), `strconv.ParseFloat` | `schema.json` | 2,073 |
+| `testguard.rs`, `gopath.rs` | `testguard`, `filepath.EvalSymlinks`, `Abs`, `Clean`, `Join`, `Dir`, `Base` (on a made-up folder tree) | `testguard.json` | 405 |
+| `pyfmt.rs` | `chymaera/internal/pyfmt` | `pyfmt.json` | 681 |
+| `flagx.rs`, `goflag.rs` | `flagx` and Go's `flag` package (syntax, values, error texts, the usage on an error) | `flagx.json` | 1,513 |
+| `version.rs` | `internal/version` (VERSION read at build time; a test checks the Go constant) | | |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -221,6 +225,9 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such
   lines 400 times and accepts any reason Go gave. Whether something is refused never depends on the order.
+- **Found on the way** (not Sarina's): Limbo's port of the flag package (`rust/limbo/src/cli/flags.rs`, where `goflag.rs`
+  comes from) kept a bool flag's old value after an invalid one (`-w=x`); Go stores false before it reports the error.
+  Harmless there (the command stops on the error); fixed here.
 - **Paths**: `realRoot` follows links with a port of Go's `EvalSymlinks` (not `std::fs::canonicalize`, which differs for
   relative paths and missing parts).
 
@@ -237,15 +244,13 @@ SARINA_PARITY_UPDATE=1 go test ./... -run Parity   # after a deliberate change: 
 ## Resume here
 
 Done (2026-11-11 night): phase 0; the workspace and the fixture writer; `shellparse`, the bash guards and `ValidateArgs`
-with ParseFloat, each with its fixture, a mutation run, properties and fuzz targets; the CI job (`.github/workflows/rust.yml`:
+with ParseFloat, `testguard` (and Go's filepath), `pyfmt`, `flagx` (and Go's flag package), `version`, each with its
+fixture and a mutation run, properties and fuzz targets for the parsers; the CI job (`.github/workflows/rust.yml`:
 the Go fixtures current, fmt, clippy `-D warnings`, the tests). No existing Go file was changed.
 
 Next, in this order:
 
-1. The rest of step 1's leaves: `chymaera/internal/pyfmt` (Python's repr for JSON values with `json.Number`), `testguard`
-   (on a made-up folder tree: links in and out, `SARINA_TEST_ROOT`, `TMPDIR`; needs `gopath::abs` and `eval_symlinks`
-   proved by their own fixture first), `internal/version` (the `VERSION` file), `flagx` (needs Go's `flag` package: Limbo's
-   `rust/limbo/src/cli/flags.rs` is the start).
+1. (Done: `pyfmt`, `testguard` with Go's filepath on a made-up tree, `version`, `flagx` with Go's flag package.)
 2. The other pure checks in `tools`: `IsSecretPath`/`secretName` (`secret.go`), `ExfilRisk`/`PrivateReference`
    (`exfil.go`), the private-folder list (`private.go`, on a made-up home).
 3. Step 2's formats, starting with what Heimdall reads: llm's message types, `config`'s data structures and tolerant

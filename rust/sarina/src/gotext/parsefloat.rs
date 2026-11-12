@@ -176,8 +176,9 @@ fn read_float(s: &[u8]) -> Option<Read> {
     Some(Read { mantissa, exp, neg, trunc, hex })
 }
 
-/// Go's underscoreOK: underscores only between digits, or between a base prefix and a digit.
-fn underscore_ok(mut s: &[u8]) -> bool {
+/// Go's underscoreOK: underscores only between digits, or between a base prefix and a digit (strconv's ParseFloat and
+/// ParseInt share it).
+pub fn underscore_ok(mut s: &[u8]) -> bool {
     let mut saw = b'^';
     let mut i = 0;
     if !s.is_empty() && (s[0] == b'-' || s[0] == b'+') {

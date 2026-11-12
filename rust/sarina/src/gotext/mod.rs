@@ -9,7 +9,7 @@
 mod parsefloat;
 mod tables;
 
-pub use parsefloat::{parse_float, ParseFloatError};
+pub use parsefloat::{parse_float, underscore_ok, ParseFloatError};
 pub use tables::GO_UNICODE_VERSION;
 
 fn in_table(table: &[(u32, u32)], c: char) -> bool {
