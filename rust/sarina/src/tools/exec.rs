@@ -274,17 +274,21 @@ impl Pump<'_> {
 
     /// After the process ended: read until every pipe is closed, for at most WAIT_DELAY.
     fn drain(&mut self) {
+        self.drain_until(Instant::now() + WAIT_DELAY);
+        for (slot, _) in self.pipes.iter_mut() {
+            *slot = None;
+        }
+    }
+
+    /// Reads until every pipe is closed or `until`; the pipes still open stay open.
+    fn drain_until(&mut self, until: Instant) {
         self.pidfd = None;
-        let until = Instant::now() + WAIT_DELAY;
         while self.open() {
             let now = Instant::now();
             if now >= until {
                 break;
             }
             self.step((until - now).min(Duration::from_millis(50)));
-        }
-        for (slot, _) in self.pipes.iter_mut() {
-            *slot = None;
         }
     }
 }
@@ -522,13 +526,93 @@ pub(crate) fn run_program(
     Ok(status)
 }
 
+/// What `run_group` kills at the deadline or a cancel: the program's process group (Go's tiers `prepareTreeKill`) or only
+/// the program (Go's `CommandContext` default).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum GroupKill {
+    Group,
+    Process,
+}
+
+/// How a `run_group` program ended: its status (None when it could not be waited for), and whether its pipes were still
+/// open 2 s after it ended (Go's `exec.ErrWaitDelay`).
+pub(crate) struct RunEnd {
+    pub status: Option<std::process::ExitStatus>,
+    pub io_incomplete: bool,
+}
+
+/// Go's `exec.CommandContext(...).Run()` with `WaitDelay` 2 s for a program in its own process group, its standard output
+/// and error each handed to `sink` ("stdout", "stderr") as they come, stdin from the null device; killed (as `kill` says) at
+/// `deadline` or when `ctx` ends. Err is Go's start error (`exec: "x": executable file not found in $PATH`,
+/// `fork/exec /x: ...`).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_group(
+    path: &str,
+    args: &[String],
+    env: &[Vec<u8>],
+    cwd: Option<&str>,
+    deadline: Instant,
+    ctx: &crate::goctx::Ctx,
+    kill: GroupKill,
+    sink: &mut dyn FnMut(&'static str, &[u8]),
+) -> Result<RunEnd, String> {
+    use std::os::unix::ffi::OsStrExt;
+    let path = if path.contains('/') { path.to_string() } else { look_path_go(path)? };
+    // a folder that cannot be entered fails the start as Go's does: "fork/exec <program>: ..."
+    let mut cmd = Command::new(&path);
+    cmd.args(args).env_clear().stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    for kv in env {
+        if let Some(i) = kv.iter().skip(1).position(|&c| c == b'=').map(|i| i + 1) {
+            cmd.env(std::ffi::OsStr::from_bytes(&kv[..i]), std::ffi::OsStr::from_bytes(&kv[i + 1..]));
+        }
+    }
+    let mut child = cmd.spawn().map_err(|e| goerr::path("fork/exec", path.as_bytes(), &e))?;
+    let pid = child.id() as i32;
+    let status;
+    let io_incomplete;
+    {
+        let mut pump = Pump {
+            pipes: vec![(child.stdout.take().map(pipe_file), "stdout"), (child.stderr.take().map(pipe_file), "stderr")],
+            sink,
+            pidfd: pidfd(&child),
+        };
+        loop {
+            if let Ok(Some(st)) = child.try_wait() {
+                status = Some(st);
+                break;
+            }
+            let now = Instant::now();
+            if now >= deadline || ctx.err().is_some() {
+                match kill {
+                    GroupKill::Group => hard_kill(pid),
+                    GroupKill::Process => {
+                        let _ = child.kill();
+                    }
+                }
+                status = child.wait().ok();
+                break;
+            }
+            pump.step((deadline - now).min(Duration::from_millis(50)));
+        }
+        pump.drain_until(Instant::now() + WAIT_DELAY);
+        io_incomplete = pump.open();
+        for (slot, _) in pump.pipes.iter_mut() {
+            *slot = None;
+        }
+    }
+    Ok(RunEnd { status, io_incomplete })
+}
+
 /// This process's environment as "KEY=value" entries (what Go's exec hands a child when no environment is set).
-pub(crate) fn parent_env() -> Vec<Vec<u8>> {
+pub fn parent_env() -> Vec<Vec<u8>> {
     this_environ()
 }
 
 /// Go's `exec.LookPath` for a bare name, with its error text.
-pub(crate) fn look_path_go(name: &str) -> Result<String, String> {
+pub fn look_path_go(name: &str) -> Result<String, String> {
     look_path(name).ok_or_else(|| format!("exec: {}: executable file not found in $PATH", gotext::quote(name)))
 }
 

@@ -37,6 +37,7 @@ pub mod sessionsearch;
 pub mod shellparse;
 pub mod skills;
 pub mod testguard;
+pub mod tiers;
 pub mod tools;
 pub mod trust;
 pub mod vecindex;

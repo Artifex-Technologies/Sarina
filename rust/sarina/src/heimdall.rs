@@ -205,3 +205,39 @@ pub fn consult(text: &str, kind: &str, session_id: &str, getenv: &dyn Fn(&str) -
     }
     Some(v)
 }
+
+static GRANT_ANSWER: Ty = Ty::Struct(r#"struct { Approve string "json:\"approve\"" }"#, "", &[Field("approve", &Ty::Str)]);
+
+/// Go's `RequestGrant`: files a request with Heimdall (`POST /v1/requests` at HEIMDALL_REVIEW_URL's host, else
+/// 127.0.0.1:8930) for something only the owner can approve, and returns the command the owner runs to approve it. The
+/// answer is read to at most 64 KiB; nothing in it grants anything (the gate reads only the root-owned file).
+pub fn request_grant(kind: &str, detail: &str, session_id: &str, reason: &str) -> Result<String, String> {
+    let getenv = |k: &str| std::env::var(k).unwrap_or_default();
+    let mut base = "http://127.0.0.1:8930".to_string();
+    if let Some(u) = crate::gourl::parse(&url(&getenv)) {
+        if !u.host.is_empty() {
+            base = format!("{}://{}", u.scheme, String::from_utf8_lossy(&u.host));
+        }
+    }
+    let payload = gojson::Obj::new(true)
+        .str("detail", detail)
+        .str("kind", kind)
+        .str("reason", reason)
+        .str("session_id", session_id)
+        .end()
+        .unwrap_or_default();
+    let reply = crate::gohttp::post(&format!("{base}/v1/requests"), "application/json", payload.as_bytes(), TIMEOUT, 64 * 1024)?;
+    if reply.status != 200 {
+        return Err(format!(
+            "Heimdall answered {}: {}",
+            reply.status_text,
+            crate::gotext::trim_space(&String::from_utf8_lossy(&reply.body))
+        ));
+    }
+    let (v, err) = gostruct::unmarshal(&GRANT_ANSWER, &reply.body);
+    let approve = gostruct::str_field(&GRANT_ANSWER, &v, "approve");
+    if err.is_some() || approve.is_empty() {
+        return Err("Heimdall's answer could not be read".into());
+    }
+    Ok(approve.to_string())
+}

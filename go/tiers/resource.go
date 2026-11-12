@@ -89,11 +89,19 @@ func nvidiaMemoryPercent(ctx context.Context) (float64, bool) {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(cctx, bin, "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits").Output()
-	if err != nil {
+	return runNvidia(exec.CommandContext(cctx, bin, "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"))
+}
+
+// maxNvidiaOutput bounds what is read of nvidia-smi's answer (a line per card); more than that is no answer.
+const maxNvidiaOutput = 64 << 10
+
+func runNvidia(cmd *exec.Cmd) (float64, bool) {
+	out := &boundedBuffer{max: maxNvidiaOutput}
+	cmd.Stdout = out
+	if err := cmd.Run(); err != nil || out.over {
 		return 0, false
 	}
-	return parseNvidia(string(out))
+	return parseNvidia(out.buf.String())
 }
 
 // parseNvidia reads the first line of "used, total" (MiB) output.

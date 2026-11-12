@@ -27,6 +27,8 @@ pub const DEFAULT_RETRY_DELAY: Duration = Duration::from_millis(750);
 pub enum Error {
     Backend(BackendError),
     Ctx(&'static str),
+    /// a failed hand-off to the claude CLI (Go's `tiers.CLIError`: never retried on the same tier)
+    Cli(String),
 }
 
 impl Error {
@@ -34,6 +36,7 @@ impl Error {
         match self {
             Error::Backend(b) => &b.message,
             Error::Ctx(s) => s,
+            Error::Cli(s) => s,
         }
     }
 }
@@ -180,7 +183,7 @@ impl Client {
         }
         let (missing, timed_out) = match &last {
             Error::Backend(b) => (b.status == 404, b.message.contains("timed out")),
-            Error::Ctx(_) => (false, false),
+            Error::Ctx(_) | Error::Cli(_) => (false, false),
         };
         (Err(last), retryable || missing || timed_out)
     }

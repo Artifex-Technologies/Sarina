@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +36,15 @@ func fakeClaude(mode string) int {
 		os.Stdout.WriteString(`{"type":"result","is_error":false,"result":"done by claude","session_id":"cli-1","total_cost_usd":0.25}`)
 	case "is_error":
 		os.Stdout.WriteString(`{"is_error":true,"result":"nope","session_id":"cli-2"}`)
+	case "huge":
+		// a valid answer larger than the CLI's output bound
+		os.Stdout.WriteString(`{"result":"` + strings.Repeat("a", 16<<20) + `","session_id":"cli-3"}`)
+	case "nvidia-huge":
+		os.Stdout.WriteString("100, 200\n")
+		line := strings.Repeat("9", 1023) + "\n"
+		for i := 0; i < 32<<10; i++ {
+			os.Stdout.WriteString(line)
+		}
 	case "badjson":
 		os.Stdout.WriteString("not json at all")
 	case "exit1":
@@ -401,5 +411,43 @@ func TestPressureOrderIncludesCPU(t *testing.T) {
 	}
 	if r := (Thresholds{MaxMemoryPercent: 90}).Pressure(Sample{CPUOK: true, CPUPercent: 100}); r != "" {
 		t.Fatal("an unset CPU threshold never trips")
+	}
+}
+
+// The CLI's answer is read with a bound: a larger one fails the hand-off with its own error instead of being held whole.
+func TestCLIOutputIsBounded(t *testing.T) {
+	c := newCLIRig(t, deadURL(t), "huge", nil)
+	_, err := c.r.Complete(context.Background(), userReq("hello"), nil)
+	if err == nil || !strings.Contains(err.Error(), "output is larger than 16777216 bytes") {
+		t.Fatalf("want the output bound's error, got %v", err)
+	}
+	rec := c.r.Record(nil)["escalations"].([]any)
+	last := rec[len(rec)-1].(map[string]any)
+	if p, _ := last["stdout_preview"].(string); len(p) != cliPreviewChars {
+		t.Fatalf("the preview should still be shown, got %d bytes", len(p))
+	}
+}
+
+// nvidia-smi's answer is read with a bound: an answer past it is no reading, and it is not held whole.
+func TestNvidiaOutputIsBounded(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Symlink(exe, filepath.Join(dir, "nvidia-smi")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("FAKE_CLAUDE_MODE", "nvidia-huge")
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	pct, ok := nvidiaMemoryPercent(context.Background())
+	runtime.ReadMemStats(&after)
+	if ok {
+		t.Fatalf("an answer past the bound must not count as a reading, got %v%%", pct)
+	}
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > 8<<20 {
+		t.Fatalf("nvidia-smi's answer was held whole (%d bytes allocated)", grew)
 	}
 }

@@ -38,6 +38,7 @@ fn err_short(e: &Error, addr: &str) -> Value {
     let (msg, status) = match e {
         Error::Backend(b) => (b.message.clone(), b.status),
         Error::Ctx(s) => (s.to_string(), -1),
+        Error::Cli(s) => (s.clone(), -2),
     };
     let msg = if addr.is_empty() { msg } else { msg.replace(addr, "{ADDR}") };
     if msg.len() > 4096 {

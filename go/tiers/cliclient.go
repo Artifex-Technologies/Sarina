@@ -21,7 +21,28 @@ const (
 	cliPreviewChars      = 2000
 	cliDigestMessages    = 8
 	cliDigestChars       = 400
+	// maxCLIOutput bounds what is read of the CLI's standard output (its JSON answer); past it the hand-off fails. Its
+	// error output is only ever shown as a preview, so no more than the preview is kept of it.
+	maxCLIOutput = 16 << 20
 )
+
+// boundedBuffer keeps the first max bytes written to it and notes whether more came, so a child's output is never held
+// whole.
+type boundedBuffer struct {
+	buf  bytes.Buffer
+	max  int
+	over bool
+}
+
+func (b *boundedBuffer) Write(p []byte) (int, error) {
+	n := len(p)
+	if room := b.max - b.buf.Len(); n > room {
+		b.over = true
+		p = p[:room]
+	}
+	b.buf.Write(p)
+	return n, nil
+}
 
 // Escalation triggers (the original's stop reasons that the router can see).
 const (
@@ -216,13 +237,13 @@ func (c *cliClient) Complete(ctx context.Context, req llm.Request, on func(llm.S
 	cmd := exec.CommandContext(cctx, c.path(), c.tier.Command(prompt, cwd)...)
 	cmd.Dir = cwd
 	cmd.Env = c.childEnv([]string{c.tier.APIKeyEnv})
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	stdout, stderr := &boundedBuffer{max: maxCLIOutput}, &boundedBuffer{max: cliPreviewChars}
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 	prepareTreeKill(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	err := cmd.Run()
-	c.last.Stdout, _ = RedactSecrets(preview(stdout.String()), c.secrets)
-	c.last.Stderr, _ = RedactSecrets(preview(stderr.String()), c.secrets)
+	c.last.Stdout, _ = RedactSecrets(preview(stdout.buf.String()), c.secrets)
+	c.last.Stderr, _ = RedactSecrets(preview(stderr.buf.String()), c.secrets)
 	if cctx.Err() != nil {
 		if ctx.Err() != nil {
 			return fail("claude CLI hand-off cancelled")
@@ -234,8 +255,11 @@ func (c *cliClient) Complete(ctx context.Context, req llm.Request, on func(llm.S
 			return fail(fmt.Sprintf("Failed to launch claude CLI: %v", err))
 		}
 	}
+	if stdout.over {
+		return fail(fmt.Sprintf("claude CLI's output is larger than %d bytes; not read", maxCLIOutput))
+	}
 	var payload map[string]any
-	if jerr := json.Unmarshal(stdout.Bytes(), &payload); jerr != nil || payload == nil || err != nil {
+	if jerr := json.Unmarshal(stdout.buf.Bytes(), &payload); jerr != nil || payload == nil || err != nil {
 		return fail("claude CLI exited " + exitText(err) + " or returned no parseable JSON output")
 	}
 	c.last.SessionID, _ = payload["session_id"].(string)

@@ -90,6 +90,8 @@ impl Write for Conn {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Reply {
     pub status: u16,
+    /// Go's `Response.Status` ("404 Not Found")
+    pub status_text: String,
     /// what was read of the body (at most the limit asked for)
     pub body: Vec<u8>,
     /// the error the body ended with ("unexpected EOF", a timeout...), as Go's reader returns it after the bytes it gave
@@ -296,6 +298,8 @@ pub struct Opts<'a> {
 /// An answer whose body is read as it comes.
 pub struct Response {
     pub status: u16,
+    /// Go's `Response.Status`: the status line after the version ("404 Not Found")
+    pub status_text: String,
     /// a Content-Encoding other than identity (never asked for: such a body is not read)
     pub encoded: bool,
     pub body: Body,
@@ -372,7 +376,7 @@ pub fn open(o: &Opts, ctx: &Ctx, deadline: &Deadline) -> Result<Response, Fail> 
     let mut raw: Vec<u8> = Vec::new();
     let mut buf = [0u8; 16384];
     let mut skipped = 0usize;
-    let (head, head_end, status) = loop {
+    let (head, head_end, status, status_text) = loop {
         let head_end = loop {
             if let Some(end) = head_end(&raw) {
                 break end;
@@ -412,7 +416,8 @@ pub fn open(o: &Opts, ctx: &Ctx, deadline: &Deadline) -> Result<Response, Fail> 
             raw.drain(..head_end.1);
             continue;
         }
-        break (head, head_end, status);
+        let text = rest.trim_start_matches(' ').to_string();
+        break (head, head_end, status, text);
     };
     let broken = |what: String| Fail::Other(format!("net/http: HTTP/1.x transport connection broken: {what}"));
     let lines = head.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).skip(1);
@@ -463,7 +468,7 @@ pub fn open(o: &Opts, ctx: &Ctx, deadline: &Deadline) -> Result<Response, Fail> 
         failed: None,
         stashed: None,
     };
-    Ok(Response { status, encoded, body })
+    Ok(Response { status, status_text, encoded, body })
 }
 
 /// The TCP connection: the name looked up and each address tried in a helper thread, so a cancel or the deadline ends
@@ -898,7 +903,7 @@ pub fn request(
             },
         )
     })?;
-    let mut reply = Reply { status: resp.status, ..Reply::default() };
+    let mut reply = Reply { status: resp.status, status_text: resp.status_text.clone(), ..Reply::default() };
     let mut buf = [0u8; 16384];
     while reply.body.len() < limit {
         let want = (limit - reply.body.len()).min(buf.len());

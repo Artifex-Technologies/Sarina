@@ -9,3 +9,35 @@ pub mod normalize;
 pub mod openai;
 pub mod repair;
 pub mod types;
+
+/// The model transport (Go's `agent.Client` and `tiers.Completer`): `Client`, `AnthropicClient` and the tier router.
+pub trait Completer {
+    fn complete(
+        &self,
+        ctx: &crate::goctx::Ctx,
+        req: &openai::Request,
+        on: Option<&mut dyn FnMut(openai::StreamEvent)>,
+    ) -> Result<types::Turn, client::Error>;
+}
+
+impl Completer for client::Client {
+    fn complete(
+        &self,
+        ctx: &crate::goctx::Ctx,
+        req: &openai::Request,
+        on: Option<&mut dyn FnMut(openai::StreamEvent)>,
+    ) -> Result<types::Turn, client::Error> {
+        client::Client::complete(self, ctx, req, on)
+    }
+}
+
+impl Completer for anthropic::AnthropicClient {
+    fn complete(
+        &self,
+        ctx: &crate::goctx::Ctx,
+        req: &openai::Request,
+        on: Option<&mut dyn FnMut(openai::StreamEvent)>,
+    ) -> Result<types::Turn, client::Error> {
+        anthropic::AnthropicClient::complete(self, ctx, req, on)
+    }
+}
