@@ -16,7 +16,8 @@ from .embeddings import ML_AVAILABLE, EmbeddingModel, MLUnavailable
 from .stt import STT_AVAILABLE
 from .tts import TTS_AVAILABLE
 
-__version__ = '0.1.0'
+# The repository's VERSION (pyproject.toml names it too). Nothing reads it; Labyrinth_OS's release.sh does not write it.
+__version__ = '1.0.0'
 
 #: True only when ALSA tools, faster-whisper, and piper-tts are all available.
 VOICE_AVAILABLE = ALSA_AVAILABLE and STT_AVAILABLE and TTS_AVAILABLE
