@@ -60,7 +60,8 @@ pub fn secret_guard(given: &str, resolved: &[u8], verb: &str) -> Result<(), Stri
     Ok(())
 }
 
-fn hard_linked_to_secret(resolved: &[u8]) -> bool {
+/// Go's `hardLinkedToSecret`: a regular file that is a hard link to a secret file in the same folder.
+pub fn hard_linked_to_secret(resolved: &[u8]) -> bool {
     use std::os::unix::ffi::OsStrExt;
     let path = |b: &[u8]| std::path::PathBuf::from(std::ffi::OsStr::from_bytes(b));
     let Ok(st) = std::fs::metadata(path(resolved)) else { return false };

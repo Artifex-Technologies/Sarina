@@ -61,6 +61,15 @@ pub type Approver = Arc<dyn Fn(&ApprovalRequest) -> (bool, String) + Send + Sync
 /// What a handler receives besides its arguments (the parts ported so far).
 #[derive(Clone, Default)]
 pub struct Context {
+    /// the workspace folder (absolute, links followed)
+    pub root: String,
+    /// what a tool's answer is cut to (0 or less: not cut)
+    pub max_output_chars: i64,
+    /// the model's tool-call batch (the agent raises it before each one): a file read and written in the same step was
+    /// written before its content was seen
+    pub step: i64,
+    /// the file tools' memory for this context (Go keeps it in Context.Runtimes); clones share it
+    pub state: Arc<crate::tools::files::FileState>,
     pub permissions: Permissions,
     /// asked before a tool that needs a permission or changes state runs (after the gate and the schema check)
     pub approver: Option<Approver>,

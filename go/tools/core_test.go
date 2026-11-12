@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/config"
 )
@@ -830,5 +832,102 @@ func TestWriteKeepsTheFinalLineBreak(t *testing.T) {
 	e.ok("write_file", map[string]any{"path": "new.txt", "content": "z"})
 	if e.read("none.txt") != "y" || e.read("new.txt") != "z" {
 		t.Fatalf("content changed: %q %q", e.read("none.txt"), e.read("new.txt"))
+	}
+}
+
+// A refused write must not count as one she made: retrying the same write_file used to pass the "read it first" refusal,
+// and a failed edit_file let a later write_file replace the file unread (found by the Rust port, 2026-11-12).
+func TestRefusedWriteOrFailedEditDoesNotUnlockAnUnreadFile(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "list.txt"), []byte("one\ntwo\n"), 0o644)
+	tc := &Context{Root: root, MaxOutputChars: 12000, Permissions: config.Permissions{AllowFileWrite: true}}
+	reg := NewRegistry(WriteFile(), EditFile(), ReadFile())
+	write := func() Result {
+		return reg.Execute(t.Context(), "write_file", map[string]any{"path": "list.txt", "content": "three\n"}, tc)
+	}
+	for i := 0; i < 2; i++ {
+		if r := write(); r.OK || !strings.Contains(r.Content, "you have not read") {
+			t.Fatalf("write %d of an unread file: %+v", i+1, r)
+		}
+	}
+	if r := reg.Execute(t.Context(), "edit_file", map[string]any{"path": "list.txt", "old_text": "zzz", "new_text": "y"}, tc); r.OK {
+		t.Fatalf("edit of text not in the file: %+v", r)
+	}
+	if r := write(); r.OK || !strings.Contains(r.Content, "you have not read") {
+		t.Fatalf("write after a failed edit: %+v", r)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "list.txt")); string(data) != "one\ntwo\n" {
+		t.Fatalf("the unread file was replaced: %q", data)
+	}
+	tc.Step = 1
+	reg.Execute(t.Context(), "read_file", map[string]any{"path": "list.txt"}, tc)
+	tc.Step = 2
+	if r := write(); !r.OK {
+		t.Fatalf("write after a read: %+v", r)
+	}
+}
+
+// A line range is gathered up to maxRangeRead, and lines before it are skipped without being kept: a range over one line of
+// gigabytes was held whole (found by the Rust port, 2026-11-12). The files are sparse: nothing is written to disk.
+func TestReadFileRangeIsBounded(t *testing.T) {
+	root := t.TempDir()
+	big := filepath.Join(root, "big.txt")
+	f, err := os.Create(big)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Truncate(maxRangeRead + 10)
+	f.Seek(maxRangeRead+10, 0)
+	f.WriteString("\nlast\n")
+	f.Close()
+	tc := &Context{Root: root, MaxOutputChars: 12000}
+	reg := NewRegistry(ReadFile())
+	read := func(args map[string]any) Result { return reg.Execute(t.Context(), "read_file", args, tc) }
+	if r := read(map[string]any{"path": "big.txt", "start_line": 1, "end_line": 1}); r.OK || !strings.Contains(r.Content, "ask for fewer lines") {
+		t.Fatalf("a line past the bound: %.200q", r.Content)
+	}
+	if r := read(map[string]any{"path": "big.txt", "start_line": 2}); !r.OK || !strings.HasPrefix(r.Content, "2: last") {
+		t.Fatalf("the line after a huge skipped one: %.200q", r.Content)
+	}
+	if r := read(map[string]any{"path": "big.txt"}); r.OK || !strings.Contains(r.Content, "too large to read whole") {
+		t.Fatalf("whole read: %.200q", r.Content)
+	}
+	os.Truncate(big, maxWholeFileRead+1)
+	if _, err := readBounded(big); err == nil || err.Error() != fmt.Sprintf("it is larger than %d bytes", maxWholeFileRead) {
+		t.Fatalf("readBounded of a file past the bound: %v", err)
+	}
+	os.Truncate(big, 3)
+	if data, err := readBounded(big); err != nil || len(data) != 3 {
+		t.Fatalf("readBounded: %q %v", data, err)
+	}
+}
+
+// A named pipe in the workspace is refused, not opened: write_file read the "existing content" of one and grep_search searched
+// one, each waiting for a writer forever (found by the Rust port, 2026-11-12).
+func TestFifoIsNotOpenedByTheFileTools(t *testing.T) {
+	root := t.TempDir()
+	if err := syscall.Mkfifo(filepath.Join(root, "pipe"), 0o644); err != nil {
+		t.Skip(err)
+	}
+	tc := &Context{Root: root, MaxOutputChars: 12000, Permissions: config.Permissions{AllowFileWrite: true}}
+	reg := NewRegistry(WriteFile(), GrepSearch(), ReadFile(), EditFile())
+	done := make(chan []Result, 1)
+	go func() {
+		done <- []Result{
+			reg.Execute(t.Context(), "write_file", map[string]any{"path": "pipe", "content": "x"}, tc),
+			reg.Execute(t.Context(), "grep_search", map[string]any{"pattern": "x", "path": "pipe"}, tc),
+			reg.Execute(t.Context(), "read_file", map[string]any{"path": "pipe"}, tc),
+			reg.Execute(t.Context(), "edit_file", map[string]any{"path": "pipe", "old_text": "a", "new_text": "b"}, tc),
+		}
+	}()
+	select {
+	case rs := <-done:
+		for _, r := range rs {
+			if r.OK || r.Content != "pipe is not a regular file" {
+				t.Errorf("%s: %+v", r.Name, r)
+			}
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a file tool opened the pipe and waits for a writer")
 	}
 }

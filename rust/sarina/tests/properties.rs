@@ -422,6 +422,20 @@ proptest! {
     }
 
     #[test]
+    fn glob_pattern_any_bytes(data in prop::collection::vec(any::<u8>(), 0..64)) {
+        fuzzing::glob_pattern(&data);
+    }
+
+    /// Glob-shaped segments against names with slashes, classes, escapes and bytes that are not UTF-8.
+    #[test]
+    fn glob_pattern_shaped(pat in r"[*?\\\[\]^a-c/-]{0,10}", name in prop::collection::vec(prop::sample::select(vec![b'a', b'b', b'c', b'/', b'-', b']', 0xff, 0xc3, 0xa9]), 0..10)) {
+        let mut data = pat.into_bytes();
+        data.push(0);
+        data.extend(name);
+        fuzzing::glob_pattern(&data);
+    }
+
+    #[test]
     fn mcp_line_any_bytes(data in prop::collection::vec(any::<u8>(), 0..160)) {
         fuzzing::mcp_line(&data);
     }

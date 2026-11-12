@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -160,7 +161,6 @@ func WriteFile() Tool {
 			if why := ExfilRisk(content); why != "" {
 				return "", nil, fmt.Errorf("%s", exfilRefusal(given, why))
 			}
-			st.markAuthored(path)
 
 			md := map[string]any{"action": "write_file", "path": relPath(tc.Root, path), "content_length": len([]rune(content))}
 			var before, keptEOL string
@@ -168,8 +168,11 @@ func WriteFile() Tool {
 			switch {
 			case statErr == nil && info.IsDir():
 				return "", nil, fmt.Errorf("%s is a directory", given)
+			case statErr == nil && !info.Mode().IsRegular():
+				// a named pipe or a device: reading what it "holds" would wait for a writer forever (found by the Rust port, 2026-11-12)
+				return "", nil, fmt.Errorf("%s is not a regular file", given)
 			case statErr == nil:
-				data, err := os.ReadFile(path)
+				data, err := readBounded(path)
 				if err != nil {
 					return "", nil, fmt.Errorf("cannot read the existing %s: %v", given, err)
 				}
@@ -196,6 +199,9 @@ func WriteFile() Tool {
 			default:
 				md["before_exists"], md["before_sha256"], md["before_size"], md["before_preview"] = false, nil, nil, nil
 			}
+			// authored only once every refusal is behind: a refused write that marked it let the same write through on a retry,
+			// past the "read it first" refusal, replacing content never read (found by the Rust port, 2026-11-12)
+			st.markAuthored(path)
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 				return "", nil, fmt.Errorf("cannot create directories for %s: %v", given, err)
 			}
@@ -247,7 +253,6 @@ func EditFile() Tool {
 			if n, refused := st.attempt(path); refused {
 				return "", nil, editLoopError(given, n)
 			}
-			st.markAuthored(path)
 			info, err := os.Stat(path)
 			if err != nil || !info.Mode().IsRegular() {
 				return "", nil, fmt.Errorf("%s is not a regular file", given)
@@ -255,7 +260,7 @@ func EditFile() Tool {
 			if info.Size() > maxWholeFileRead {
 				return "", nil, fmt.Errorf("%s is too large to edit", given)
 			}
-			data, err := os.ReadFile(path)
+			data, err := readBounded(path)
 			if err != nil {
 				return "", nil, fmt.Errorf("cannot read %s: %v", given, err)
 			}
@@ -289,6 +294,8 @@ func EditFile() Tool {
 			if strings.TrimSpace(before) != "" && strings.TrimSpace(after) == "" {
 				return "", nil, fmt.Errorf("refused: that edit would leave %s empty, which erases it. There is no tool here to delete or empty files: leave it as it is and tell the user so", given)
 			}
+			// authored only when it is changed: a failed edit (text not found) let a later write_file replace the file unread
+			st.markAuthored(path)
 			if err := os.WriteFile(path, []byte(after), info.Mode().Perm()); err != nil {
 				return "", nil, fmt.Errorf("cannot write %s: %v", given, err)
 			}
@@ -316,9 +323,18 @@ func EditFile() Tool {
 // verifyOnDisk reads a file back and checks it holds exactly what was meant to be written, so the agent never reports a change the
 // disk does not have (a full disk, a filesystem that rewrites content, a file replaced meanwhile).
 func verifyOnDisk(path, want string) error {
-	got, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("cannot read it back: %v", err)
+	}
+	defer f.Close()
+	// at most one byte more than was written: a file that grew meanwhile is not read whole
+	got, err := io.ReadAll(io.LimitReader(f, int64(len(want))+1))
+	if err != nil {
+		return fmt.Errorf("cannot read it back: %v", err)
+	}
+	if len(got) > len(want) {
+		return fmt.Errorf("it holds more than %d bytes, expected %d", len(want), len(want))
 	}
 	if string(got) != want {
 		return fmt.Errorf("it holds %d bytes, expected %d", len(got), len(want))

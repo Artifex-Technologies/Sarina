@@ -118,7 +118,7 @@ func ReadFile() Tool {
 				if st.Size() > maxWholeFileRead {
 					return "", nil, fmt.Errorf("%s is %d bytes, too large to read whole; use start_line and end_line", given, st.Size())
 				}
-				data, err := os.ReadFile(path)
+				data, err := readBounded(path)
 				if err != nil {
 					return "", nil, fmt.Errorf("cannot read %s: %v", given, err)
 				}
@@ -232,6 +232,31 @@ func outline(s string, from, to int) string {
 	return "[defined in the omitted lines, first line only: read a definition's lines (start_line/end_line) before you say what it does or quote it]\n" + b.String() + "[...]\n"
 }
 
+// maxRangeRead bounds what a line-range read gathers before the answer is cut to MaxOutputChars: a range over a huge file,
+// or one line of gigabytes, was held in memory whole (found by the Rust port, 2026-11-12). Lines before the range are
+// skipped without being kept.
+const maxRangeRead = 32 << 20
+
+var errRangeTooLarge = fmt.Errorf("the lines asked for hold more than %d bytes; ask for fewer lines", maxRangeRead)
+
+// readBounded reads a whole file of at most maxWholeFileRead bytes; one that is larger (it may have grown since its size
+// was checked) is refused, not read.
+func readBounded(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxWholeFileRead+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxWholeFileRead {
+		return nil, fmt.Errorf("it is larger than %d bytes", maxWholeFileRead)
+	}
+	return data, nil
+}
+
 func readLines(path string, start, end int) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -241,8 +266,22 @@ func readLines(path string, start, end int) (string, error) {
 	br := bufio.NewReader(f)
 	var b strings.Builder
 	for n := 1; n <= end; n++ {
-		line, err := br.ReadString('\n')
-		if line != "" && n >= start {
+		var raw []byte
+		var err error
+		for {
+			chunk, e := br.ReadSlice('\n')
+			if n >= start {
+				if b.Len()+len(raw)+len(chunk) > maxRangeRead {
+					return "", errRangeTooLarge
+				}
+				raw = append(raw, chunk...)
+			}
+			if e != bufio.ErrBufferFull {
+				err = e
+				break
+			}
+		}
+		if line := string(raw); line != "" {
 			line = strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
 			fmt.Fprintf(&b, "%d: %s\n", n, strings.ToValidUTF8(line, "�"))
 		}

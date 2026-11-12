@@ -142,3 +142,10 @@ path = "fuzz_targets/mcp_line.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "glob_pattern"
+path = "fuzz_targets/glob_pattern.rs"
+test = false
+doc = false
+bench = false

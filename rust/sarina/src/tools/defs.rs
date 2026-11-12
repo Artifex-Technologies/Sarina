@@ -64,3 +64,9 @@ pub fn definitions() -> &'static [ToolDef] {
 pub fn definition(name: &str) -> Option<&'static ToolDef> {
     definitions().iter().find(|d| d.spec.name == name)
 }
+
+/// A tool with the Go build's definition of that name and the given handler.
+pub fn tool(name: &str, handler: super::registry::Handler) -> super::registry::Tool {
+    let d = definition(name).unwrap_or_else(|| panic!("no definition named {name}"));
+    super::registry::Tool { spec: d.spec.clone(), handler, requires: d.requires, class: d.class }
+}

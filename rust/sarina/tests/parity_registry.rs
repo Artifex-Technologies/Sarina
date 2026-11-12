@@ -154,6 +154,7 @@ fn registry_matches_go() {
                             }
                         }) as sarina::tools::registry::Approver
                     }),
+                    ..Context::default()
                 };
                 let args = untyped(&a[4]).into_object().unwrap();
                 let r = reg.execute(a[0].as_str().unwrap(), Some(args), &tc);

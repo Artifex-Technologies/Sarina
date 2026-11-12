@@ -35,11 +35,13 @@ pub fn expand_home(p: &str) -> String {
     p.to_owned()
 }
 
-fn real_root(root: &[u8]) -> Vec<u8> {
+/// Go's `realRoot`: root with its links followed, or root when that fails.
+pub fn real_root(root: &[u8]) -> Vec<u8> {
     gopath::eval_symlinks(root).unwrap_or_else(|_| root.to_vec())
 }
 
-fn within(root: &[u8], p: &[u8]) -> bool {
+/// Go's `within`: p is root or below it.
+pub fn within(root: &[u8], p: &[u8]) -> bool {
     gopath::rel(root, p).is_ok_and(|r| r != b".." && !r.starts_with(b"../"))
 }
 

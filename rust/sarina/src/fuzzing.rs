@@ -339,3 +339,17 @@ pub fn model_answer(data: &[u8]) {
 pub fn mcp_line(data: &[u8]) {
     crate::mcp::client::fuzz_line(data);
 }
+
+/// Any bytes as a glob segment and a file name (split at the first NUL): path.Match does not panic, is deterministic, and
+/// a pattern without a slash never matches a name with one (`*`, `?` and classes never match `/`).
+pub fn glob_pattern(data: &[u8]) {
+    let (pat, name) = match data.iter().position(|&c| c == 0) {
+        Some(i) => (&data[..i], &data[i + 1..]),
+        None => (data, &b"a/b"[..]),
+    };
+    let r = crate::gopath::path_match(pat, name);
+    assert_eq!(r, crate::gopath::path_match(pat, name));
+    if r == Ok(true) && !pat.contains(&b'/') {
+        assert!(!name.contains(&b'/'), "a pattern without a slash matched a name with one");
+    }
+}

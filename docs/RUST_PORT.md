@@ -15,7 +15,7 @@ equal.
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
-| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
+| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep) |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
 
@@ -218,6 +218,7 @@ reaches it any more (dead code is a risk).
 | `llm/anthropic.rs` | `llm/anthropic.go`: `BuildBody` (system texts joined, roles merged, a user turn first, tool calls with their arguments read as Go reads them into a map, tool ids in the API's characters, the schema in the system text, tools and tool_choice, the default max_tokens, temperature only above 0), `parseAnthropic` (blocks, thinking, tool use, stop reasons, usage, errors), the endpoints, and `Complete` on 22 scripted servers (the retry, the key scrubbed from every error, the timer not extended by max_tokens, cancellation, the replay as events, TLS) | `anthropic.json` | 80 |
 | `llm/discover.rs`, `gourl.rs` | `llm/discover.go`: `serverRoot` (Go 1.27's `url.Parse` and `String` as far as it uses them: schemes, user information, IPv6 hosts, ports and the strict colons, escapes kept or rewritten), `sameModel`, `ContextWindow` on 35 scripted servers (the four probes in order, Go's struct reading of each answer, the num_ctx line, the 4 MiB bound just past, at and with junk, a transport failure ending the round, the cache and its TTL, a cancelled caller not cached) | `discover.json` | 76 |
 | `mcp/client.rs` | `mcp/client.go`: `Spawn` (Go's LookPath on the parent's PATH, the overlay environment, the folder, its own process group, Go's start errors), the handshake, `ListTools` and `ListResources` with pages, `CallTool` and `ReadResource` rendered as text (binary named, not inlined; structured content indented), raw calls (the result as the server wrote it), JSON-RPC errors, the server's own requests answered (ping) or refused, noise and odd ids, timeouts and cancels with notifications/cancelled, a dying server's last stderr lines, the 8 MiB line bound at, under and over, a flood of requests, `Close` (a stubborn server's group killed after a second); against one shell stand-in server both tests run (10 scenarios, 44 calls) | `mcp.json` | 19 |
+| `tools/files.rs`, `tools/search.rs`, `gopath.rs` (`read_dir`, `walk_dir`, `path_match`) | `readfile.go`, `writefile.go`, `search.go`: `read_file` (whole, line ranges, the same-name hint, the cut with the outline of what was left out), `list_dir`, `write_file` and `edit_file` with every refusal (secret and private paths, the edit loop, summary churn, unread content, the same step, tool-output markers, exfiltration, binary files, erasing, repeated changes, the nearest lines), `glob_search` (Go's `path.Match` per segment) and `grep_search` (bufio.Scanner's 1 MiB lines), the file state; Go's `filepath.WalkDir` and `os.ReadDir`; through the registry on a made-up tree with links, a hard link to `.env`, a private folder and a named pipe, the workspace compared after each scenario | `files.json` | 178 calls in 6 scenarios, 35 patterns x 22 names |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -330,6 +331,22 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   transport error and an error status, but not from an error the server wrote in a 200 answer (`"type":"error"`, its
   message echoing the key) nor from the timeout's text (a base URL holding the key). Both now scrub every error text;
   Go's `TestAnthropicErrorsInAnswersScrubTheKey` failed before the fix, and the fixture checks every case.
+- **The file tools: four faults fixed in Go and Rust (2026-11-12).** A refused `write_file` marked the file as hers before
+  the "you have not read it" refusal, so the same write sent again replaced content never read (and a failed `edit_file`
+  did the same); now a file counts as hers only once it is written (`TestRefusedWriteOrFailedEditDoesNotUnlockAnUnreadFile`
+  failed before the fix). A line-range `read_file` held every line asked for (a range over a huge file, or one line of
+  gigabytes) before the answer was cut: both gather at most 32 MiB (`maxRangeRead`) and skip earlier lines without keeping
+  them, and every whole read (`read_file`, the file `write_file` replaces, `edit_file`, the read-back) stops at 32 MiB
+  (`TestReadFileRangeIsBounded`). `write_file` onto a named pipe and `grep_search` given one waited for a writer forever;
+  both refuse anything but a regular file now (`TestFifoIsNotOpenedByTheFileTools`).
+- **grep_search's patterns are read by `goregexp`.** Go's regexp syntax is translated to the regex crate's with Go's
+  meaning, and constructs it does not translate (named groups, POSIX classes, `\pL`, `\Q...\E`) are refused; Go
+  accepts them. A pattern Go refuses is refused here too, but the error after "invalid pattern: " is the regex crate's,
+  not Go's ("error parsing regexp: missing closing ): `(`"); the fixture checks only that it is refused. A repeat count
+  over 1,000 is accepted here (Go refuses it). Only what grep finds could differ, never what it may read.
+- **The checks of code files after a change (`verify.go`) are not ported yet**: a change to a `.go`, `.py`, `.sh`, `.js`
+  or `.rs` file says "the Rust port does not check code files yet, so the change was not verified" instead of a result.
+
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such

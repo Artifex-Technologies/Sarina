@@ -227,6 +227,10 @@ func GrepSearch() Tool {
 				if err := secretGuard(given, start, "search"); err != nil {
 					return "", nil, err
 				}
+				if !info.Mode().IsRegular() {
+					// a named pipe or a device would be read without end, or wait for a writer forever (found by the Rust port, 2026-11-12)
+					return "", nil, fmt.Errorf("%s is not a regular file", given)
+				}
 			}
 			limit := argInt(args, "max_matches", 100)
 			root := realRoot(tc.Root)
