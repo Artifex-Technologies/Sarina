@@ -280,3 +280,16 @@ pub fn search_snippet(data: &[u8]) {
         assert!(low.contains(w.chars().next().unwrap_or(' ')), "{w:?} not in {out:?}");
     }
 }
+
+/// Any bytes as an operator's agent profile: no panic, and a profile that reads is one the runner can trust the shape
+/// of: a valid name, a description, a prompt, at most 20 turns, and no empty tool name.
+pub fn agent_profile(data: &[u8]) {
+    if let Ok(p) = crate::agents::parse(data, "fallback") {
+        assert!(!p.name.is_empty() && p.name.len() <= 64 && p.name.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c)));
+        assert!(!p.description.is_empty() && !p.prompt.is_empty());
+        assert!((0..=crate::agents::MAX_TURNS_LIMIT).contains(&p.max_turns));
+        if let Some(t) = &p.tools {
+            assert!(!t.is_empty() && t.iter().all(|x| !x.is_empty()));
+        }
+    }
+}

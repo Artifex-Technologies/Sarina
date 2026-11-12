@@ -206,6 +206,7 @@ reaches it any more (dead code is a risk).
 | `llm/repair.rs`, `llm/normalize.rs` | `llm/repair.go` (`RepairJSON`: fences, trailing commas, single quotes, raw control characters, closing what was cut off; `ParseArguments`) and `normalize.go` (`<think>` split, `<tool_call>` blocks, the python tag, bare JSON calls, cut-off arguments on a length stop, unique ids), on the Go tests' inputs, tool calls in every shape, every cut of each, generated damage | `repair.json` | 4,021 |
 | `session/save.rs`, `goos.rs` | `session.Save` and `writeAtomic` (the folder made, the temporary file, the mode from SARINA_SESSION_FILE_MODE, the rename; 12 sessions with odd ids x 6 modes x 4 folders) and `MigrateDir` (dry and real runs twice, backups, skipped files, a link, a `.bak` folder, an id with a slash), compared as whole folder listings | `save.json` | 301 |
 | `sessionsearch.rs`, `gomath.rs` (`log`), `gotext/letters.rs` | `sessionsearch` (`Search`: files newest first, the lenient reading of messages, the phrase BM25 and the word count, snippets), Go's amd64 `math.Log` (math/log_amd64.s, 1,700 values), Go's letter and digit tables (written by the Go test) | `sessionsearch.json` | 175 |
+| `agents.rs` | `agents` (`Parse`: the front matter, its keys, quotes, lists, switches and limits, each document 30 times for Go's map order; `Load`: operator folders, SARINA_AGENTS_DIR, overrides of the built-ins, duplicates, links, folders, oversized and unreadable files, the trust check, the text gate; `Get` with Go's case folding) | `agents.json` | 174 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -277,6 +278,9 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   after writing its backup and stops with the error, every run, so the files after it are never brought up to date.
   Also as Go: a `.bak` that exists as anything (a folder too) means no new backup, and a session file that is a link is
   replaced by a regular file. All kept; worth an explicit id check in both later.
+- **Texts that are not UTF-8 in profiles become U+FFFD when read.** Go keeps a profile's name, description, prompt and
+  tools as the file's bytes; the port keeps strings, so a byte that is not UTF-8 is U+FFFD at once, which is what Go's
+  JSON encoder writes when those texts reach the model. Error texts quote the original bytes as Go does.
 - **Map order.** Go walks the pipelines of a command line (`CheckDestructive`) and an object's properties
   (`ValidateArgs`) in map order, which is random: when two pipelines are refused for different reasons, or two properties
   are wrong, Go names either one. The port names the first (source order; sorted property names). The fixture runs such

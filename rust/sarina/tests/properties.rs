@@ -330,6 +330,25 @@ proptest! {
         fuzzing::search_snippet(format!("{content}\u{0}{query}").as_bytes());
     }
 
+    /// Profile-shaped files: front matter lines of every key with values of any shape, and a body.
+    #[test]
+    fn agent_profile_shaped(lines in prop::collection::vec(
+        "(name|description|tools|shell|max_turns|project_context|NAME|# c|junk)\\s?:?\\s?(\"?[a-z._ -]{0,8}\"?|\\[[a-z, *']{0,10}\\]?|yes|0|21|\\xff)",
+        0..7,
+    ), body in "[a-z \\n]{0,12}", crlf in any::<bool>()) {
+        let nl = if crlf { "\r\n" } else { "\n" };
+        let doc = format!("---{nl}{}{nl}---{nl}{body}", lines.join(nl));
+        fuzzing::agent_profile(doc.as_bytes());
+    }
+
+    #[test]
+    fn agent_profile_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::agent_profile(&data);
+        let mut d = b"---\ndescription: d\n".to_vec();
+        d.extend(&data);
+        fuzzing::agent_profile(&d);
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]
