@@ -81,6 +81,8 @@ pub struct Context {
     pub extra_env: BTreeMap<String, String>,
     /// where background processes live (Go's Runtimes[RuntimeProcs]); None is the process-wide manager
     pub procs: Option<Arc<crate::tools::exec::ProcManager>>,
+    /// whether plan mode is on, as the agent reports it (Go's RuntimePlanActive); None is unknown
+    pub plan_active: Option<crate::tools::plan::PlanActive>,
     pub permissions: Permissions,
     /// asked before a tool that needs a permission or changes state runs (after the gate and the schema check)
     pub approver: Option<Approver>,
