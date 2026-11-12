@@ -28,7 +28,9 @@ import stat
 import subprocess
 import sys
 import tempfile
+import signal
 import threading
+import time
 
 HANGUP = "hangup"
 
@@ -54,13 +56,17 @@ class Server:
         self.sock.listen(16)
         self.answers = []
         self.requests = []
+        self.model = False
         self.lock = threading.Lock()
         threading.Thread(target=self.loop, daemon=True).start()
 
-    def reset(self, answers):
+    def reset(self, answers, model=False):
+        """`model`: only the chat completions take the scripted answers; the context-window discovery's probes
+        (/api/ps, /api/show, /props, /v1/models) are answered 404, as a server without those routes does."""
         with self.lock:
             self.answers = list(answers)
             self.requests = []
+            self.model = model
 
     def loop(self):
         while True:
@@ -108,7 +114,10 @@ class Server:
             }
             with self.lock:
                 self.requests.append(req)
-                a = self.answers.pop(0) if self.answers else resp("no answer scripted", "599 Script Ended", ctype="text/plain")
+                if self.model and not req["target"].endswith("/chat/completions"):
+                    a = resp("404 page not found", "404 Not Found", ctype="text/plain")
+                else:
+                    a = self.answers.pop(0) if self.answers else resp("no answer scripted", "599 Script Ended", ctype="text/plain")
             if callable(a):
                 a = a(req)
             if a == HANGUP:
@@ -459,6 +468,179 @@ def tiers_cases():
     return cs
 
 
+def completion(content="", calls=(), finish="stop", usage=(12, 5)):
+    """A non-streamed chat completion answer."""
+    msg = {"role": "assistant", "content": content}
+    if calls:
+        msg["tool_calls"] = [{"id": f"call_{i}", "type": "function", "function": {"name": n, "arguments": json.dumps(a)}}
+                             for i, (n, a) in enumerate(calls)]
+        finish = "tool_calls"
+    return resp({"id": "c1", "object": "chat.completion", "model": "made-up-model",
+                 "choices": [{"index": 0, "message": msg, "finish_reason": finish}],
+                 "usage": {"prompt_tokens": usage[0], "completion_tokens": usage[1], "total_tokens": sum(usage)}})
+
+
+def sse_completion(parts, finish="stop"):
+    """A streamed chat completion: one data line per part, then the finish and [DONE]."""
+    lines = [json.dumps({"id": "c1", "choices": [{"index": 0, "delta": {"role": "assistant", "content": p}}]}) for p in parts]
+    lines.append(json.dumps({"id": "c1", "choices": [{"index": 0, "delta": {}, "finish_reason": finish}],
+                             "usage": {"prompt_tokens": 9, "completion_tokens": 3, "total_tokens": 12}}))
+    body = "".join(f"data: {x}\n\n" for x in lines) + "data: [DONE]\n\n"
+    return resp(body, ctype="text/event-stream")
+
+
+MODEL_ENV = {"OPENAI_BASE_URL": "{H}/v1", "OPENAI_MODEL": "made-up-model", "SARINA_RS_TRY": "chat,resume,skill,memory-review",
+             "SARINA_GO_BINARY": "{G}"}
+# what differs between two runs by design: the session id and a memory proposal's id (random), the time
+CHAT_NORM = [(r"[0-9a-f]{32}", "SESSIONID"), (r"mem_[0-9a-f]{12}", "mem_ID"), (r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})", "TIME")]
+
+
+def chat_cases():
+    cs = []
+
+    def add(name, args, http=(), env=None, files=None, stdin=None, norm=()):
+        c = C(name, args, files=files, env=dict(MODEL_ENV, **(env or {})), http=http, stdin=stdin, norm=CHAT_NORM + list(norm))
+        c["model"] = True
+        cs.append(c)
+    add("chat one turn", ["chat", "hello there"], http=[completion("Hello!")])
+    add("chat words and flags", ["chat", "say", "--max-turns", "3", "hi", "--temperature", "0.5"], http=[completion("hi")])
+    add("chat no answer text", ["chat", "x"], http=[completion("")])
+    add("chat stream", ["chat", "--stream", "count"], http=[sse_completion(["one ", "two ", "three"])])
+    add("chat stream claim sent back", ["chat", "--stream", "what does notes.txt say"], files=state(**{"ws/notes.txt": "blue\n"}),
+        http=[sse_completion(["I checked notes.txt and ", "it says the widget is red."]), sse_completion(["I have not read notes.txt yet."])]
+        + [sse_completion(["Still not read."])] * 2)
+    add("chat stream tool then text", ["chat", "--stream", "read notes.txt"], files=state(**{"ws/notes.txt": "blue\n"}),
+        http=[completion(calls=[("read_file", {"path": "notes.txt"})]), sse_completion(["It says ", "blue."])])
+    add("chat backend error", ["chat", "x"], http=[resp({"error": {"message": "model not loaded"}}, "500 Internal Server Error")] * 3)
+    add("chat backend 404", ["chat", "x"], http=[resp("no such model", "404 Not Found", ctype="text/plain")] * 3)
+    add("chat backend hangs up", ["chat", "x"], http=[HANGUP] * 3)
+    add("chat read a file", ["chat", "what is in notes.txt"], files=state(**{"ws/notes.txt": "the widget is blue\n"}),
+        http=[completion(calls=[("read_file", {"path": "notes.txt"})]), completion("It says the widget is blue.")])
+    add("chat write refused", ["chat", "write a file"],
+        http=[completion(calls=[("write_file", {"path": "out.txt", "content": "x"})]), completion("I could not write it.")])
+    add("chat write allowed", ["chat", "--allow-write", "write a file"],
+        http=[completion(calls=[("write_file", {"path": "out.txt", "content": "made by the model\n"})]), completion("I wrote out.txt.")] + [completion("I wrote out.txt with write_file.")] * 2)
+    add("chat secret file refused", ["chat", "read .env"], files=state(**{"ws/.env": "API_KEY=sk-not-a-real-key-123456"}),
+        http=[completion(calls=[("read_file", {"path": ".env"})]), completion("It is a secret file.")])
+    add("chat unknown tool", ["chat", "x"], http=[completion(calls=[("launch_rockets", {})]), completion("No such tool.")])
+    add("chat bad tool arguments", ["chat", "x"], http=[completion(calls=[("read_file", {"path": 5})]), completion("ok")])
+    add("chat two tools", ["chat", "list and read"], files=state(**{"ws/a.txt": "alpha\n", "ws/b.txt": "beta\n"}),
+        http=[completion(calls=[("list_dir", {"path": "."}), ("read_file", {"path": "a.txt"})]), completion("alpha")])
+    add("chat max turns", ["chat", "--max-turns", "1", "loop"], files=state(**{"ws/a.txt": "alpha\n"}),
+        http=[completion(calls=[("read_file", {"path": "a.txt"})])] * 3)
+    add("chat memory add", ["chat", "remember"], http=[completion(calls=[("memory_add", {"scope": "agent", "content": "The widget is blue."})]),
+                                                       completion("Remembered.")])
+    add("chat session search", ["chat", "find widget"], http=[completion(calls=[("session_search", {"query": "blue widget"})]),
+                                                              completion("Found it.")])
+    add("chat doctor", ["chat", "check yourself"], http=[completion(calls=[("sarina_doctor", {})]), completion("Checked.")])
+    add("chat no tools", ["chat", "--no-tools", "x"], http=[completion("plain")])
+    add("chat tools list", ["chat", "--tools", "read_file,list_dir", "x"], http=[completion("short list")])
+    add("chat system prompt flags", ["chat", "--append-system-prompt", "Be brief.", "--override-system-prompt", "Only this.", "x"],
+        http=[completion("ok")])
+    add("chat budget", ["chat", "--max-total-tokens", "5", "x"], http=[completion("over budget", usage=(100, 50))])
+    add("chat schema", ["chat", "--response-schema-file", "{W}/schema.json", "x"],
+        files=state(**{"schema.json": '{"type":"object","properties":{"a":{"type":"string"}}}'}), http=[completion('{"a":"b"}')])
+    add("chat schema missing", ["chat", "--response-schema-file", "{W}/nope.json", "x"])
+    add("chat -h", ["chat", "-h"])
+    add("chat bad flag", ["chat", "--frobnicate", "x"])
+    add("chat cwd elsewhere", ["chat", "--cwd", "{W}/empty", "x"], http=[completion("ok")])
+    add("chat guidance file", ["chat", "x"], files=state(**{"ws/CLAUDE.md": "# Rules\nAlways say hello.\n"}), http=[completion("hello")])
+    add("chat no claude md", ["chat", "--disable-claude-md", "x"], files=state(**{"ws/CLAUDE.md": "# Rules\n"}), http=[completion("ok")])
+    add("chat plan mode", ["chat", "plan it"], http=[completion(calls=[("enter_plan_mode", {})]),
+                                                    completion(calls=[("exit_plan_mode", {"plan": "1. read\n2. write"})]), completion("Waiting.")])
+    add("chat slash help", ["chat", "/help"])
+    add("chat slash plan", ["chat", "/plan"])
+    add("chat slash plan show", ["chat", "/plan", "show"])
+    add("chat slash plan bogus", ["chat", "/plan", "fly"])
+    add("chat slash tier", ["chat", "/tier"])
+    add("chat slash skill", ["chat", "/skill"])
+    add("chat slash unknown", ["chat", "/frobnicate", "now"])
+    add("chat slash empty", ["chat", "/"])
+    add("chat slash path", ["chat", "/etc/hosts", "is", "what"], http=[completion("a path")])
+    skill = {"home/.sarina/skills/greet/SKILL.md": "---\nname: greet\ndescription: Say hello to someone.\nallowed_tools: [read_file]\n---\nGreet $ARGUMENTS warmly.\n",
+             "home/.sarina/skills/hidden/SKILL.md": "---\nname: hidden\ndescription: Not for people.\nuser_invocable: false\n---\nSecret steps.\n"}
+    add("chat slash skill list", ["chat", "/skill"], files=state(**skill))
+    add("chat slash skill run", ["chat", "/skill", "greet", "the", "owner"], files=state(**skill), http=[completion("Hello, owner!")])
+    add("chat slash skill hidden", ["chat", "/skill", "hidden"], files=state(**skill))
+    add("chat slash skill unknown", ["chat", "/skill", "nope"], files=state(**skill))
+    add("skill list", ["skill", "list"], files=state(**skill))
+    add("skill list none", ["skill", "list"])
+    add("skill run", ["skill", "run", "greet", "Ada"], files=state(**skill), http=[completion("Hi Ada")])
+    add("skill run unknown", ["skill", "run", "nope"], files=state(**skill))
+    add("skill run hidden", ["skill", "run", "hidden"], files=state(**skill))
+    add("skill no args", ["skill"])
+    add("skill bogus", ["skill", "frob"])
+    add("skill run no name", ["skill", "run"])
+    add("interactive two turns", ["chat"], stdin=b"hello\n\nsecond\n/exit\n",
+        http=[completion("first answer"), completion("second answer"), completion("[]")])
+    add("interactive eof", ["chat", "--no-auto-memory-review"], stdin=b"hello\n", http=[completion("only")])
+    add("interactive with prompt", ["chat", "--interactive", "start"], stdin=b"/quit\n", http=[completion("started"), completion("[]")])
+    add("interactive review proposes", ["chat"], stdin=b"remember blue\n",
+        http=[completion("ok"), completion('[{"scope":"user","action":"add","content":"Likes blue.","rationale":"said so"}]')])
+    add("interactive slash", ["chat", "--no-auto-memory-review"], stdin=b"/help\n/plan\n/plan show\n/plan reject\n/exit\n")
+    add("interactive plan decision", ["chat", "--no-auto-memory-review"], stdin=b"plan it\na\n",
+        http=[completion(calls=[("enter_plan_mode", {})]), completion(calls=[("exit_plan_mode", {"plan": "1. do it"})]),
+              completion("Proceeding.")] + [completion("Proceeding with the approved plan.")] * 3)
+    add("interactive plan revise", ["chat", "--no-auto-memory-review"], stdin=b"plan it\nr\nsmaller steps\n",
+        http=[completion(calls=[("enter_plan_mode", {})]), completion(calls=[("exit_plan_mode", {"plan": "1. do it"})]),
+              completion(calls=[("exit_plan_mode", {"plan": "1a. half"})]), completion("ok")])
+    add("interactive empty input", ["chat"], stdin=b"")
+    # Ctrl-C after 3 s (both builds are waiting by then, on a busy CI runner too), the slow answer after 8 s
+    slow = lambda req: (time.sleep(8), completion("too late"))[1]
+    for name, args, stdin, http in [
+        ("ctrl-c at the prompt", ["chat", "--no-auto-memory-review"], b"", []),
+        ("ctrl-c at the prompt after a turn", ["chat"], b"hello\n", [completion("hi"), completion("[]")]),
+        ("ctrl-c during a turn", ["chat", "slow one"], None, [slow]),
+        ("ctrl-c during an interactive turn", ["chat", "--no-auto-memory-review"], b"slow one\n", [slow]),
+    ]:
+        add(name, args, stdin=stdin, http=http)
+        cs[-1]["sigint"] = 3
+    here = {"model_config": {"model": "made-up-model", "base_url": "{H}/v1", "temperature": 0},
+            "runtime_config": {"cwd": "{W}/ws", "max_turns": 12, "session_directory": "{W}/ws/.port_sessions/agent",
+                               "scratchpad_root": "{W}/ws/.port_sessions/scratchpad"}}
+    stored = session("r1", [u("first question"), a("first answer")], **here)
+    planned = session("p1", [u("plan it"), a("Here is the plan.")], plugin_state={"plan_mode": {"mode": "plan", "pending": "1. read\n2. write"}}, **here)
+    add("resume", ["resume", "r1", "and", "then?"], files=state(**{SESSIONS + "r1.json": stored}), http=[completion("then this")])
+    add("resume no prompt", ["resume", "r1"], files=state(**{SESSIONS + "r1.json": stored}), stdin=b"", http=[])
+    add("resume missing", ["resume", "nope", "x"])
+    add("resume no id", ["resume"])
+    add("resume damaged", ["resume", "bad", "x"], files=state(**{SESSIONS + "bad.json": "{"}))
+    add("resume pipe-free bad id", ["resume", "../escape", "x"])
+    add("resume approve without plan", ["resume", "--approve-plan", "r1"], files=state(**{SESSIONS + "r1.json": stored}),
+        http=[completion("carried on")])
+    add("resume two decisions", ["resume", "--approve-plan", "--reject-plan", "r1"], files=state(**{SESSIONS + "r1.json": stored}))
+    add("resume flags override", ["resume", "--max-turns", "2", "--allow-write", "r1", "go"], files=state(**{SESSIONS + "r1.json": stored}),
+        http=[completion("ok")])
+    add("resume retired tools", ["resume", "r2", "x"], http=[completion("ok")], files=state(**{SESSIONS + "r2.json": session("r2", [
+        u("plan"), call("c0", "task_get", '{"task_id":"a"}'), result("c0", "task_get", "done"), a("done")], **here)}))
+    add("resume old server", ["resume", "r3", "x"], files=state(**{SESSIONS + "r3.json": session("r3", [u("q"), a("a")])}))
+    for flag in (["--approve-plan"], ["--reject-plan"], ["--revise-plan", "smaller steps"], ["--revise-plan="]):
+        add(f"resume plan {' '.join(flag)}", ["resume"] + flag + ["p1"], files=state(**{SESSIONS + "p1.json": planned}),
+            http=[completion("Carrying on."), completion("ok")])
+    add("resume plan pending", ["resume", "p1", "show me"], files=state(**{SESSIONS + "p1.json": planned}),
+        http=[completion(calls=[("exit_plan_mode", {"plan": "1. new"})]), completion("waiting")])
+    add("resume interactive", ["resume", "--no-auto-memory-review", "r1"], files=state(**{SESSIONS + "r1.json": stored}),
+        stdin=b"next\n/plan\n/exit\n", http=[completion("next answer")])
+    add("memory-review", ["memory-review", "s1"], http=[completion('[{"scope":"agent","action":"add","content":"Widgets are blue.","rationale":"seen"}]')])
+    add("memory-review nothing", ["memory-review", "s2"], http=[completion("[]")])
+    add("memory-review junk answer", ["memory-review", "s1"], http=[completion("I think nothing.")])
+    add("memory-review missing", ["memory-review", "nope"])
+    add("memory-review no id", ["memory-review"])
+    add("memory-review backend down", ["memory-review", "s1"], http=[resp("down", "503 Service Unavailable", ctype="text/plain")] * 3)
+    tiers2 = tiers_file([{"name": "local", "kind": "openai_compat", "allow_data": "all"},
+                         {"name": "desktop", "kind": "openai_compat", "base_url": "{H}/desk/v1", "model": "big", "allow_data": "all"}])
+    add("chat with tiers", ["chat", "x"], files=state(**{"home/.sarina/tiers.json": tiers2}), http=[completion("from local")])
+    add("chat tiers falls over", ["chat", "x"], files=state(**{"home/.sarina/tiers.json": tiers2}),
+        http=[resp("down", "500 Internal Server Error", ctype="text/plain")] * 2 + [completion("from desktop")])
+    add("chat slash tier with tiers", ["chat", "/tier"], files=state(**{"home/.sarina/tiers.json": tiers2}),
+        norm=[(r"memory (\d+)%", "memory N%")])
+    add("chat damaged tiers", ["chat", "x"], files=state(**{"home/.sarina/tiers.json": "{"}), http=[completion("local only")])
+    add("chat policy", ["chat", "x"], files=state(**{"home/.sarina/policy.json": '{"denyTools":["bash"],"budget":{"maxToolCalls":2}}'}),
+        http=[completion("ok")])
+    add("chat damaged policy", ["chat", "x"], files=state(**{"home/.sarina/policy.json": "{"}))
+    return cs
+
+
 def other_cases():
     """Heimdall's containment lock: both builds refuse a ported command (and a line that is not UTF-8) with the same words."""
     lock = {"no-lock": '{"reason": "a made-up lock: <b> & caf\u00e9"}'}
@@ -510,7 +692,7 @@ def snapshot(work, norm=()):
         dirs.sort()
         for n in sorted(dirs + fnames):
             p = os.path.join(root, n)
-            rel = os.path.relpath(p, work)
+            rel = normalize(os.path.relpath(p, work).encode(), norm).decode()
             st = os.lstat(p)
             if stat.S_ISLNK(st.st_mode):
                 out[rel] = "link -> " + os.readlink(p)
@@ -520,14 +702,14 @@ def snapshot(work, norm=()):
                 with open(p, "rb") as f:
                     body = normalize(f.read(), norm)
                 out[rel] = "file %o %s" % (st.st_mode & 0o7777, hashlib.sha256(body).hexdigest()[:16])
-                if len(body) < 4096:
+                if len(body) < 65536:
                     out[rel] += " " + body.decode("utf-8", "backslashreplace")
             else:
                 out[rel] = "other %o" % stat.S_IFMT(st.st_mode)
     return out
 
 
-def run_one(binary, case, base, limbo, http, hurl):
+def run_one(binary, case, base, limbo, http, hurl, gobin):
     work = os.path.join(base, "w")
     if os.path.exists(work):
         for root, dirs, _ in os.walk(work):
@@ -536,7 +718,7 @@ def run_one(binary, case, base, limbo, http, hurl):
         shutil.rmtree(work)
     os.makedirs(work)
     sockp = os.path.join(base, "agent.sock")
-    sub = lambda s: s.replace("{W}", work).replace("{S}", sockp).replace("{H}", hurl)
+    sub = lambda s: s.replace("{W}", work).replace("{S}", sockp).replace("{H}", hurl).replace("{G}", gobin)
     make_files(work, case["files"], sub)
     env = {"PATH": os.path.join(work, "bin"), "LANG": "C.UTF-8", "HOME": os.path.join(work, "home"), "USER": "tester",
            "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"), "SARINA_RS_NO_GO": "1"}
@@ -550,11 +732,27 @@ def run_one(binary, case, base, limbo, http, hurl):
         path, mode = c.split("=")
         os.chmod(os.path.join(work, path), int(mode, 8))
     limbo.reset(case["limbo"])
-    http.reset([sub(x) if isinstance(x, str) and x != HANGUP else x for x in case["http"]])
+    http.reset([sub(x) if isinstance(x, str) and x != HANGUP else x for x in case["http"]], case.get("model", False))
     argv = [binary] + [sub(x) for x in case["args"]]
     cwd = os.path.join(work, case["cwd"]) if case["cwd"] else work
     try:
-        if case.get("closed_stdout"):
+        if case.get("sigint"):
+            # Ctrl-C after the given seconds, standard input left open until then
+            pr = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if case["stdin"]:
+                pr.stdin.write(case["stdin"])
+                pr.stdin.flush()
+            time.sleep(case["sigint"])
+            pr.send_signal(signal.SIGINT)
+            # standard input stays open a moment longer: closing it at once raced with the signal (the end of input won)
+            time.sleep(1)
+            try:
+                out, errs = pr.communicate(timeout=30)
+            except subprocess.TimeoutExpired:
+                pr.kill()
+                out, errs = pr.communicate()
+            p = subprocess.CompletedProcess(argv, pr.returncode, out, errs)
+        elif case.get("closed_stdout"):
             r, w = os.pipe()
             os.close(r)
             try:
@@ -573,13 +771,14 @@ def run_one(binary, case, base, limbo, http, hurl):
     except subprocess.TimeoutExpired:
         res = {"stdout": "", "stderr": "TIMEOUT", "exit": -1}
     with limbo.lock, http.lock:
-        res["requests"] = {"limbo": list(limbo.requests), "http": list(http.requests)}
+        reqs = {"limbo": list(limbo.requests), "http": list(http.requests)}
+    res["requests"] = json.loads(normalize(json.dumps(reqs).encode(), case["norm"]).decode())
     res["files"] = snapshot(work, case["norm"])
     return res
 
 
 def cases():
-    return memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + other_cases()
+    return memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
 
 
 def main():
@@ -588,7 +787,7 @@ def main():
     ap.add_argument("--rs", required=True)
     ap.add_argument("--out", help="scratch folder (short: a socket lives in it); default a new one in the temp folder")
     ap.add_argument("--only", default="", help="run only the cases whose name contains this")
-    ap.add_argument("--show", action="store_true", help="print each case's Go result")
+    ap.add_argument("--show", action="store_true", help="print each case's Go result (and sarina-rs's when they differ)")
     o = ap.parse_args()
     go, rs = os.path.abspath(o.go), os.path.abspath(o.rs)
     base = o.out or tempfile.mkdtemp(prefix="scd")
@@ -609,16 +808,21 @@ def main():
     cs = [c for c in cases() if o.only in c["name"]]
     bad = 0
     for c in cs:
-        g = run_one(go, c, base, limbo, http, hurl)
-        r = run_one(rs, c, base, limbo, http, hurl)
+        g = run_one(go, c, base, limbo, http, hurl, go)
+        r = run_one(rs, c, base, limbo, http, hurl, go)
         diffs = [k for k in ("stdout", "stderr", "exit", "requests", "files") if g[k] != r[k]]
         if o.show:
             print(f"== {c['name']}: {json.dumps(g, indent=1, ensure_ascii=False)}")
+            if g != r:
+                print(f"== rs {c['name']}: {json.dumps(r, indent=1, ensure_ascii=False)}")
         if diffs:
             bad += 1
             print(f"DIFF {c['name']}: {' '.join(c['args'])}")
             for k in diffs:
-                print(f"  {k}:\n    go: {json.dumps(g[k], ensure_ascii=False)[:3000]}\n    rs: {json.dumps(r[k], ensure_ascii=False)[:3000]}")
+                a_, b_ = json.dumps(g[k], ensure_ascii=False), json.dumps(r[k], ensure_ascii=False)
+                i = next((j for j in range(min(len(a_), len(b_))) if a_[j] != b_[j]), min(len(a_), len(b_)))
+                lo = max(0, i - 300)
+                print(f"  {k} (first difference at {i}):\n    go: ...{a_[lo:i + 600]}\n    rs: ...{b_[lo:i + 600]}")
     w = os.path.join(base, "w")
     if os.path.exists(w):
         for root, dirs, _ in os.walk(w):

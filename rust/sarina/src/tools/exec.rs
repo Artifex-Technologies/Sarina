@@ -680,6 +680,11 @@ pub struct ProcManager {
 
 static DEFAULT_PROCS: LazyLock<Arc<ProcManager>> = LazyLock::new(|| Arc::new(ProcManager::default()));
 
+/// Go's `StopAllBackground`: the background processes of the default manager stopped (they do not outlive a session).
+pub fn stop_all_background() {
+    DEFAULT_PROCS.stop_all();
+}
+
 fn proc_manager(tc: &Context) -> Arc<ProcManager> {
     tc.procs.clone().unwrap_or_else(|| DEFAULT_PROCS.clone())
 }

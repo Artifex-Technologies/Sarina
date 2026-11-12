@@ -2,6 +2,7 @@
 //! the `Env`'s outputs, returning the exit status; the table and the hand-over of unported commands to the Go build come
 //! with the `sarina-rs` binary (docs/RUST_PORT.md "The switch"): [`ported`] is the table.
 
+pub mod chat;
 pub mod chatopts;
 pub mod entry;
 pub mod limbocmd;
@@ -15,7 +16,7 @@ pub const EXIT_USAGE: i32 = 2;
 
 /// Where a command's output goes as it is written: the binary's standard streams (1 and 2). None keeps it in `stdout`
 /// and `stderr` (tests).
-pub type Sink = Box<dyn FnMut(i32, &[u8])>;
+pub type Sink = Box<dyn FnMut(i32, &[u8]) + Send>;
 
 /// Go's `Getenv`, shareable (the tiers' Router keeps one).
 pub type Getenv = std::sync::Arc<dyn Fn(&str) -> String + Send + Sync>;
@@ -94,6 +95,19 @@ impl Env {
         self.stderr.push(b'\n');
         self.flush();
     }
+}
+
+/// Commands ported and proving themselves, not moved yet: sarina-rs runs them only when `SARINA_RS_TRY` names them (the
+/// CLI differential, rust/parity) and [`chat::needs_go`] finds no optional tool set the port lacks; otherwise the Go
+/// build answers.
+pub fn proving(name: &str) -> Option<Command> {
+    Some(match name {
+        "chat" => chat::chat_command,
+        "resume" => chat::resume_command,
+        "skill" => chat::skill_command,
+        "memory-review" => chat::memory_review_command,
+        _ => return None,
+    })
 }
 
 /// A ported command: the arguments after its name, the exit status back.
