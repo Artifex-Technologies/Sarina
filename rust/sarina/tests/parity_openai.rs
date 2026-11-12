@@ -5,7 +5,7 @@ mod common;
 
 use sarina::config::OutputSchema;
 use sarina::goany::Any;
-use sarina::llm::openai::{build_body, parse_response, read_stream, BackendError, Request};
+use sarina::llm::openai::{build_body, parse_response, read_stream, BackendError, Request, StreamError};
 use sarina::llm::types::{FunctionCall, Message, ToolSpec, Turn, WireToolCall};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -126,7 +126,10 @@ fn openai_matches_go() {
                         u
                     ]));
                 });
-                let (t, e) = result_out(r);
+                let (t, e) = result_out(r.map_err(|e| match e {
+                    StreamError::Backend(b) => b,
+                    StreamError::Read(m) => BackendError { message: m, status: -1 },
+                }));
                 json!([t, e, evs, touches])
             }
             other => panic!("unknown fn {other}"),

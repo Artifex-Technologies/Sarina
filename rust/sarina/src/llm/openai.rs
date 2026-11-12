@@ -24,6 +24,29 @@ pub struct BackendError {
     pub status: i64,
 }
 
+/// Why a streamed answer was not read: the answer was refused (a backend error), or reading it failed (the reader's own
+/// error, which the transport words as "cannot reach backend", as Go's `readStream` returns it unwrapped).
+#[derive(Clone, Debug, PartialEq)]
+pub enum StreamError {
+    Backend(BackendError),
+    Read(String),
+}
+
+impl StreamError {
+    pub fn message(&self) -> &str {
+        match self {
+            StreamError::Backend(b) => &b.message,
+            StreamError::Read(s) => s,
+        }
+    }
+}
+
+impl From<BackendError> for StreamError {
+    fn from(b: BackendError) -> StreamError {
+        StreamError::Backend(b)
+    }
+}
+
 fn be(message: impl Into<String>) -> BackendError {
     BackendError { message: message.into(), status: 0 }
 }
@@ -413,7 +436,7 @@ pub fn read_stream(
     max_line: usize,
     touch: &mut dyn FnMut(),
     on: &mut dyn FnMut(StreamEvent),
-) -> Result<Turn, BackendError> {
+) -> Result<Turn, StreamError> {
     let mut acc = StreamAcc::default();
     on(StreamEvent { kind: "message_start".into(), ..StreamEvent::default() });
     // Go's bufio.Reader (64 KiB) over an io.LimitedReader of one byte past the bound
@@ -441,10 +464,10 @@ pub fn read_stream(
     while !done {
         let end = read_line(&mut br, max_line, &mut line);
         if br.get_ref().limit() == 0 {
-            return Err(be(format!("the model's streamed answer is larger than {max_response} bytes; not read")));
+            return Err(be(format!("the model's streamed answer is larger than {max_response} bytes; not read")).into());
         }
         if let LineEnd::TooLong = end {
-            return Err(be(format!("a line of the model's streamed answer is longer than {max_line} bytes; not read")));
+            return Err(be(format!("a line of the model's streamed answer is longer than {max_line} bytes; not read")).into());
         }
         if !line.is_empty() {
             touch();
@@ -459,13 +482,13 @@ pub fn read_stream(
         match end {
             LineEnd::Line => {}
             LineEnd::Eof => break,
-            LineEnd::Failed(e) => return Err(be(e)),
+            LineEnd::Failed(e) => return Err(StreamError::Read(e)),
             LineEnd::TooLong => unreachable!("handled above"),
         }
     }
     flush(&mut data, &mut acc, &mut done)?;
     if acc.payloads == 0 {
-        return Err(be("backend returned an empty stream"));
+        return Err(be("backend returned an empty stream").into());
     }
     let mut t = Turn {
         content: acc.content,
@@ -479,7 +502,7 @@ pub fn read_stream(
     approx_reasoning_tokens(&mut t);
     for s in acc.slots {
         if s.name.is_empty() {
-            return Err(be("tool call missing function name"));
+            return Err(be("tool call missing function name").into());
         }
         t.tool_calls.push(make_call(&s.id, &s.name, Some(&Any::String(s.args))));
     }

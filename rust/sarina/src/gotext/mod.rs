@@ -117,6 +117,34 @@ pub fn lossy(b: &[u8]) -> String {
     }
 }
 
+/// Go's `strings.ToValidUTF8(s, "\u{FFFD}")`: each run of bytes that are not UTF-8 becomes one U+FFFD.
+pub fn to_valid_utf8(b: &[u8]) -> String {
+    let mut out = String::with_capacity(b.len());
+    let mut b = b;
+    let mut in_run = false;
+    loop {
+        match std::str::from_utf8(b) {
+            Ok(s) => {
+                out.push_str(s);
+                return out;
+            }
+            Err(e) => {
+                let good = e.valid_up_to();
+                if good > 0 {
+                    in_run = false;
+                }
+                out.push_str(std::str::from_utf8(&b[..good]).unwrap_or_default());
+                if !in_run {
+                    out.push('\u{FFFD}');
+                }
+                in_run = true;
+                // Go steps one byte at a time through what does not decode
+                b = &b[good + 1..];
+            }
+        }
+    }
+}
+
 /// Go's `unicode.IsLetter`.
 pub fn is_letter(c: char) -> bool {
     if (c as u32) < 0x80 {

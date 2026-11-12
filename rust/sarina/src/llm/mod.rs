@@ -1,6 +1,7 @@
 //! Go: `go/llm`: the message types (types.go), the repair of damaged JSON (repair.go) and the normaliser for local
-//! servers' quirks (normalize.go); the clients come in step 3 (docs/RUST_PORT.md).
+//! servers' quirks (normalize.go), the OpenAI-compatible wire format and transport (client.go: `openai.rs`, `client.rs`).
 
+pub mod client;
 pub mod normalize;
 pub mod openai;
 pub mod repair;

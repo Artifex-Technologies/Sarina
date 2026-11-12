@@ -323,7 +323,7 @@ pub fn model_answer(data: &[u8]) {
     let r = read_stream(data, 1 << 20, 1 << 16, &mut || {}, &mut |_| events += 1);
     assert!(events >= 1, "message_start always comes first");
     if let Err(e) = &r {
-        assert!(!e.message.is_empty());
+        assert!(!e.message().is_empty());
     }
     let tight = data.len().saturating_sub(1);
     if !data.is_empty() {

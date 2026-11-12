@@ -214,6 +214,7 @@ reaches it any more (dead code is a risk).
 | `helpers.rs` | `helpers` (`Python`, `Command`, `Available`, `Passthrough`, the `serve` client: ping and protocol, classify, group, the helper's errors, damaged, exact and over-long answer lines, a helper that dies or speaks last after closing its output, Close's exit status, the requests byte for byte), against one shell stand-in for the interpreter that both tests run | `helpers.json` | 18 |
 | `limbo.rs`, `gohttp.rs` (unix sockets, any method) | `limbo/limbo.go` (the agent-socket client: `ListProfiles`, `DescribeProfilesAndSkipped` with the capped skipped list, `Validate` and `ValidateBundle` with polling, `RunResult` and its text for the model, the cleaning of guest output, the socket-name rule, Limbo's errors, damaged and over-long answers), against a scripted unix socket (`RawUnixServer`) | `limbo.json` | 32 |
 | `llm/openai.rs` | `llm/client.go`'s wire format: `BuildBody` (every request shape, the encoder keeping a tool's own HTML-escaped JSON, `/no_think`), `parseResponse` (content parts, reasoning, finish reasons of any kind, usage, tool calls and the old function_call, the server's errors), `readStream` (server-sent events: data lines, comments, `[DONE]`, tool-call fragments merged by index and id, cumulative usage, every event handed on) and its bounds at, under and over | `openai.json` | 74 |
+| `llm/client.rs`, `gohttp.rs` (TLS, bodies as they come), `goctx.rs` | `llm/client.go`'s `Complete`: the one retry (connections, 429, 5xx), the fallback models (after those, a 404 or a timeout; the turn names the model that answered), the timer (the whole call, a second more per 40 tokens allowed when not streamed; reset by every streamed line), cancellation (also during the retry's wait) and a context deadline, the error texts (`cannot reach backend at`, `timed out after`), the answer's bounds, a header value with control characters refused before sending; 45 scripted servers (the same answers and pauses in both tests), TLS against an authority each test makes (trusted, another authority, a wrong address, names only) | `transport.json` | 45 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -288,12 +289,19 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **Texts that are not UTF-8 in profiles become U+FFFD when read.** Go keeps a profile's name, description, prompt and
   tools as the file's bytes; the port keeps strings, so a byte that is not UTF-8 is U+FFFD at once, which is what Go's
   JSON encoder writes when those texts reach the model. Error texts quote the original bytes as Go does.
-- **The HTTP client (`gohttp`) is not all of Go's.** It speaks plain `http://` to loopback services: `https://` is
-  refused (TLS comes with the model clients), redirects are not followed (Go follows them; an answer is then taken only
-  from the configured address), and a body with a `Content-Encoding` reads as an error (Go asks for gzip and unpacks it;
-  Heimdall's and Ollama's servers never send one). Everything else Sarina's code can see was compared with Go's client
-  on raw answers: statuses, framings, odd heads, cut-short bodies, the deadline. For `Consult` these differences all end
-  as "no verdict" (fail open), as an unusable answer does in Go.
+- **The HTTP client (`gohttp`) is not all of Go's.** It speaks `http://` and, since the model transport, `https://`
+  (rustls with ring, TLS 1.3 and 1.2; the system's authorities read from the files Go's crypto/x509 reads on Linux:
+  `SSL_CERT_FILE` or Go's six bundle paths, then `SSL_CERT_DIR` or /etc/ssl/certs and /etc/pki/tls/certs, each file read
+  to at most 16 MiB). Not as Go: redirects are not followed (Go follows them; an answer is then taken only from the
+  configured address, and an API key never goes to another); no proxy is taken from `HTTPS_PROXY`/`HTTP_PROXY` (Go's
+  default transport uses them for addresses other than loopback); no `Accept-Encoding: gzip` is sent, so a body with a
+  `Content-Encoding` reads as an error (Go asks for gzip and unpacks it); one request per connection (`Connection:
+  close`); a URL Go's `url.Parse` refuses (`http://[::1`) gives another error text. TLS refusals carry Go's words for an
+  unknown authority and for a name or address the certificate does not hold (both compared); an expired certificate
+  reads without Go's times, and other TLS failures as `tls: ` and rustls's text. Everything else Sarina's code can see was compared with Go's client on raw
+  answers: statuses, informational 1xx answers skipped, framings (Go's chunked reader ported whole: CRLF checks, bare LF,
+  the 4096-byte size line, the overhead limit, the trailer), odd heads, cut-short bodies, deadlines, cancels. For
+  `Consult` these differences all end as "no verdict" (fail open), as an unusable answer does in Go.
 - **embed's answer is bounded, in Go and Rust (2026-11-12).** Go read Ollama's answer without a limit, so a program
   answering on Ollama's port could make Sarina read without end. Both now read at most `MaxAnswerBytes` (64 MiB) and
   refuse a larger answer ("embedder answer is larger than 67108864 bytes; not read"). Sized from the largest plausible

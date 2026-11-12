@@ -8,6 +8,7 @@ pub mod embed;
 pub mod flagx;
 pub mod fuzzing;
 pub mod goany;
+pub mod goctx;
 pub mod goerr;
 pub mod goflag;
 pub mod gohttp;

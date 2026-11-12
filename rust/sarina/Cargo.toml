@@ -19,6 +19,9 @@ regex = { version = "=1.12.3", default-features = false, features = ["std", "per
 ring = { version = "=0.17.14", default-features = false }
 # sha256 of the approved files (trust.rs) and the caches' content hashes; as Heimdall and Limbo
 sha2 = { version = "=0.10.9", default-features = false, features = ["std"] }
+# TLS for the model clients (gohttp): ring's crypto, TLS 1.3 and 1.2 as Go's client offers; the same crate and version as
+# Heimdall's
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 
 [dev-dependencies]
 proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
