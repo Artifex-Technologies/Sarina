@@ -126,3 +126,21 @@ func StringLiterals(t *testing.T, files ...string) []string {
 	}
 	return out
 }
+
+// Generated compares data with the file at path (relative to the repository's root), or writes it when
+// SARINA_PARITY_UPDATE=1: data the Rust port carries as it stands (the tool definitions the model sees), recorded from
+// the Go code so the two cannot drift apart.
+func Generated(t *testing.T, path string, data []byte) {
+	t.Helper()
+	full := filepath.Join(Root(), path)
+	if os.Getenv(UpdateEnv) == "1" {
+		if err := os.WriteFile(full, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	old, err := os.ReadFile(full)
+	if err != nil || !bytes.Equal(old, data) {
+		t.Fatalf("%s is out of date with the Go code: rerun with %s=1 and review the diff", path, UpdateEnv)
+	}
+}
