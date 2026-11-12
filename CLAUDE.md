@@ -238,6 +238,23 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (afternoon, 2) — Rust port: the commands without a model run in sarina-rs; a CLI differential proves them
+- `rust/parity/cli-differential.py` runs the Go build and `sarina-rs` on the same command lines, environment and made-up
+  home and workspace, with a scripted Limbo agent socket and a loopback stand-in for model endpoints and Heimdall's review
+  API (never the real model, sessions, vault or memory), and compares output, exit status, every request and every file
+  left. 195 cases, 975 comparisons: no difference. CI runs it. sarina-rs runs there with `SARINA_RS_NO_GO=1`, so a
+  command still in Go fails instead of passing by running Go twice.
+- Moved to `sarina-rs`: memory-status, memory-show, session-search, memory-review-list/-approve/-reject,
+  session-migrate, limbo-profiles, limbo-validate, tiers status. Every other command still goes to the Go build.
+  The per-call operator confirmation (Go's `Confirm`, council_ask's channel) is ported too.
+- Nothing found in Go this time; one Rust-only fault fixed (a huge `--timeout` in limbo-validate overflowed).
+- **For Limbo's and Heimdall's boards:** nothing changes (the requests on agent.sock and to `/v1/review` are Go's, byte
+  for byte, but for a `Connection: close` header). **For Labyrinth's board (nothing to do yet):** sarina-rs is not
+  installed anywhere; the PKGBUILD change (both builds, `/usr/bin/sarina` as sarina-rs, the Go build at
+  `/usr/lib/sarina/sarina-go`) is next and will come with a CONTRACT note.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (evening) — Rust port: the agent loop, proved against Go on a scripted model; two Go fixes
 - Ported and proved against Go (docs/RUST_PORT.md "Ported"): every answer check and carry-on nudge of `go/agent/claims.go`
   with its texts word for word, the secret redactor (`secrets.go`, streamed replies too), and the loop's pure helpers:
