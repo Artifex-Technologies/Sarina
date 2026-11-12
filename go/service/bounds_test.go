@@ -31,16 +31,18 @@ func TestBodyThatNeverArrivesIsBounded(t *testing.T) {
 	bodyReadTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { bodyReadTimeout = old })
 	addr := serveFor(t)
-	for _, tc := range []struct{ path, want string }{
-		{"/v1/sessions", "400 Bad Request"},
-		{"/nowhere", "404 Not Found"},
+	for _, tc := range []struct{ method, path, want string }{
+		{"POST", "/v1/sessions", "400 Bad Request"},
+		{"POST", "/nowhere", "404 Not Found"},
+		// net/http's own OPTIONS * handler read its body without a deadline; the service's handler answers it now
+		{"OPTIONS", "*", "400 Bad Request"},
 	} {
 		c, err := net.Dial("tcp", addr)
 		if err != nil {
 			t.Fatal(err)
 		}
 		_ = c.SetDeadline(time.Now().Add(5 * time.Second))
-		_, _ = io.WriteString(c, "POST "+tc.path+" HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\n{\"cwd\":")
+		_, _ = io.WriteString(c, tc.method+" "+tc.path+" HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\n{\"cwd\":")
 		line, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil || !strings.Contains(line, tc.want) {
 			t.Fatalf("%s: %q %v", tc.path, line, err)

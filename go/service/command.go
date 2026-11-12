@@ -191,7 +191,10 @@ var idleTimeout = 120 * time.Second
 
 // Serve runs the server on ln until ctx is cancelled, then shuts down.
 func Serve(ctx context.Context, s *Server, ln net.Listener) error {
-	hs := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 15 * time.Second, IdleTimeout: idleTimeout}
+	// DisableGeneralOptionsHandler: "OPTIONS *" goes through the handler (the browser guard and its body deadline)
+	// instead of net/http's own, which read up to 4 KiB of a body without any deadline
+	hs := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 15 * time.Second, IdleTimeout: idleTimeout,
+		DisableGeneralOptionsHandler: true}
 	errc := make(chan error, 1)
 	go func() { errc <- hs.Serve(ln) }()
 	select {
