@@ -3,7 +3,9 @@
 //! scope at <workspace>/.port_sessions/memory/AGENT_MEMORY.md (resolved inside the workspace on every use, never a
 //! secret or private file), the "user" scope at ~/.sarina/memory/USER_MEMORY.md. Files are plain text, entries
 //! separated by a "---" line; only a regular file of at most 1 MiB is read, and a write over one that cannot be read is
-//! refused (testdata/parity/memory.json). The review queue (review.go) comes with the CLI.
+//! refused (testdata/parity/memory.json). The review queue: `review.rs`.
+
+pub mod review;
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::Read;
@@ -53,7 +55,7 @@ pub struct Runtime {
     pub scanner: Option<Scanner>,
 }
 
-static WRITE: Mutex<()> = Mutex::new(());
+pub(crate) static WRITE: Mutex<()> = Mutex::new(());
 static WORD_RE: LazyLock<Regex> = LazyLock::new(|| goregexp::compile("[a-z0-9']+").expect("a fixed pattern"));
 
 fn join(a: &str, b: &str) -> String {
@@ -73,7 +75,7 @@ fn normalize(s: &str) -> String {
 }
 
 /// Go's `workspaceFile`: p resolved inside root as a file tool's write is; never a secret or private file.
-fn workspace_file(root: &str, p: &str) -> Result<String, String> {
+pub(crate) fn workspace_file(root: &str, p: &str) -> Result<String, String> {
     let rel = gotext::lossy(&gopath::rel(root.as_bytes(), p.as_bytes())?);
     let resolved = resolve_for_write(root, &rel)?;
     if crate::tools::secret::is_secret_path(&resolved) || crate::tools::private::is_private(&resolved) {
@@ -83,7 +85,7 @@ fn workspace_file(root: &str, p: &str) -> Result<String, String> {
 }
 
 /// Go's `readStateFile`: None for no file; an error for anything but a regular file of at most 1 MiB.
-fn read_state_file(p: &str) -> Result<Option<Vec<u8>>, String> {
+pub(crate) fn read_state_file(p: &str) -> Result<Option<Vec<u8>>, String> {
     let st = match std::fs::metadata(p) {
         Ok(st) => st,
         Err(e) if e.raw_os_error() == Some(2) => return Ok(None),
