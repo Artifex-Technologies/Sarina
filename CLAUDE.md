@@ -238,6 +238,23 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (later) — vecindex fixed in Go; Rust port step 2 finished but skills' discovery; nothing switched
+- **Go fix (live code):** `go/vecindex` now refuses dimension 65,536 (its block loop never ended) and a vector count the
+  file cannot hold (2^32 asked ~52 GB before reading), as the Rust port did; Go tests for both, bounded in time and
+  allocation (`28b9c3f`). The earlier entry's "not changed in Go" no longer holds.
+- Ported and proved against Go fixtures (docs/RUST_PORT.md "Ported"): trust (ed25519 by `ring`), Heimdall's grants gate
+  with AccessTierFromEnv, policy, guard's detectors, analysiscache, llm's JSON repair and normaliser, session.Save and
+  MigrateDir, sessionsearch (Go's amd64 math.Log), agents, the skill file format. 41,826 fixture cases in all; 15 fuzz
+  targets; mutation runs; CI green.
+- **Go quirks kept and written down** (docs/RUST_PORT.md "Differences"): a session id with a slash cannot be saved and
+  stops MigrateDir at that file on every run; a `.bak` of any kind blocks a new backup; a linked session file becomes a
+  regular file; analysiscache keeps a NaN in memory so every later Set fails; Normalize can rename a server's own call id.
+- **For Heimdall's board:** Go 1.27 reads a `time.Time` in JSON with the loose `time.Parse(RFC3339)` (one-digit hour,
+  offsets up to +24:60, a comma before the fraction); Heimdall's `gotime.rs` refuses `+24:00` and a one-digit hour and
+  words its errors differently. It writes the grants file Sarina reads, so worth a fixture there.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 — Rust port, step 2: JSON, the session file, the permission gate, vecindex; nothing switched
 - Ported and proved against Go fixtures (docs/RUST_PORT.md "Ported"): Go 1.27's encoding/json, the session file Heimdall
   reads (read and written byte for byte; a read-only run over a private copy of 9,839 real sessions gave the same bytes

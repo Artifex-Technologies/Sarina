@@ -13,7 +13,7 @@ equal.
 | --- | --- | --- |
 | 0 | this inventory, the order, the crates, the risks, the switch and the proof plan | **done** (2026-11-11) |
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
-| 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **in progress**: gojson, the session file, config's loaders, llm's types, the permission gate and registry, the tool definitions, vecindex (with Go's math/rand and math.Exp) done 2026-11-12 |
+| 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | open |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | open |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
@@ -197,7 +197,7 @@ reaches it any more (dead code is a risk).
 | `session/`, `config.rs`, `llm/types.rs` | `session` (Parse, Marshal byte for byte, MessageFromMap, the retired-tool migration, plan state, RepairPairing, NotRunMessage, ToolResultBody, Mutate, Redact, FileMode), `config` (ModelFromMap, RuntimeFromMap, ModelFromEnv, ContextConfig.Settings, AsInt/AsFloat with amd64's float to int), `llm/types.go` (Usage both ways, UsageFromProvider, wire messages, replayed arguments, ToolSpec) | `session.json`, `config.json`, `llmtypes.json` | 3,505 + 135 + 338 |
 | `tools/registry.rs` | `permission.go`, `registry.go`, `ForMode` (the gate, needsApproval, deny, hidden tools, Filter, the Builder's order, Execute's order) | `registry.json` | 3,716 |
 | `tools/defs.rs`, `tools/defs.json` | the 35 tool definitions the model sees (written from the Go tools by go/cmd/sarina's parity test) | `tooldefs.json` | 61 definitions |
-| `vecindex.rs`, `gorand.rs`, `gomath.rs` | `vecindex` (rotation, levels, Add, Remove, Search with container/heap's tie order, the SVEC1 file), `math/rand` with a seeded source (table generated from the Go source), amd64 `math.Exp` on both its paths | `vecindex.json` | 93 (1,029 comparisons) |
+| `vecindex.rs`, `gorand.rs`, `gomath.rs` | `vecindex` (rotation, levels, Add, Remove, Search with container/heap's tie order, the SVEC1 file), `math/rand` with a seeded source (table generated from the Go source), amd64 `math.Exp` on both its paths | `vecindex.json` | 95 (1,031 comparisons) |
 | `trust.rs`, `gostruct.rs` | `trust` (Go's base64, `ed25519.Verify` through `ring` with small-order and non-canonical keys and S+L, the signed list read once, `Refuse` on a made-up tree, `Contained`), Go 1.27's `json.Unmarshal` into a struct (case-insensitive keys with Go's two special folds, merging duplicates, null, the first type error) | `trust.json` | 134 (47 trust folders x 21 paths) |
 | `heimdall.rs`, `gotime.rs`, `config.rs` | `heimdall/grants.go` (`LoadGrants`: link, owner, others' write, the folder, unreadable, a folder, a path under a file; `TierCap`, `EscalationAllowed`), `config.AccessTierFromEnv` (19 values of SARINA_ACCESS_TIER against 66 grants states), Go's `time.Parse(time.RFC3339)` as JSON reads a time, with its error texts | `accesstier.json` | 131 (1,584 answers) |
 | `policy.rs` | `policy` (`Load`: operator files, SARINA_POLICY_FILE's list with duplicates, missing files, folders, unreadable and oversized files, the tighten-only workspace file, the trust check; `Denied`, `DenyRules`, `ApplyBudget` on three starting budgets); each case run 60 times in Go, every distinct answer kept (map order) | `policy.json` | 93 (25 tools, 3 budgets each) |
@@ -205,8 +205,9 @@ reaches it any more (dead code is a risk).
 | `analysiscache.rs`, `goos.rs` | `analysiscache` (`New` over files of every shape, `Get`, `Set`'s file byte for byte, its mode, its errors: `MkdirAll`, `CreateTemp`) | `analysiscache.json` | 39 |
 | `llm/repair.rs`, `llm/normalize.rs` | `llm/repair.go` (`RepairJSON`: fences, trailing commas, single quotes, raw control characters, closing what was cut off; `ParseArguments`) and `normalize.go` (`<think>` split, `<tool_call>` blocks, the python tag, bare JSON calls, cut-off arguments on a length stop, unique ids), on the Go tests' inputs, tool calls in every shape, every cut of each, generated damage | `repair.json` | 4,021 |
 | `session/save.rs`, `goos.rs` | `session.Save` and `writeAtomic` (the folder made, the temporary file, the mode from SARINA_SESSION_FILE_MODE, the rename; 12 sessions with odd ids x 6 modes x 4 folders) and `MigrateDir` (dry and real runs twice, backups, skipped files, a link, a `.bak` folder, an id with a slash), compared as whole folder listings | `save.json` | 301 |
-| `sessionsearch.rs`, `gomath.rs` (`log`), `gotext/letters.rs` | `sessionsearch` (`Search`: files newest first, the lenient reading of messages, the phrase BM25 and the word count, snippets), Go's amd64 `math.Log` (math/log_amd64.s, 1,700 values), Go's letter and digit tables (written by the Go test) | `sessionsearch.json` | 175 |
-| `agents.rs` | `agents` (`Parse`: the front matter, its keys, quotes, lists, switches and limits, each document 30 times for Go's map order; `Load`: operator folders, SARINA_AGENTS_DIR, overrides of the built-ins, duplicates, links, folders, oversized and unreadable files, the trust check, the text gate; `Get` with Go's case folding) | `agents.json` | 174 |
+| `sessionsearch.rs`, `gomath.rs` (`log`), `gotext/letters.rs` | `sessionsearch` (`Search`: files newest first, the lenient reading of messages, the phrase BM25 and the word count, snippets), Go's amd64 `math.Log` (math/log_amd64.s, 1,700 values), Go's letter and digit tables (written by the Go test) | `sessionsearch.json` | 174 |
+| `agents.rs` | `agents` (`Parse`: the front matter, its keys, quotes, lists, switches and limits, each document 30 times for Go's map order; `Load`: operator folders, SARINA_AGENTS_DIR, overrides of the built-ins, duplicates, links, folders, oversized and unreadable files, the trust check, the text gate; `Get` with Go's case folding) | `agents.json` | 162 |
+| `skills/parse.rs` | `skills/parse.go` (`Parse`: the front matter with scalars, quotes as `strconv.Unquote` reads them, inline, block and comma lists, the switches, the name rule; `ValidName`, `Expand`) | `skillparse.json` | 215 |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -316,19 +317,28 @@ Done (2026-11-11 night and 2026-11-12): phase 0; the workspace and the fixture w
 bash guards, `ValidateArgs`, the file tools' guards and path resolution, `testguard`, `pyfmt`, `flagx`, `version`); then
 `gojson` (Go 1.27's JSON), the session file with config's loaders and llm's types (and a read-only run over a private copy
 of 9,839 real session files: Go and Rust wrote the same bytes for every one; the copy was deleted), the permission gate
-and the registry, the tool definitions, and vecindex with Go's math/rand and math.Exp. 33,207 fixture cases in all, a
-mutation run for each piece, fuzz targets for every reader (`json`, `session`, `vecindex` new). CI green through
-`180d0de`. Go files changed: only new `*parity_test.go` files and the test-only `go/internal/parity`.
+and the registry, the tool definitions, vecindex with Go's math/rand and math.Exp; and in the second half of 2026-11-12
+`trust` (ed25519 through `ring`), Heimdall's grants gate with `AccessTierFromEnv`, `policy`, `guard`'s detectors,
+`analysiscache`, `llm`'s repair and normaliser, `session.Save` and `MigrateDir`, `sessionsearch` (with Go's amd64
+`math.Log`), `agents`, the skill file format, plus `gostruct` (Go 1.27's Unmarshal into a struct), `gotime` (Go's loose
+RFC 3339) and `goos` (MkdirAll, CreateTemp, WriteFile). 41,826 fixture cases in all, a mutation run for each piece (the
+cases widened where one got through), fuzz targets for every reader (15 now). CI green through the last push. Go code
+changed: `go/vecindex` (dimension 65,536 and counts past the file refused, with tests: commit `28b9c3f`), otherwise only
+new `*parity_test.go` files and the test-only `go/internal/parity`.
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. The rest of step 2: `trust` (ed25519 against Heimdall's signed list: `ring`), `policy`, `analysiscache`, `guard`'s
-   detectors, the `agents` and `skills` file formats, `sessionsearch`, `llm`'s pure parts (`repair.go`, `normalize.go`),
-   `session.Save` (the atomic write) and `MigrateDir`, `config.AccessTierFromEnv` with Heimdall's grants cap
-   (`go/heimdall/grants.go`: a fixture of every tier against the cap missing, damaged, lower, higher).
-2. Step 3, the clients, starting with `heimdall` (review) and `embed`.
+1. The rest of `skills`: discovery (`discover.go`: the roots, `~/.sarina/skills.json`, the trust check, collisions), the
+   skill tool and the long-skill library (`library.go`, `recall.go` with vecindex) — these lean on `tools` and `llm`, so
+   they may wait for step 4.
+2. Step 3, the clients, starting with `heimdall` (the review client: `Consult`, which `guard`'s full scan needs) and
+   `embed`.
 3. Which tools a session offers (the providers' switches and their order) comes with the tools in step 4; `defs.json`
    already holds every definition.
+
+The mutation script used in this session copied the file back with `cp`/`mv`, which leaves the restored file older
+than the last (mutant) build, so cargo did not rebuild the first test run after a series: touch the file after restoring
+(CI builds fresh, so nothing pushed was affected).
 
 Rules for whoever continues: every build, test and fixture run under the memory cap above (`-j4`, `-p 4`, nice 19);
 keep fixtures small and bounded (no input that makes Go allocate by a count it reads); pull before each commit (another

@@ -114,3 +114,10 @@ path = "fuzz_targets/agent_profile.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "skill_file"
+path = "fuzz_targets/skill_file.rs"
+test = false
+doc = false
+bench = false

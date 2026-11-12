@@ -27,6 +27,7 @@ pub mod pyfmt;
 pub mod session;
 pub mod sessionsearch;
 pub mod shellparse;
+pub mod skills;
 pub mod testguard;
 pub mod tools;
 pub mod trust;

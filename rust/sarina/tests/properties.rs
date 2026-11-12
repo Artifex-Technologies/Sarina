@@ -349,6 +349,24 @@ proptest! {
         fuzzing::agent_profile(&d);
     }
 
+    /// Skill-shaped files: front matter keys with scalars, quotes and escapes, inline and block lists, then a body.
+    #[test]
+    fn skill_file_shaped(lines in prop::collection::vec(
+        "(name|description|when_to_use|allowed_tools|prefetch|user_invocable|model_invocable|x|- item|  nested|# c)(: ?)?(\"[a-z\\\\nx0-9u]{0,8}\"|'[a-z']{0,6}'|\\[[a-z, \"]{0,10}\\]?|yes|no|[{|>&*!]?[a-z]{0,5})?",
+        0..8,
+    ), body in "[a-z $ARGUMENTS\\n]{0,16}") {
+        let doc = format!("---\n{}\n---\n{body}", lines.join("\n"));
+        fuzzing::skill_file(doc.as_bytes());
+    }
+
+    #[test]
+    fn skill_file_any_bytes(data in prop::collection::vec(any::<u8>(), 0..120)) {
+        fuzzing::skill_file(&data);
+        let mut d = b"---\nname: x\n".to_vec();
+        d.extend(&data);
+        fuzzing::skill_file(&d);
+    }
+
     /// Whatever follows `sudo `, the line is refused by the privileged check (unless the word is data, which a plain word
     /// after sudo never is).
     #[test]

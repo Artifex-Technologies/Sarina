@@ -293,3 +293,16 @@ pub fn agent_profile(data: &[u8]) {
         }
     }
 }
+
+/// Any bytes as a skill file: no panic; a skill that reads has a valid name and a body, and its expansion only replaces
+/// `$ARGUMENTS`.
+pub fn skill_file(data: &[u8]) {
+    if let Ok(s) = crate::skills::parse::parse(data, "fallback") {
+        assert!(crate::skills::parse::valid_name(s.name.as_bytes()));
+        assert!(!s.body.is_empty());
+        assert_eq!(s.expand("$ARGUMENTS"), s.body);
+        if !s.has_allowed {
+            assert!(s.allowed_tools.is_empty());
+        }
+    }
+}
