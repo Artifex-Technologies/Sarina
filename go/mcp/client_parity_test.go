@@ -135,7 +135,8 @@ func mcpScenarios() []mcpScenario {
 			Ops: []mcpOp{{Op: "init", TimeMs: t}}},
 		{Dir: "lines", Replies: []string{init1, `@xline:9437184 ` + r(2, `{"after":"long"}`), fmt.Sprintf("@text:3:%d", MaxLineBytes-frame),
 			fmt.Sprintf("@text:4:%d", MaxLineBytes-frame+1)},
-			Ops: []mcpOp{{Op: "init", TimeMs: t}, {Op: "raw", Name: "a", TimeMs: t}, {Op: "call", Name: "exact", TimeMs: t}, {Op: "call", Name: "over", TimeMs: t}}},
+			// the stand-in writes 8-9 MiB lines through head and tr: on a busy CI runner that took more than 3 s (2026-11-12)
+			Ops: []mcpOp{{Op: "init", TimeMs: t}, {Op: "raw", Name: "a", TimeMs: 15000}, {Op: "call", Name: "exact", TimeMs: 15000}, {Op: "call", Name: "over", TimeMs: 15000}}},
 		{Dir: "flood", Replies: []string{`@flood:5000 ` + init1, r(2, `{"still":"here"}`)},
 			Ops: []mcpOp{{Op: "init", TimeMs: 10000}, {Op: "raw", Name: "a", TimeMs: 10000}}},
 		{Dir: "env", Env: map[string]string{"FAKE_VAR": "over"}, Cwd: "work", Replies: []string{init1}, Ops: []mcpOp{{Op: "init", TimeMs: t}}},
