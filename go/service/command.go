@@ -79,10 +79,12 @@ func command(env *cli.Env, args []string) int {
 	fs.SetOutput(env.Stderr)
 	host := fs.String("host", "127.0.0.1", "address to bind (must stay loopback unless a token is set)")
 	port := fs.Int("port", 8899, "port to listen on")
-	token := fs.String("token", getenv("SARINA_SERVICE_TOKEN"), "bearer token required on every endpoint but /healthz (env SARINA_SERVICE_TOKEN); empty = no authentication")
+	// the token's and the key's defaults come from the environment after parsing, never as flag defaults: the usage
+	// printed for -h or a mistyped flag (into the journal, for the unit) would show them
+	token := fs.String("token", "", "bearer token required on every endpoint but /healthz (env SARINA_SERVICE_TOKEN); empty = no authentication")
 	model := fs.String("model", d.Model, "default model (env OPENAI_MODEL)")
 	baseURL := fs.String("base-url", d.BaseURL, "default OpenAI-compatible endpoint (env OPENAI_BASE_URL)")
-	apiKey := fs.String("api-key", d.APIKey, "default API key (env OPENAI_API_KEY)")
+	apiKey := fs.String("api-key", "", "default API key (env OPENAI_API_KEY)")
 	sessionDir := fs.String("session-dir", filepath.Join(".port_sessions", "agent"), "where agent sessions persist")
 	scratch := fs.String("scratchpad-root", filepath.Join(".port_sessions", "scratchpad"), "scratchpad root")
 	maxSessions := fs.Int("max-sessions", 20, "pool bound (least recently used sessions are evicted)")
@@ -99,6 +101,14 @@ func command(env *cli.Env, args []string) int {
 			return 0
 		}
 		return 2
+	}
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	if !given["token"] {
+		*token = getenv("SARINA_SERVICE_TOKEN")
+	}
+	if !given["api-key"] {
+		*apiKey = d.APIKey
 	}
 	for _, r := range filepath.SplitList(getenv("SARINA_SERVICE_CWD_ROOTS")) {
 		if r != "" {

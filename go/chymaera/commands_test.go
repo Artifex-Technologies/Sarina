@@ -145,3 +145,14 @@ func TestMergeReportCommandOutsideRepoExitsOne(t *testing.T) {
 		t.Fatalf("code %d out %q", code, out)
 	}
 }
+
+// The usage printed for -h or a mistyped flag must never show the console token (it was the --token flag's default).
+func TestUsageShowsNoToken(t *testing.T) {
+	const token = "made-up-console-token-0123"
+	for _, args := range [][]string{{"chymaera-console", "-h"}, {"chymaera-console", "--no-such-flag"}} {
+		_, _, errOut := run(args, "", map[string]string{TokenEnv: token})
+		if strings.Contains(errOut, token) || !strings.Contains(errOut, "-token") {
+			t.Errorf("%v: %s", args, errOut)
+		}
+	}
+}

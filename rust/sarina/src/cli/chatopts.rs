@@ -23,7 +23,8 @@ impl ChatOpts {
         let mut f = FlagSet::new(name);
         f.string("model", &d.model, "model name (env OPENAI_MODEL)");
         f.string("base-url", &d.base_url, "OpenAI-compatible base URL (env OPENAI_BASE_URL)");
-        f.string("api-key", &d.api_key, "API key (env OPENAI_API_KEY); never written to session files");
+        // no default shown: the usage printed for -h or a mistyped flag would show the key (build reads OPENAI_API_KEY)
+        f.string("api-key", "", "API key (env OPENAI_API_KEY); never written to session files");
         f.float("temperature", d.temperature, "sampling temperature (default: SARINA_TEMPERATURE, else 0)");
         f.float("timeout-seconds", DEFAULT_TIMEOUT_SECONDS, "per-request timeout");
         f.float("input-cost-per-million", 0.0, "USD per million input tokens");

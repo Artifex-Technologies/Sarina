@@ -47,19 +47,29 @@ type connFlags struct {
 	host  *string
 	port  *int
 	token *string
+	fs    *flag.FlagSet
+	env   *cli.Env
 }
 
 func addConnFlags(fs *flag.FlagSet, env *cli.Env) connFlags {
 	return connFlags{
-		host:  fs.String("host", console.DefaultHost, "console host (loopback)"),
-		port:  fs.Int("port", console.DefaultPort, "console port"),
-		token: fs.String("token", firstNonEmpty(env.Getenv(TokenEnv), console.DefaultToken()), "console token (default $"+TokenEnv+", else the one Argus App wrote to $XDG_RUNTIME_DIR/argus/token)"),
+		host: fs.String("host", console.DefaultHost, "console host (loopback)"),
+		port: fs.Int("port", console.DefaultPort, "console port"),
+		// no default value shown: the usage printed for -h or a mistyped flag would show the token; client() reads it
+		token: fs.String("token", "", "console token (default $"+TokenEnv+", else the one Argus App wrote to $XDG_RUNTIME_DIR/argus/token)"),
+		fs:    fs,
+		env:   env,
 	}
 }
 
 func (f connFlags) client() *console.Client {
 	c := console.New()
-	c.Host, c.Port, c.Token = *f.host, *f.port, *f.token
+	token, given := *f.token, false
+	f.fs.Visit(func(fl *flag.Flag) { given = given || fl.Name == "token" })
+	if !given {
+		token = firstNonEmpty(f.env.Getenv(TokenEnv), console.DefaultToken())
+	}
+	c.Host, c.Port, c.Token = *f.host, *f.port, token
 	c.Timeout = console.DefaultTimeout
 	return c
 }

@@ -44,7 +44,9 @@ func command(env *cli.Env, args []string) int {
 	cwd := fs.String("cwd", ".", "workspace directory the agent works in")
 	model := fs.String("model", d.Model, "model name (env OPENAI_MODEL)")
 	baseURL := fs.String("base-url", d.BaseURL, "OpenAI-compatible base URL (env OPENAI_BASE_URL)")
-	apiKey := fs.String("api-key", d.APIKey, "API key (env OPENAI_API_KEY); never returned by the API")
+	// the key's default comes from the environment after parsing: as a flag default the usage printed for -h or a
+	// mistyped flag would show it
+	apiKey := fs.String("api-key", "", "API key (env OPENAI_API_KEY); never returned by the API")
 	sessionDir := fs.String("session-dir", "", "session directory (default <cwd>/.port_sessions/agent)")
 	allowShell := fs.Bool("allow-shell", false, "start with shell commands permitted")
 	allowWrite := fs.Bool("allow-write", false, "start with file writes permitted")
@@ -64,6 +66,11 @@ func command(env *cli.Env, args []string) int {
 			return 0
 		}
 		return 2
+	}
+	keyGiven := false
+	fs.Visit(func(f *flag.Flag) { keyGiven = keyGiven || f.Name == "api-key" })
+	if !keyGiven {
+		*apiKey = d.APIKey
 	}
 	if !service.IsLoopbackHost(*host) {
 		fmt.Fprintf(env.Stderr, "sarina gui: refusing to listen on %s. The console has no accounts and may hold shell access, so it only binds to a loopback address.\n", *host)
