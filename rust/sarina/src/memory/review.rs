@@ -362,12 +362,7 @@ impl Queue {
         self.load().into_iter().find(|e| e.entry_id == id)
     }
 
-    fn set_status(
-        &self,
-        id: &str,
-        status: &str,
-        apply: Option<ApplyFn>,
-    ) -> Result<Option<Mutation>, String> {
+    fn set_status(&self, id: &str, status: &str, apply: Option<ApplyFn>) -> Result<Option<Mutation>, String> {
         let mut entries = self.load();
         let Some(i) = entries.iter().position(|e| e.entry_id == id) else {
             return Err(format!("no pending review entry with id {id}"));
