@@ -265,6 +265,7 @@ is a gain):
 | `labyrinth-ask-sarina` (Super+S) | Python | a spoken question 52-80 ms → 4.2-7.1 ms (−91 to −92 %, 48-73 ms sooner), 19-30 MB → 5.7-6.3 MB | [sarina-voice](packaging/voice/README.md#why-rust-measured) |
 | `labyrinth-sarina-checkup` | Python | 54-57 ms → 2.1-3.6 ms (−94 to −96 %), 26 MB → 4-5 MB | [sarina-voice](packaging/voice/README.md#why-rust-measured) |
 | `labyrinth-sarina-speak-voiced` (per spoken sentence) | Python | 24-26 ms → 0.7-1.1 ms (−96 to −97 %), 13-14 MB → 3.5-3.8 MB | [sarina-voice](packaging/voice/README.md#why-rust-measured) |
+| `labyrinth-voiced` (the voice service, Chatterbox) | Python | on the processor: a sentence the same (−0.8 %; it is all ONNX Runtime), peak memory 2.48 → 2.21 GB (−11 %), waiting 13 → 4 MB; the card's numbers are still to come | [sarina-voiced](packaging/voiced/README.md#why-rust-measured) |
 
 Every case gave the same output in both. **Worse in Rust:** the size on disk (2.3 MB against 74 KB of scripts; Python stays
 installed for the voice service either way).
