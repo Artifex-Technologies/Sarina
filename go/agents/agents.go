@@ -135,7 +135,6 @@ type Options struct {
 // Trust refuses behaviour files the owner did not approve (Heimdall's signed list, package trust); "" means the file may be used.
 type Trust interface{ Refuse(path string) string }
 
-
 // Load returns the built-in profiles plus the operator's. An operator profile
 // with a built-in's name replaces it (the operator wrote it); between operator
 // files, the earlier directory wins.

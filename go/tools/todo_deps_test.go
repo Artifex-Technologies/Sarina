@@ -128,7 +128,7 @@ const legacyDependencyFile = `{"tasks": [
 func TestLoadNormalisesALegacyFileOnceAndIdempotently(t *testing.T) {
 	e := newEnv(t, writeAll())
 	file := e.put(".port_sessions/"+taskFileName, legacyDependencyFile)
-	e.ok("task_list", nil) // the first load normalises and persists
+	e.ok("task_list", nil)        // the first load normalises and persists
 	want := map[string][2]string{ // id -> status, blocked_reason
 		"t0": {"pending", ""}, "t1": {"blocked", "waiting_on:t0"}, "t2": {"pending", ""}, "t3": {"completed", ""},
 		"t4": {"blocked", "needs a decision"}, "t5": {"blocked", "waiting_on:t0"}, "t6": {"in_progress", ""}, "t7": {"pending", ""},

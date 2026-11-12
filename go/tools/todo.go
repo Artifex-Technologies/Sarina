@@ -2,10 +2,10 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -681,7 +681,7 @@ func taskList() Tool {
 	return Tool{
 		Class: ClassReadOnly,
 		Spec: llm.ToolSpec{
-			Name:        "task_list",
+			Name: "task_list",
 			Description: "List to-do tasks, most urgent first. Pass task_id to show one task in full. " +
 				"actionable_only=true lists only what can be worked on now (in progress, or pending with every blocked_by task finished); use it to pick the next task.",
 			Parameters: obj(map[string]any{
@@ -774,7 +774,7 @@ func taskUpdate() Tool {
 	return Tool{
 		Requires: PermWrite, Class: ClassMutating,
 		Spec: llm.ToolSpec{
-			Name:        "task_update",
+			Name: "task_update",
 			Description: "Change the given fields of a to-do task (the rest stay). completed releases tasks waiting on it; blocked and cancelled take a reason. " +
 				"blocked_by replaces the dependencies, add_blocked_by / remove_blocked_by edit them; an unknown dependency id does not block.",
 			Parameters: obj(map[string]any{
@@ -856,8 +856,8 @@ func taskUpdate() Tool {
 				return withNotes(fmt.Sprintf("Updated task %s: %s [%s]", out.TaskID, out.Title, out.Status), notesFor(*ts, out, "")), &out, nil
 			})
 		},
-		}
-		}
+	}
+}
 
 func todoWrite() Tool {
 	return Tool{
@@ -978,12 +978,11 @@ func renderPlan(p planFile) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-
 func updatePlan() Tool {
 	return Tool{
 		Requires: PermWrite, Class: ClassMutating,
 		Spec: llm.ToolSpec{
-			Name:        "update_plan",
+			Name: "update_plan",
 			Description: "Replace the plan with the given steps, mirrored into the to-do list by id unless sync_tasks is false; other tasks stay. " +
 				"clear=true empties the plan; prune_tasks also removes tasks earlier plans made.",
 			Parameters: obj(map[string]any{

@@ -47,7 +47,6 @@ type Options struct {
 // Trust refuses behaviour files the owner did not approve (Heimdall's signed list, package trust); "" means the file may be used.
 type Trust interface{ Refuse(path string) string }
 
-
 type prefixRule struct{ prefix, source string }
 
 // Policy is the merged result.

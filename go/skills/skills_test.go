@@ -27,7 +27,7 @@ func write(t *testing.T, path, content string) {
 // env is a fake home, workspace and environment.
 type env struct {
 	home, ws, sys string
-	vars     map[string]string
+	vars          map[string]string
 }
 
 func newEnv(t *testing.T) *env {

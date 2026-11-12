@@ -28,8 +28,8 @@ import (
 
 	"github.com/Artifex-Technologies/Sarina/go/agent"
 	"github.com/Artifex-Technologies/Sarina/go/config"
-	"github.com/Artifex-Technologies/Sarina/go/tiers"
 	"github.com/Artifex-Technologies/Sarina/go/runkit"
+	"github.com/Artifex-Technologies/Sarina/go/tiers"
 )
 
 //go:embed static

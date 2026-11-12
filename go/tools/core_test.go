@@ -121,14 +121,14 @@ func TestGatedToolsAreDeniedWithoutFlags(t *testing.T) {
 	e := newEnv(t, config.Permissions{})
 	e.put("a.txt", "x")
 	calls := map[string]map[string]any{
-		"write_file":    {"path": "n.txt", "content": "x"},
-		"edit_file":     {"path": "a.txt", "old_text": "x", "new_text": "y"},
-		"task_create":   {"title": "t"},
-		"task_update":   {"task_id": "t1", "title": "t"},
-		"todo_write":    {"items": []any{map[string]any{"title": "t"}}},
-		"update_plan":   {"items": []any{map[string]any{"step": "s"}}},
-		"bash":          {"command": "echo hi"},
-		"TaskStop":      {"task_id": "bg_x"},
+		"write_file":  {"path": "n.txt", "content": "x"},
+		"edit_file":   {"path": "a.txt", "old_text": "x", "new_text": "y"},
+		"task_create": {"title": "t"},
+		"task_update": {"task_id": "t1", "title": "t"},
+		"todo_write":  {"items": []any{map[string]any{"title": "t"}}},
+		"update_plan": {"items": []any{map[string]any{"step": "s"}}},
+		"bash":        {"command": "echo hi"},
+		"TaskStop":    {"task_id": "bg_x"},
 	}
 	for name, args := range calls {
 		r := e.fails(name, args, "permission_denied")

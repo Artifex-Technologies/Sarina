@@ -453,9 +453,9 @@ func TestNoSecretsAnywhereInTheReport(t *testing.T) {
 	heimdallTok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) }))
 	defer heimdallTok.Close()
 	env := map[string]string{
-		"OPENAI_BASE_URL":   strings.Replace(srv.URL, "http://", "http://user:"+canary+"@", 1) + "/v1",
-		"OPENAI_MODEL":      "m",
-		"OPENAI_API_KEY":    canary,
+		"OPENAI_BASE_URL":     strings.Replace(srv.URL, "http://", "http://user:"+canary+"@", 1) + "/v1",
+		"OPENAI_MODEL":        "m",
+		"OPENAI_API_KEY":      canary,
 		"HEIMDALL_REVIEW_URL": strings.Replace(heimdallTok.URL, "http://", "http://u:"+canary+"@", 1) + "/v1/review?k=" + canary,
 	}
 	dir := t.TempDir()

@@ -434,7 +434,7 @@ func TestCryptoToolsOnlyForCryptoQuestions(t *testing.T) {
 		"How is my computer doing?":                                                   false,
 		"Tell me a joke about backups":                                                false,
 		"Add a function Reverse to text.go":                                           false,
-		"Read /home/sam/Documents/Github/Labyrinth/README.md and summarise it":    false,
+		"Read /home/sam/Documents/Github/Labyrinth/README.md and summarise it":        false,
 	}
 	for prompt, want := range cases {
 		t.Setenv("SARINA_CRYPTO", "auto")

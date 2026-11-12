@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Artifex-Technologies/Sarina/go/limbo"
 	"github.com/Artifex-Technologies/Sarina/go/heimdall"
+	"github.com/Artifex-Technologies/Sarina/go/limbo"
 )
 
 const limboDocs = "Limbo docs/INTEGRATION-FAILURES.md"
