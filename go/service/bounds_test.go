@@ -5,6 +5,8 @@ import (
 	"context"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -72,5 +74,26 @@ func TestIdleConnectionIsClosed(t *testing.T) {
 	all, err := io.ReadAll(c)
 	if err != nil || !strings.Contains(string(all), "200 OK") {
 		t.Fatalf("the idle connection stayed open: %v %q", err, all)
+	}
+}
+
+// The body's deadline must not reach the turn: it is cleared once the body is read, so a turn longer than it ends
+// normally (a deadline left in place would cancel the request's context through the server's background read).
+func TestLongTurnOutlivesTheBodyDeadline(t *testing.T) {
+	old := bodyReadTimeout
+	bodyReadTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { bodyReadTimeout = old })
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.ReadAll(r.Body)
+		time.Sleep(800 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"slow answer"},"finish_reason":"stop"}]}`)
+	}))
+	t.Cleanup(slow.Close)
+	r := newRig(t, func(c *Config) { c.BaseURL = slow.URL })
+	id := r.mustCreate(map[string]any{"tool_allowlist": []string{}})
+	code, out := r.chat(id, map[string]any{"prompt": "take your time"})
+	if code != 200 || out["final_output"] != "slow answer" || out["stop_reason"] != "stop" {
+		t.Fatalf("%d %v", code, out)
 	}
 }

@@ -39,8 +39,9 @@ const maxBody = 8 << 20
 // bodyReadTimeout bounds how long a request's body may take to arrive. net/http's ReadHeaderTimeout covers only the
 // header: without this a client that declared a body and sent less held its connection and handler for ever, also
 // when the handler never read the body (the server drains up to 256 KiB of it after the answer). It is a read
-// deadline set when a request starts and cleared once readBody has the body, so a long turn is never cut off (a
-// deadline left in place would cancel the request's context through the server's background read).
+// deadline set when a request with a body starts and cleared once readBody has the body, so a long turn is never cut
+// off (a request without a body gets none: the server's background read for it has already begun, and a deadline
+// reaching that read would cancel the request).
 var bodyReadTimeout = 30 * time.Second
 
 // Config is the operator's configuration. Zero values mean "nothing granted".
@@ -118,7 +119,9 @@ func (s *Server) Handler() http.Handler {
 // computer are unaffected: they send a loopback Host and no Origin.
 func browserGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyReadTimeout))
+		if r.ContentLength != 0 {
+			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(bodyReadTimeout))
+		}
 		host := r.Host
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
@@ -194,7 +197,8 @@ func readBody(w http.ResponseWriter, r *http.Request, into any) bool {
 		}
 		return false
 	}
-	// the body is in: the turn that follows may take longer than the body's deadline
+	// the body is in: the turn that follows must not meet the body's deadline (net/http's background read, which
+	// begins at the body's end, clears it too)
 	_ = http.NewResponseController(w).SetReadDeadline(time.Time{})
 	if err := json.Unmarshal(body, into); err != nil {
 		var te *json.UnmarshalTypeError
