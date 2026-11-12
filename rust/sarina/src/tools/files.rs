@@ -451,7 +451,7 @@ fn edit_loop_error(path: &str, n: i64) -> String {
     )
 }
 
-fn exfil_refusal(path: &str, why: &str) -> String {
+pub(crate) fn exfil_refusal(path: &str, why: &str) -> String {
     format!(
         "refused: the content for {path} would take keys or passwords off this computer: {why}. This is not written, whoever asks. \
          Tell the user plainly that you will not write it, and why; offer a safe alternative only if one fits (backing up keys to a \

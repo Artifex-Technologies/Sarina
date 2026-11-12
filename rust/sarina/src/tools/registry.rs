@@ -70,6 +70,17 @@ pub struct Context {
     pub step: i64,
     /// the file tools' memory for this context (Go keeps it in Context.Runtimes); clones share it
     pub state: Arc<crate::tools::files::FileState>,
+    /// the call's context (Go passes it to every handler): a cancel stops a running command
+    pub ctx: crate::goctx::Ctx,
+    /// a foreground command's time when the call sets none (zero or less: the default, 30 s)
+    pub command_timeout: std::time::Duration,
+    /// the parent environment ("KEY=value" entries) children start from; None is this process's
+    pub environ: Option<crate::tools::exec::Environ>,
+    /// variables the operator set for this session, applied to children after the secret filter
+    pub session_env: BTreeMap<String, String>,
+    pub extra_env: BTreeMap<String, String>,
+    /// where background processes live (Go's Runtimes[RuntimeProcs]); None is the process-wide manager
+    pub procs: Option<Arc<crate::tools::exec::ProcManager>>,
     pub permissions: Permissions,
     /// asked before a tool that needs a permission or changes state runs (after the gate and the schema check)
     pub approver: Option<Approver>,
@@ -93,6 +104,12 @@ pub struct Output {
 
 pub type Handler = Arc<dyn Fn(&BTreeMap<String, Any>, &Context) -> Output + Send + Sync>;
 
+/// Receives live output from a streaming tool: the stream ("stdout" or "stderr") and a piece of text.
+pub type Emit = Arc<dyn Fn(&str, &str) + Send + Sync>;
+
+/// A handler that can also report output while it runs (Go's StreamHandler).
+pub type StreamHandler = Arc<dyn Fn(&BTreeMap<String, Any>, &Context, &Emit) -> Output + Send + Sync>;
+
 /// A name, a model-visible description and schema, a handler, the permission the call needs and the plan-mode class.
 #[derive(Clone)]
 pub struct Tool {
@@ -100,6 +117,8 @@ pub struct Tool {
     pub handler: Handler,
     pub requires: Permission,
     pub class: Class,
+    /// used instead of the handler by execute_stream
+    pub stream: Option<StreamHandler>,
 }
 
 /// The result of one call.
@@ -237,6 +256,16 @@ impl Registry {
     /// Go's `Execute`: never fails; failures are results the model reads. Order: unknown tool, the operator's policy, the
     /// permission gate, the schema, the approver, the handler (a panic in it is a result too).
     pub fn execute(&self, name: &str, args: Option<BTreeMap<String, Any>>, tc: &Context) -> ToolResult {
+        self.run(name, args, tc, None)
+    }
+
+    /// Go's `ExecuteStream`: Execute for a caller that wants live output; a tool with a stream handler reports through
+    /// emit, and its result says `streamed`.
+    pub fn execute_stream(&self, name: &str, args: Option<BTreeMap<String, Any>>, tc: &Context, emit: &Emit) -> ToolResult {
+        self.run(name, args, tc, Some(emit))
+    }
+
+    fn run(&self, name: &str, args: Option<BTreeMap<String, Any>>, tc: &Context, emit: Option<&Emit>) -> ToolResult {
         let Some(t) = self.get(name) else {
             return ToolResult { name: name.into(), content: format!("unknown tool {}", gotext::quote(name)), ..ToolResult::default() };
         };
@@ -275,7 +304,12 @@ impl Registry {
             }
         }
         let handler = t.handler.clone();
-        let out = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler(&args, tc))) {
+        let streamed = emit.is_some() && t.stream.is_some();
+        let call = || match (emit, &t.stream) {
+            (Some(e), Some(st)) => st(&args, tc, e),
+            _ => handler(&args, tc),
+        };
+        let out = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(call)) {
             Ok(out) => out,
             Err(p) => {
                 let what =
@@ -289,6 +323,9 @@ impl Registry {
             }
         };
         let mut metadata = out.metadata;
+        if streamed {
+            metadata.insert("streamed".into(), Any::Bool(true));
+        }
         match out.error {
             Some(e) => {
                 let (kind, text) = match e {

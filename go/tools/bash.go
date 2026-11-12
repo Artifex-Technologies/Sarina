@@ -46,10 +46,7 @@ func Bash() Tool {
 			return fmt.Sprintf("Started background process %s (pid %d). Read its output with TaskOutput and stop it with TaskStop, using task_id %q.", p.ID, p.PID, p.ID),
 				map[string]any{"action": "bash", "command": command, "background": true, "task_id": p.ID, "pid": p.PID}, nil
 		}
-		timeout := tc.CommandTimeout
-		if n := argInt(args, "timeout_seconds", 0); n > 0 {
-			timeout = time.Duration(n) * time.Second
-		}
+		timeout := bashTimeout(tc, args)
 		res, err := runForeground(ctx, command, tc, timeout, emit)
 		if err != nil {
 			return "", nil, err
@@ -95,4 +92,21 @@ func Bash() Tool {
 		},
 		Stream: run,
 	}
+}
+
+// defaultCommandTimeout is a foreground command's time when neither the call nor the context sets one.
+const defaultCommandTimeout = 30 * time.Second
+
+// bashTimeout is how long a foreground command may run: timeout_seconds, else the context's, else the default. The
+// default used to be applied only inside runForeground, so a command killed after 30 s was reported as "timed out after
+// 0s" (found by the Rust port, 2026-11-12).
+func bashTimeout(tc *Context, args map[string]any) time.Duration {
+	timeout := tc.CommandTimeout
+	if n := argInt(args, "timeout_seconds", 0); n > 0 {
+		timeout = time.Duration(n) * time.Second
+	}
+	if timeout <= 0 {
+		timeout = defaultCommandTimeout
+	}
+	return timeout
 }

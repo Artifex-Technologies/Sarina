@@ -69,6 +69,7 @@ fn parity_tools() -> Vec<Tool> {
         handler: handler.clone(),
         requires,
         class,
+        stream: None,
     };
     vec![
         mk("r", Permission::None, Class::ReadOnly, true),

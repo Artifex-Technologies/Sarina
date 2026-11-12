@@ -931,3 +931,20 @@ func TestFifoIsNotOpenedByTheFileTools(t *testing.T) {
 		t.Fatal("a file tool opened the pipe and waits for a writer")
 	}
 }
+
+// The time a foreground command gets is the one its timeout message names: without a configured timeout it was killed
+// after 30 s and reported as "timed out after 0s" (found by the Rust port, 2026-11-12).
+func TestBashTimeoutIsTheOneNamed(t *testing.T) {
+	for _, c := range []struct {
+		ctx  time.Duration
+		args map[string]any
+		want time.Duration
+	}{
+		{0, nil, defaultCommandTimeout}, {-time.Second, nil, defaultCommandTimeout}, {5 * time.Second, nil, 5 * time.Second},
+		{5 * time.Second, map[string]any{"timeout_seconds": 2}, 2 * time.Second}, {0, map[string]any{"timeout_seconds": 0}, defaultCommandTimeout},
+	} {
+		if got := bashTimeout(&Context{CommandTimeout: c.ctx}, c.args); got != c.want {
+			t.Errorf("context %v, args %v: %v, want %v", c.ctx, c.args, got, c.want)
+		}
+	}
+}

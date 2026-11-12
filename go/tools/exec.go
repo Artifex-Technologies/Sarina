@@ -209,7 +209,7 @@ func newShellCmd(command string, tc *Context) (*exec.Cmd, error) {
 // arrive.
 func runForeground(ctx context.Context, command string, tc *Context, timeout time.Duration, emit Emit) (shellResult, error) {
 	if timeout <= 0 {
-		timeout = 30 * time.Second
+		timeout = defaultCommandTimeout
 	}
 	cmd, err := newShellCmd(command, tc)
 	if err != nil {

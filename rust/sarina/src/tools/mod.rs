@@ -2,6 +2,7 @@
 
 pub mod defs;
 pub mod destructive;
+pub mod exec;
 pub mod exfil;
 pub mod files;
 pub mod fsutil;
