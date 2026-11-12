@@ -18,4 +18,5 @@ regex = { version = "=1.12.3", default-features = false, features = ["std", "per
 
 [dev-dependencies]
 proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
-serde_json = "=1.0.149"
+# float_roundtrip: numbers read as Go reads them (correctly rounded), so fixtures compare exactly
+serde_json = { version = "=1.0.149", features = ["float_roundtrip"] }

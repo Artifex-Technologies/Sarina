@@ -49,3 +49,22 @@ pub fn bash_guards(data: &[u8]) {
         }
     }
 }
+
+/// Any text as a number a model sent: Go's ParseFloat does not panic, a value it accepts is what Rust's own parser makes of
+/// the same digits (when Rust takes them), and every finite result prints and parses back to itself.
+pub fn parse_float(data: &[u8]) {
+    let Ok(s) = std::str::from_utf8(data) else { return };
+    match crate::gotext::parse_float(s) {
+        Ok(f) => {
+            if !s.contains(['_', 'x', 'X', 'p', 'P', 'n', 'N', 'i', 'I']) {
+                if let Ok(r) = s.parse::<f64>() {
+                    assert_eq!(f.to_bits(), r.to_bits(), "{s:?}");
+                }
+            }
+            if f.is_finite() {
+                assert_eq!(crate::gotext::parse_float(&crate::gotext::float_v(f)).map(f64::to_bits), Ok(f.to_bits()));
+            }
+        }
+        Err(e) => assert!(e.value == 0.0 || e.value.is_infinite()),
+    }
+}

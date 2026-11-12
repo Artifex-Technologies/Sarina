@@ -30,3 +30,10 @@ path = "fuzz_targets/bash_guards.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "parse_float"
+path = "fuzz_targets/parse_float.rs"
+test = false
+doc = false
+bench = false

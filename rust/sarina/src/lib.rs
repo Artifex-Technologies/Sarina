@@ -2,6 +2,7 @@
 //! names the Go package or file it comes from in its first line.
 
 pub mod fuzzing;
+pub mod goany;
 pub mod gopath;
 pub mod gotext;
 pub mod shellparse;

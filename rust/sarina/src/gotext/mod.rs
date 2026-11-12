@@ -6,8 +6,10 @@
 //! its regular expressions and its JSON encoder see them: each byte that does not start a valid UTF-8 sequence becomes one
 //! U+FFFD.
 
+mod parsefloat;
 mod tables;
 
+pub use parsefloat::{parse_float, ParseFloatError};
 pub use tables::GO_UNICODE_VERSION;
 
 fn in_table(table: &[(u32, u32)], c: char) -> bool {
