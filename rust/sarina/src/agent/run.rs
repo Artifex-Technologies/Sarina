@@ -31,7 +31,7 @@ use crate::session::message::{
 use crate::session::redact::redact;
 use crate::session::{Message, OrderedMap, PlanState, Session, PLAN_ACTIVE, PLAN_NORMAL};
 use crate::tools::fsutil::state_dir;
-use crate::tools::registry::{Approver, Builder, Class, Context, Output, Permission, Registry, Tool, ToolResult};
+use crate::tools::registry::{Approver, Builder, Class, Confirm, Context, Output, Permission, Registry, Tool, ToolResult};
 
 pub const STOP_MAX_TURNS: &str = "max_turns";
 pub const STOP_BUDGET_EXCEEDED: &str = "budget_exceeded";
@@ -106,6 +106,9 @@ pub struct Options {
     pub session_env: BTreeMap<String, String>,
     pub parent_link: Option<BTreeMap<String, Any>>,
     pub approver: Option<Approver>,
+    /// Go's `Options.Confirm`: lets a tool ask the operator one yes/no question per call (None: no one can be asked).
+    /// Sub-agents get the parent's, as its Approver.
+    pub confirm: Option<Confirm>,
     /// read-only profiles the `agent` tool can run as bounded child agents (a child never gets the tool)
     pub subagents: Option<Arc<Catalog>>,
 }
@@ -269,6 +272,13 @@ impl Agent {
         self.opts.on_event = f;
     }
 
+    /// Go's `SetConfirm`: installs (or with None removes) the per-call operator question; only that channel changes,
+    /// and a rebuilt tool context keeps it.
+    pub fn set_confirm(&mut self, f: Option<Confirm>) {
+        self.opts.confirm.clone_from(&f);
+        self.tool_ctx.confirm = f;
+    }
+
     pub fn set_plan_decider(&mut self, d: Option<PlanDecider>) {
         self.decider = d;
     }
@@ -303,6 +313,7 @@ impl Agent {
             session_directory: rt.session_directory.clone(),
             session_env: self.opts.session_env.clone(),
             approver: self.opts.approver.clone(),
+            confirm: self.opts.confirm.clone(),
             plan_active: Some(Arc::new(move || plan_on.load(Ordering::SeqCst))),
             ..Context::default()
         };
@@ -2332,5 +2343,65 @@ impl TierTracker for crate::tiers::router::Router {
 impl WindowDiscoverer for crate::llm::discover::Discoverer {
     fn context_window(&self, model: &ModelConfig) -> (i64, String) {
         crate::llm::discover::Discoverer::context_window(self, &Ctx::background(), model)
+    }
+}
+
+#[cfg(test)]
+mod confirm_tests {
+    use super::*;
+
+    struct NoModel;
+
+    impl Completer for NoModel {
+        fn complete(&self, _: &Ctx, _: &Request, _: Option<&mut dyn FnMut(StreamEvent)>) -> Result<Turn, LlmError> {
+            Err(LlmError::Backend(crate::llm::openai::BackendError { message: "no model in this test".into(), status: 0 }))
+        }
+    }
+
+    /// Go's `TestSetConfirmAddsOnlyItsOwnRuntimeKey`.
+    #[test]
+    fn set_confirm_adds_only_its_own_channel() {
+        let dir = std::env::temp_dir().join(format!("sarina-confirm-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let d = dir.to_string_lossy().into_owned();
+        let opts = Options {
+            model: ModelConfig { model: "test".into(), base_url: "http://127.0.0.1:1/v1".into(), ..ModelConfig::default() },
+            runtime: crate::config::default_runtime(&d),
+            client: Arc::new(NoModel),
+            tools: Builder::default(),
+            prompt: PromptOptions::default(),
+            context_window: 0,
+            now: Arc::new(|| Time::from_unix(1_791_115_200, 0)),
+            home: d.clone(),
+            on_event: None,
+            getenv: Arc::new(|_: &str| String::new()),
+            discoverer: None,
+            scanner: None,
+            tiers: None,
+            session_env: BTreeMap::new(),
+            parent_link: None,
+            approver: None,
+            confirm: None,
+            subagents: None,
+        };
+        let mut a = Agent::new(opts).unwrap();
+        assert!(a.tool_ctx.confirm.is_none(), "no confirm channel was installed, yet one is there");
+        let asked = Arc::new(Mutex::new(Vec::<String>::new()));
+        let log = asked.clone();
+        a.set_confirm(Some(Arc::new(move |p: &str| {
+            log.lock().unwrap().push(p.to_owned());
+            true
+        })));
+        let ask = |a: &Agent, p: &str| a.tool_ctx.confirm.as_ref().map(|f| f(p));
+        assert_eq!(ask(&a, "send?"), Some(true), "the confirm channel was not installed");
+        assert!(a.tool_ctx.plan_active.is_some(), "set_confirm dropped the plan-mode probe");
+        a.rebuild_tools(&d).unwrap();
+        assert_eq!(ask(&a, "again?"), Some(true), "rebuilding the tool context lost the confirm channel");
+        assert_eq!(*asked.lock().unwrap(), ["send?", "again?"], "each call asks once");
+        a.set_confirm(None);
+        assert!(a.tool_ctx.confirm.is_none(), "set_confirm(None) left the channel installed");
+        a.rebuild_tools(&d).unwrap();
+        assert!(a.tool_ctx.confirm.is_none(), "a rebuilt context brought the removed channel back");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

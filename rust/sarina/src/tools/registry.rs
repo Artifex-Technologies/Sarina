@@ -58,6 +58,12 @@ pub struct ApprovalRequest {
 /// Answers an ApprovalRequest: allow, or refuse with an optional reason the model reads.
 pub type Approver = Arc<dyn Fn(&ApprovalRequest) -> (bool, String) + Send + Sync>;
 
+/// One yes/no question to the operator, asked on every call (Go's `Runtimes[RuntimeOperatorConfirm]`, a
+/// `func(prompt string) bool`). Deliberately not the [`Approver`], which can carry an "allow for this session" grant: a
+/// tool that sends data off the machine (council_ask) must be asked about every time, and does nothing online when this
+/// is None (no one can be asked).
+pub type Confirm = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
 /// What a handler receives besides its arguments (the parts ported so far).
 #[derive(Clone, Default)]
 pub struct Context {
@@ -92,6 +98,8 @@ pub struct Context {
     pub permissions: Permissions,
     /// asked before a tool that needs a permission or changes state runs (after the gate and the schema check)
     pub approver: Option<Approver>,
+    /// the per-call operator question; None: no one can be asked
+    pub confirm: Option<Confirm>,
 }
 
 /// Why a handler failed: refused by configuration (Go's PermissionDeniedError, found anywhere in the error chain) or any

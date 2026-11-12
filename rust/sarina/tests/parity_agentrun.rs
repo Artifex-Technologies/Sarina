@@ -200,6 +200,7 @@ fn agent_runs_match_go() {
             session_env: BTreeMap::new(),
             parent_link: None,
             approver: None,
+            confirm: None,
             subagents: if sc["agents"].as_bool().unwrap() {
                 Some(Arc::new(sarina::agents::Catalog { profiles: sarina::agents::builtins(), problems: vec![] }))
             } else {
