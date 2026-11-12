@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/config"
 	"github.com/Artifex-Technologies/Sarina/go/guard"
@@ -493,5 +495,78 @@ func TestCorruptOrMissingQueueIsEmpty(t *testing.T) {
 	os.WriteFile(q.Path, []byte("{broken"), 0o600)
 	if len(q.Load()) != 0 {
 		t.Fatal("corrupt queue must be empty")
+	}
+}
+
+// The agent memory file stays in the workspace: a link planted at .port_sessions/memory/AGENT_MEMORY.md (or at the
+// folder) put the file it named into every session's prompt, and a write went through it (found by the Rust port,
+// 2026-11-12). A named pipe there hung the session at start; an unreadable file read as empty, so the next add replaced it.
+func TestAgentMemoryStaysInTheWorkspace(t *testing.T) {
+	ws, outside := t.TempDir(), t.TempDir()
+	key := filepath.Join(outside, "id_ed25519_copy")
+	os.WriteFile(key, []byte("PRIVATE KEY MATERIAL"), 0o600)
+	os.MkdirAll(filepath.Join(ws, ".port_sessions", "memory"), 0o755)
+	agent := filepath.Join(ws, ".port_sessions", "memory", "AGENT_MEMORY.md")
+	if err := os.Symlink(key, agent); err != nil {
+		t.Fatal(err)
+	}
+	rt := FromWorkspace(ws, t.TempDir())
+	rt.Scanner = guard.Default()
+	if block := rt.RenderPromptBlock(); strings.Contains(block, "PRIVATE KEY") {
+		t.Fatalf("a linked file reached the prompt: %q", block)
+	}
+	if _, err := rt.Add("agent", "a fact"); err == nil {
+		t.Fatal("an add through a link out of the workspace was accepted")
+	}
+	if data, _ := os.ReadFile(key); string(data) != "PRIVATE KEY MATERIAL" {
+		t.Fatalf("the linked file was written: %q", data)
+	}
+	// the folder as a link
+	ws2 := t.TempDir()
+	os.MkdirAll(filepath.Join(ws2, ".port_sessions"), 0o755)
+	os.Symlink(outside, filepath.Join(ws2, ".port_sessions", "memory"))
+	os.WriteFile(filepath.Join(outside, "AGENT_MEMORY.md"), []byte("OUTSIDE NOTE"), 0o644)
+	rt2 := FromWorkspace(ws2, t.TempDir())
+	rt2.Scanner = guard.Default()
+	if strings.Contains(rt2.RenderPromptBlock(), "OUTSIDE NOTE") {
+		t.Fatal("a file outside the workspace reached the prompt through a linked folder")
+	}
+	if q := QueueFromWorkspace(ws2); q.Add([]Proposal{{EntryID: "x", Scope: "agent", Action: "add", Status: "pending"}}) == nil {
+		t.Fatal("the review queue was written through a linked folder")
+	}
+}
+
+func TestAgentMemoryFileMustBeRegularAndReadable(t *testing.T) {
+	ws := t.TempDir()
+	dir := filepath.Join(ws, ".port_sessions", "memory")
+	os.MkdirAll(dir, 0o755)
+	if err := syscall.Mkfifo(filepath.Join(dir, "AGENT_MEMORY.md"), 0o644); err != nil {
+		t.Skip(err)
+	}
+	rt := FromWorkspace(ws, t.TempDir())
+	rt.Scanner = guard.Default()
+	done := make(chan string, 1)
+	go func() { done <- rt.RenderPromptBlock() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reading the memory waited on a named pipe")
+	}
+	if _, err := rt.Add("agent", "a fact"); err == nil {
+		t.Fatal("an add over a named pipe was accepted")
+	}
+	// an existing file that cannot be read is not replaced
+	ws2 := t.TempDir()
+	dir2 := filepath.Join(ws2, ".port_sessions", "memory")
+	os.MkdirAll(dir2, 0o755)
+	big := filepath.Join(dir2, "AGENT_MEMORY.md")
+	os.WriteFile(big, []byte("old fact\n---\n"+strings.Repeat("x", 1<<20)), 0o644)
+	rt2 := FromWorkspace(ws2, t.TempDir())
+	rt2.Scanner = guard.Default()
+	if _, err := rt2.Add("agent", "new fact"); err == nil || !strings.Contains(err.Error(), "nothing was changed") {
+		t.Fatalf("an add over an unreadable memory file: %v", err)
+	}
+	if data, _ := os.ReadFile(big); !strings.HasPrefix(string(data), "old fact") {
+		t.Fatal("the unreadable memory file was replaced")
 	}
 }

@@ -200,7 +200,19 @@ func extractJSONArray(text string) []any {
 }
 
 // Queue is the pending-review file, <workspace>/.port_sessions/memory/pending_review.json.
-type Queue struct{ Path string }
+type Queue struct {
+	Path string
+	// Root is the workspace (QueueFromWorkspace sets it): the file is resolved inside it on every use, as the agent
+	// memory file is.
+	Root string
+}
+
+func (q *Queue) file() (string, error) {
+	if q.Root == "" {
+		return q.Path, nil
+	}
+	return workspaceFile(q.Root, q.Path)
+}
 
 // QueueFromWorkspace places the queue next to the agent-scope memory file.
 func QueueFromWorkspace(cwd string) *Queue {
@@ -208,13 +220,17 @@ func QueueFromWorkspace(cwd string) *Queue {
 	if err != nil {
 		abs = cwd
 	}
-	return &Queue{Path: filepath.Join(abs, ".port_sessions", "memory", "pending_review.json")}
+	return &Queue{Path: filepath.Join(abs, ".port_sessions", "memory", "pending_review.json"), Root: abs}
 }
 
 // Load reads every entry; a missing or corrupt file is an empty queue.
 func (q *Queue) Load() []Proposal {
-	raw, err := os.ReadFile(q.Path)
+	p, err := q.file()
 	if err != nil {
+		return nil
+	}
+	raw, err := readStateFile(p)
+	if err != nil || raw == nil {
 		return nil
 	}
 	var file struct {
@@ -269,13 +285,17 @@ func (q *Queue) save(entries []Proposal) error {
 	if err != nil {
 		return err
 	}
-	if err := testguard.Allow(q.Path); err != nil {
+	path, err := q.file()
+	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(q.Path), 0o755); err != nil {
+	if err := testguard.Allow(path); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(q.Path), ".review-*.tmp")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".review-*.tmp")
 	if err != nil {
 		return err
 	}
@@ -287,7 +307,7 @@ func (q *Queue) save(entries []Proposal) error {
 		return fmt.Errorf("cannot write review queue: %v %v", werr, cerr)
 	}
 	_ = os.Chmod(name, 0o600)
-	if err := os.Rename(name, q.Path); err != nil {
+	if err := os.Rename(name, path); err != nil {
 		os.Remove(name)
 		return err
 	}

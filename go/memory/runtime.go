@@ -13,7 +13,7 @@ package memory
 import (
 	"errors"
 	"fmt"
-	"github.com/Artifex-Technologies/Sarina/go/testguard"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,6 +22,8 @@ import (
 	"sync"
 
 	"github.com/Artifex-Technologies/Sarina/go/guard"
+	"github.com/Artifex-Technologies/Sarina/go/testguard"
+	"github.com/Artifex-Technologies/Sarina/go/tools"
 )
 
 // Limits.
@@ -66,6 +68,10 @@ type Mutation struct {
 type Runtime struct {
 	AgentPath string
 	UserPath  string
+	// Root is the workspace AgentPath lies in (FromWorkspace sets it): the agent file is then resolved inside it on every
+	// use, so a link planted in the workspace cannot lead it to a file elsewhere (whose text would be put in front of the
+	// model every session) or to a secret or private file.
+	Root string
 	// Scanner vets every write; nil means guard.Memory() (local checks, then Heimdall).
 	Scanner guard.Scanner
 }
@@ -85,7 +91,60 @@ func FromWorkspace(cwd, home string) *Runtime {
 	return &Runtime{
 		AgentPath: filepath.Join(abs, ".port_sessions", "memory", "AGENT_MEMORY.md"),
 		UserPath:  filepath.Join(home, ".sarina", "memory", "USER_MEMORY.md"),
+		Root:      abs,
 	}
+}
+
+// maxMemoryFileBytes bounds what is read of a memory or review file (a scope holds at most 4000 characters).
+const maxMemoryFileBytes = 1 << 20
+
+// workspaceFile resolves p (a path under root) as a file tool's write is: a link cannot lead it out of the workspace,
+// and a secret or private file is never used (found by the Rust port, 2026-11-12: a planted AGENT_MEMORY.md link put
+// the file it named into every session's prompt).
+func workspaceFile(root, p string) (string, error) {
+	rel, err := filepath.Rel(root, p)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := tools.ResolveForWrite(root, rel)
+	if err != nil {
+		return "", err
+	}
+	if tools.IsSecretPath(resolved) || tools.IsPrivate(resolved) {
+		return "", fmt.Errorf("%s leads to a file the file tools never use", rel)
+	}
+	return resolved, nil
+}
+
+// readStateFile reads a memory or review file: nil for none; an error for anything but a regular file of at most
+// maxMemoryFileBytes (a named pipe would wait forever, a huge file would be held whole).
+func readStateFile(p string) ([]byte, error) {
+	st, err := os.Stat(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", p)
+	}
+	if st.Size() > maxMemoryFileBytes {
+		return nil, fmt.Errorf("%s is larger than %d bytes", p, maxMemoryFileBytes)
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxMemoryFileBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxMemoryFileBytes {
+		return nil, fmt.Errorf("%s is larger than %d bytes", p, maxMemoryFileBytes)
+	}
+	return raw, nil
 }
 
 func (r *Runtime) scanner() guard.Scanner {
@@ -98,6 +157,9 @@ func (r *Runtime) scanner() guard.Scanner {
 func (r *Runtime) path(scope string) (string, error) {
 	switch scope {
 	case "agent":
+		if r.Root != "" {
+			return workspaceFile(r.Root, r.AgentPath)
+		}
 		return r.AgentPath, nil
 	case "user":
 		return r.UserPath, nil
@@ -105,15 +167,15 @@ func (r *Runtime) path(scope string) (string, error) {
 	return "", fail("unknown memory scope '%s' (expected 'agent' or 'user')", scope)
 }
 
-// Entries returns the stored entries of a scope (nil when absent or unreadable).
+// Entries returns the stored entries of a scope (nil when there are none); an error when the file cannot be used.
 func (r *Runtime) Entries(scope string) ([]string, error) {
 	p, err := r.path(scope)
 	if err != nil {
 		return nil, err
 	}
-	raw, err := os.ReadFile(p)
+	raw, err := readStateFile(p)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	var out []string
 	for _, e := range strings.Split(strings.ToValidUTF8(string(raw), "�"), entryDelimiter) {
@@ -161,7 +223,10 @@ func (r *Runtime) Add(scope, content string) (Mutation, error) {
 	if err != nil {
 		return Mutation{}, err
 	}
-	existing, _ := r.Entries(scope)
+	existing, err := r.Entries(scope)
+	if err != nil {
+		return Mutation{}, unreadable(err)
+	}
 	norm := normalize(content)
 	for _, e := range existing {
 		if normalize(e) == norm {
@@ -186,7 +251,10 @@ func (r *Runtime) Replace(scope, oldText, content string) (Mutation, error) {
 	if err != nil {
 		return Mutation{}, err
 	}
-	existing, _ := r.Entries(scope)
+	existing, err := r.Entries(scope)
+	if err != nil {
+		return Mutation{}, unreadable(err)
+	}
 	idx, err := findUnique(existing, oldText)
 	if err != nil {
 		return Mutation{}, err
@@ -206,7 +274,10 @@ func (r *Runtime) Remove(scope, oldText string) (Mutation, error) {
 	if _, err := r.path(scope); err != nil {
 		return Mutation{}, err
 	}
-	existing, _ := r.Entries(scope)
+	existing, err := r.Entries(scope)
+	if err != nil {
+		return Mutation{}, unreadable(err)
+	}
 	idx, err := findUnique(existing, oldText)
 	if err != nil {
 		return Mutation{}, err
@@ -215,8 +286,16 @@ func (r *Runtime) Remove(scope, oldText string) (Mutation, error) {
 	return r.commit(scope, "remove", len(existing), updated)
 }
 
+// unreadable refuses a write over a memory file that exists but cannot be read: writing would replace what it holds.
+func unreadable(err error) error {
+	return fail("cannot use the stored memory, so nothing was changed: %v", err)
+}
+
 func (r *Runtime) commit(scope, action string, before int, entries []string) (Mutation, error) {
-	p, _ := r.path(scope)
+	p, err := r.path(scope)
+	if err != nil {
+		return Mutation{}, unreadable(err)
+	}
 	if err := testguard.Allow(p); err != nil {
 		return Mutation{}, fail("%v", err)
 	}
@@ -371,7 +450,10 @@ func (r *Runtime) RenderSummary() string {
 	lines := []string{"# Curated Memory", ""}
 	for _, scope := range Scopes {
 		entries, _ := r.Entries(scope)
-		p, _ := r.path(scope)
+		p := r.AgentPath
+		if scope == "user" {
+			p = r.UserPath
+		}
 		lines = append(lines, "## "+scope, "- Path: "+p,
 			fmt.Sprintf("- Usage: %d/%d chars, %d entries", used(entries, -1), MaxScopeChars, len(entries)))
 		for _, e := range entries {

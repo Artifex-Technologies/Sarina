@@ -15,7 +15,7 @@ equal.
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
-| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools |
+| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina-go` for what is not ported | open |
 
@@ -227,6 +227,7 @@ reaches it any more (dead code is a risk).
 | `skills/discover.rs`, `library.rs`, `recall.rs`, `tool.rs` | `skills`: `Roots` (operator folders, SARINA_SKILLS_DIR, skills.json read as Go 1.27 reads it, the system folder, the workspace's only with the opt-in), `Discover` (name.md and name/SKILL.md, links refused, the scan gate and the owner's signed list first, files over 4 MiB, a SKILL.md without front matter, collisions, notices), long skills (sections from headings or `sections/*.md`, parts, the table of contents and its cut), the `skill` tool, `skill_section`, `skill_search` by words (Go's amd64 `math.Log`) and by meaning (an index per skill, saved and loaded: the folder name, `meta.json` and `passages.vec` byte for byte the same as Go's), `ExpandWith` with prefetched context; with a made-up embedder and trust list in both tests | `skills.json` | 122 comparisons |
 | `mcp/config.rs`, `mcp/manager.rs` | `mcp/config.go` (`Load`: ~/.sarina/mcp.json and SARINA_MCP_FILE's files, the workspace's only with the opt-in, the owner's signed list, the 256 KiB bound, `mcpServers` and `servers`, every problem) and `manager.go` (`Connect`, the tools offered as `mcp__<server>__<tool>` with their cleaned and scanned descriptions and classes, `Status`, calls, the result bound, a server restarted after it exits, a listing that fails on a later page, the resource tools), against the client fixture's shell stand-in server | `mcpmanager.json` | 53 comparisons |
 | `limbo.rs` (`tools`) | `limbo/integration.go`'s tools: `limbo_profiles` (the listing, its empty forms with and without skipped files) and `limbo_validate` (blank arguments, the timeout read leniently and clamped to 10..900, an infrastructure failure as an error with its metadata, Limbo's errors, the shell gate, a missing socket), against the scripted agent socket; the `limbo-*` commands come with the CLI | `limbotools.json` | 20 calls and the definitions |
+| `memory.rs` | `memory/runtime.go` and `tools.go`: the two scopes, `Add`/`Replace`/`Remove` with the gate, the limits, duplicates, the files written, the prompt blocks (whole and the most relevant entries for a task), the summary, `memory_add`/`memory_replace`/`memory_remove`/`session_search`, and the files that may not be used (a link out of the workspace, a linked folder, a link to a secret file, a named pipe, one too large, a folder); the review queue (`review.go`) comes with the CLI | `memory.json` | 24 calls, 7 file cases |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -380,6 +381,14 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **skills.json is read through the skill files' 4 MiB cap, in Go and Rust (2026-11-12)** (it was read whole). Not
   covered by the fixture: the 0.45 similarity below which a passage is not offered (no made-up passage scores between
   0.44 and 0.45).
+- **The agent's memory stays in the workspace, in Go and Rust (2026-11-12).** `<workspace>/.port_sessions/memory/AGENT_MEMORY.md`
+  was read without resolving links and put in front of the model every session, with no scan on reading: a workspace
+  that planted it as a link to a private key (or the folder as a link) put that file's text into Sarina's prompt, and a
+  write went through it. A named pipe there hung the session at its start, and a file that could not be read counted as
+  empty, so the next `memory_add` replaced it. Now the agent file and the review queue are resolved inside the workspace
+  on every use (never a secret or private file), only a regular file of at most 1 MiB is read, and a write over one that
+  cannot be read is refused ("cannot use the stored memory, so nothing was changed"). `TestAgentMemoryStaysInTheWorkspace`
+  saw the key's text in the prompt before the fix; `TestAgentMemoryFileMustBeRegularAndReadable` hung on the pipe.
 - **grep_search's patterns are read by `goregexp`.** Go's regexp syntax is translated to the regex crate's with Go's
   meaning, and constructs it does not translate (named groups, POSIX classes, `\pL`, `\Q...\E`) are refused; Go
   accepts them. A pattern Go refuses is refused here too, but the error after "invalid pattern: " is the regex crate's,
@@ -480,11 +489,14 @@ list and the plan out of it. Then the checks after a code change and `check_code
 for every program; the bubblewrap command line recorded as data), after a Go fix: their programs' output was collected
 whole (now the first and last MiB). Then skills' discovery, the skill tool and the long-skill
 library (`skills/`, its saved indexes byte for byte Go's), with skills.json read through the 4 MiB cap in both. Then MCP's definitions loader and manager
-(`mcp/config.rs`, `mcp/manager.rs`, against the client fixture's stand-in server). Then the limbo tools.
+(`mcp/config.rs`, `mcp/manager.rs`, against the client fixture's stand-in server). Then the limbo tools. Then memory
+(`memory.rs`), after a Go fix: a link planted at the agent memory file put the file it named into every session's
+prompt.
 
 Nothing switches yet: the Rust code is a library with tests, no binary. Next, in this order:
 
-1. Memory, tiers, the agent loop (against a scripted fake model only). Every read from another process keeps its
+1. Tiers (`tiers/`, 2,133 lines: compute tiers, sanitising, hand-offs, the grants gate), then the agent loop (against a
+   scripted fake model only), then memory's review queue with the CLI. Every read from another process keeps its
    bound (the owner's rule), and a timed fixture case must not depend on how bytes arrive.
 2. The binary (`sarina-rs`) and the switch plan, once the agent loop is equal.
 

@@ -81,6 +81,12 @@ pub struct Context {
     pub extra_env: BTreeMap<String, String>,
     /// where background processes live (Go's Runtimes[RuntimeProcs]); None is the process-wide manager
     pub procs: Option<Arc<crate::tools::exec::ProcManager>>,
+    /// where saved sessions live ("" = <workspace>/.port_sessions/agent)
+    pub session_directory: String,
+    /// the memory runtime the memory tools use (Go's Runtimes["memory"]); None: the workspace's
+    pub memory: Option<Arc<crate::memory::Runtime>>,
+    /// the home folder for the user-scope memory file (Go's Runtimes["memory_home"], tests); "" = $HOME
+    pub memory_home: String,
     /// whether plan mode is on, as the agent reports it (Go's RuntimePlanActive); None is unknown
     pub plan_active: Option<crate::tools::plan::PlanActive>,
     pub permissions: Permissions,
