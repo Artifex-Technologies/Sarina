@@ -107,7 +107,7 @@ the 10th to 90th percentile in brackets; change is (new − old) / old, so a min
 | per sentence: 4013, 3054, 3144, 3889, 3099, 3703 ms against | | 3992, 3037, 3124, 3848, 3070, 3661 ms | −0.5 to −1.1 % each |
 | Loading (graphs, tokenizer, the reference recording's conditioning) | 5.82 s (5.79-5.85) | 5.87 s (5.81-5.93) | **+0.9 %, 0.05 s later** |
 | Peak memory of a process that loads the voice and makes the six | 2,480 MB | 2,206 MB | −11 %, 274 MB less |
-| The service, a five-sentence answer (17.7 s of speech), voice loaded: time to the first sentence | 4.50 s (4.39-6.32) | 4.30 s (4.19-5.60) | −4 %, 0.20 s sooner |
+| The service, a five-sentence answer (about 16 s of speech), voice loaded: time to the first sentence | 4.50 s (4.39-6.32) | 4.30 s (4.19-5.60) | −4 %, 0.20 s sooner |
 | ... gaps a listener would have heard between the sentences (the processor makes speech slower than it is spoken) | 1.51 s (1.39-4.45) | 1.49 s (1.42-3.98) | −1 %, the same |
 | ... the end of the last sentence | 22.45 s (22.20-27.27) | 22.28 s (22.03-25.16) | −0.8 %, 0.17 s sooner |
 | ... memory with the voice loaded (RSS) | 2,274 MB | 1,676 MB | −26 %, 598 MB less |
@@ -139,7 +139,7 @@ the 7-run round with the defaults, in turn on the processor):
 
 Both halves use every core (ONNX Runtime's thread pools), so running them side by side slows each: the overlap took the
 gaps down only by making the first sentence 2 s later, and once the first sentence goes alone, the overlap only makes the
-rest later. On the card the language model's thousands of small steps leave it idle much of the time, which is where the
+rest later. On the card the language model's many small steps (one per speech token) leave it idle much of the time, which is where the
 overlap should pay; that is the morning's step 3, and if it does not, `LABYRINTH_VOICE_PIPELINE=0` (or a change of the
 default) is all it takes.
 
