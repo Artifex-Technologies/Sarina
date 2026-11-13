@@ -340,7 +340,12 @@ func Report(w Work) string {
 	return b.String()
 }
 
+// atoi reads a short whole number (-1 for anything else): a longer one would wrap around the int and could read as a rule
+// number (a 40-digit multiplier worked as 9).
 func atoi(s string) int {
+	if len(s) > 9 {
+		return -1
+	}
 	n := 0
 	for _, r := range s {
 		if r < '0' || r > '9' {

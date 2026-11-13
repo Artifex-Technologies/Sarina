@@ -60,3 +60,18 @@ func TestAWrongAnswerIsPlaced(t *testing.T) {
 		t.Fatal("a right answer")
 	}
 }
+
+// A multiplier of up to 40 digits whose value wrapped around the int in atoi to a rule number was worked by that rule:
+// 12 × 1844674407370955161600000000000000000009 came out as 12 × 9 = 108 (the check compared it with 12 × 9 too).
+func TestHugeMultiplierIsNotARule(t *testing.T) {
+	big := "1844674407370955161600000000000000000009" // 9 + 2^64 * 10^20
+	for _, ab := range [][2]string{{"12", big}, {big, "12"}} {
+		w, err := WorkOut(ab[0], ab[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w.Result != "22136092888451461939200000000000000000108" || strings.Contains(Report(w), "× 9 by") {
+			t.Fatalf("%s × %s worked out as %s", ab[0], ab[1], w.Result)
+		}
+	}
+}
