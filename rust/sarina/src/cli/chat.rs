@@ -772,6 +772,27 @@ fn plan_status(pending: &str) -> String {
     }
 }
 
+/// The /help text.
+fn help_text() -> String {
+    let mut b = String::from("# Slash Commands\n");
+    for (n, d) in SLASH {
+        b.push_str(&format!("- /{n}: {d}\n"));
+    }
+    b.push_str("These are handled locally; the model is not called for them.");
+    b
+}
+
+/// Go's `LocalSlash`: the slash commands a front end without a conversation answers itself (only /help).
+pub fn local_slash(input: &str) -> Option<String> {
+    let input = gotext::trim_space(input);
+    let body = input.strip_prefix('/')?;
+    let name = body.split(' ').next().unwrap_or("");
+    if gotext::to_lower(name) != "help" {
+        return None;
+    }
+    Some(help_text())
+}
+
 impl Chat {
     /// Go's `dispatchSlash`: None for an ordinary prompt.
     fn dispatch_slash(&mut self, a: &mut Agent, current: &mut Option<Session>, input: &str) -> Option<SlashResult> {
@@ -785,14 +806,7 @@ impl Chat {
             return Some(SlashResult { text: "Slash commands look like /command [args]. Try /help.".into(), ..Default::default() });
         }
         let r = match gotext::to_lower(name).as_str() {
-            "help" => {
-                let mut b = String::from("# Slash Commands\n");
-                for (n, d) in SLASH {
-                    b.push_str(&format!("- /{n}: {d}\n"));
-                }
-                b.push_str("These are handled locally; the model is not called for them.");
-                SlashResult { text: b, ..Default::default() }
-            }
+            "help" => SlashResult { text: help_text(), ..Default::default() },
             "plan" => self.plan_slash(a, current, args),
             "skill" => self.skill_slash(args),
             "tier" => self.tier_slash(args),

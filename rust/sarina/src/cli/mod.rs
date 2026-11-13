@@ -7,6 +7,7 @@ pub mod chatopts;
 pub mod entry;
 pub mod limbocmd;
 pub mod memorycmd;
+pub mod servicecmd;
 pub mod sessionmigrate;
 pub mod tiercmd;
 
@@ -106,6 +107,7 @@ pub fn proving(name: &str) -> Option<Command> {
         "resume" => chat::resume_command,
         "skill" => chat::skill_command,
         "memory-review" => chat::memory_review_command,
+        "service" => servicecmd::service,
         _ => return None,
     })
 }

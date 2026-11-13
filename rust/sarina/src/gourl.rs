@@ -1,19 +1,19 @@
 //! Go 1.27's `net/url`, as far as `serverRoot` (llm/discover.go) uses it: `url.Parse` (scheme, authority with user
 //! information, host and port checks with the strict colons for http and https, the path unescaped and its raw form
-//! kept, the query and fragment), and `URL.String` for a URL whose query and fragment were dropped. Error texts are not
-//! kept: a URL Go refuses is `None`.
+//! kept, the query and fragment), `url.ParseRequestURI` for the service's request targets (with `EscapedPath`), and
+//! `URL.String` for a URL whose query and fragment were dropped. Error texts are not kept: a URL Go refuses is `None`.
 
 /// The characters each part leaves as they are (Go's encoding table; letters and digits are always left).
 const PATH_OK: &[u8] = b"$&+,-./:;=@_~";
 const HOST_OK: &[u8] = b"!\"$&'()*+,-.:;<=>[]_~";
 const USER_OK: &[u8] = b"$&+,-.;=_~";
 
-fn should_escape(c: u8, ok: &[u8]) -> bool {
+pub(crate) fn should_escape(c: u8, ok: &[u8]) -> bool {
     !(c.is_ascii_alphanumeric() || ok.contains(&c))
 }
 
 /// Go's `escape`: each byte not left as it is becomes `%XX`.
-fn escape(s: &[u8], ok: &[u8]) -> String {
+pub(crate) fn escape(s: &[u8], ok: &[u8]) -> String {
     let mut out = String::with_capacity(s.len());
     for &c in s {
         if should_escape(c, ok) {
@@ -34,7 +34,7 @@ fn unhex(c: u8) -> u8 {
 }
 
 #[derive(PartialEq)]
-enum Mode {
+pub(crate) enum Mode {
     Path,
     Host,
     User,
@@ -42,7 +42,7 @@ enum Mode {
 
 /// Go's `unescape` for a path, a host or user information: None for a bad `%` (or, in a host, a character a host cannot
 /// hold, or an escaped ASCII byte other than `%25`).
-fn unescape(s: &[u8], mode: Mode) -> Option<Vec<u8>> {
+pub(crate) fn unescape(s: &[u8], mode: Mode) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(s.len());
     let mut i = 0;
     while i < s.len() {
@@ -83,6 +83,8 @@ pub struct Url {
     pub omit_host: bool,
     pub path: Vec<u8>,
     pub raw_path: Vec<u8>,
+    /// the query as written (ParseRequestURI keeps it; Parse drops it)
+    pub raw_query: Vec<u8>,
 }
 
 fn parse_host(scheme: &str, host: &[u8]) -> Option<Vec<u8>> {
@@ -136,7 +138,11 @@ fn parse_host(scheme: &str, host: &[u8]) -> Option<Vec<u8>> {
 
 /// Go's `url.Parse`; None where Go returns an error.
 pub fn parse(raw: &str) -> Option<Url> {
-    let raw = raw.as_bytes();
+    parse_bytes(raw.as_bytes())
+}
+
+/// `parse` of bytes that need not be UTF-8 (a request header's value).
+pub fn parse_bytes(raw: &[u8]) -> Option<Url> {
     let (u, frag) = match raw.iter().position(|&c| c == b'#') {
         Some(i) => (&raw[..i], Some(&raw[i + 1..])),
         None => (raw, None),
@@ -148,6 +154,19 @@ pub fn parse(raw: &str) -> Option<Url> {
         // the fragment's escapes must be well formed (its text is not kept)
         unescape(f, Mode::Path)?;
     }
+    parse_core(u, false)
+}
+
+/// Go's `url.ParseRequestURI`: a request's target, an absolute URI or an absolute path; no fragment (a `#` is part of the
+/// path), the query kept.
+pub fn parse_request_uri(raw: &[u8]) -> Option<Url> {
+    if raw.iter().any(|&c| c < 0x20 || c == 0x7f) || raw.is_empty() {
+        return None;
+    }
+    parse_core(raw, true)
+}
+
+fn parse_core(u: &[u8], via_request: bool) -> Option<Url> {
     let mut url = Url {
         scheme: String::new(),
         opaque: false,
@@ -156,6 +175,7 @@ pub fn parse(raw: &str) -> Option<Url> {
         omit_host: false,
         path: Vec::new(),
         raw_path: Vec::new(),
+        raw_query: Vec::new(),
     };
     if u == b"*" {
         url.path = b"*".to_vec();
@@ -182,8 +202,11 @@ pub fn parse(raw: &str) -> Option<Url> {
         }
         break;
     }
-    // the query is dropped
-    if let Some(q) = rest.iter().position(|&c| c == b'?') {
+    // the query (a single trailing "?" is Go's ForceQuery: no query)
+    if rest.ends_with(b"?") && rest.iter().filter(|&&c| c == b'?').count() == 1 {
+        rest = &rest[..rest.len() - 1];
+    } else if let Some(q) = rest.iter().position(|&c| c == b'?') {
+        url.raw_query = rest[q + 1..].to_vec();
         rest = &rest[..q];
     }
     if !rest.starts_with(b"/") {
@@ -191,12 +214,15 @@ pub fn parse(raw: &str) -> Option<Url> {
             url.opaque = true;
             return Some(url);
         }
+        if via_request {
+            return None;
+        }
         let seg = rest.split(|&c| c == b'/').next().unwrap_or(&[]);
         if seg.contains(&b':') {
             return None;
         }
     }
-    if (!url.scheme.is_empty() || !rest.starts_with(b"///")) && rest.starts_with(b"//") {
+    if (!url.scheme.is_empty() || !via_request && !rest.starts_with(b"///")) && rest.starts_with(b"//") {
         let a = &rest[2..];
         let (authority, r) = match a.iter().position(|&c| c == b'/') {
             Some(i) => (&a[..i], &a[i..]),
@@ -231,7 +257,7 @@ fn valid_encoded(s: &[u8]) -> bool {
 
 impl Url {
     /// Go's `EscapedPath`.
-    fn escaped_path(&self) -> String {
+    pub fn escaped_path(&self) -> String {
         if !self.raw_path.is_empty() && valid_encoded(&self.raw_path) && unescape(&self.raw_path, Mode::Path).as_deref() == Some(&self.path)
         {
             return String::from_utf8_lossy(&self.raw_path).into_owned();

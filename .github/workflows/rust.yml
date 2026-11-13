@@ -1,5 +1,6 @@
 # The Rust port of the Go core (rust/, docs/RUST_PORT.md): the Go fixtures current, format, lints, the tests (every
-# fixture compared with the Rust code, the properties, the fuzz targets' bodies), and both builds' CLI side by side.
+# fixture compared with the Rust code, the properties, the fuzz targets' bodies), and both builds' CLI and service side
+# by side.
 name: rust
 on:
   push:
@@ -32,3 +33,6 @@ jobs:
           (cd go && go build -o "$RUNNER_TEMP/sarina-go" ./cmd/sarina)
           (cd rust && cargo build --locked --bin sarina-rs)
           python3 -I rust/parity/cli-differential.py --go "$RUNNER_TEMP/sarina-go" --rs rust/target/debug/sarina-rs
+      # both builds' services on the same scripted requests (rust/parity/service-differential.py)
+      - name: the service differential
+        run: python3 -I rust/parity/service-differential.py --go "$RUNNER_TEMP/sarina-go" --rs rust/target/debug/sarina-rs

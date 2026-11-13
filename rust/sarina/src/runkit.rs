@@ -30,6 +30,11 @@ static ASSIGN_RE: LazyLock<Regex> = LazyLock::new(|| {
     .expect("assign")
 });
 
+/// Go's `llm.DefaultDiscoverer`: one for every agent of the process, so its cache is shared (the service builds an agent
+/// per session).
+static DEFAULT_DISCOVERER: LazyLock<Arc<crate::llm::discover::Discoverer>> =
+    LazyLock::new(|| Arc::new(crate::llm::discover::Discoverer::default()));
+
 /// Removes secrets from text.
 pub type Scrub = Arc<dyn Fn(&str) -> String + Send + Sync>;
 
@@ -255,8 +260,7 @@ pub fn build(s: Spec) -> Result<Built, String> {
             session_env.insert(name.clone(), v);
         }
     }
-    let discoverer: Option<Arc<dyn crate::agent::run::WindowDiscoverer>> =
-        if s.discover { Some(Arc::new(crate::llm::discover::Discoverer::default())) } else { None };
+    let discoverer: Option<Arc<dyn crate::agent::run::WindowDiscoverer>> = if s.discover { Some(DEFAULT_DISCOVERER.clone()) } else { None };
     let profiles = s.subagents.then(|| {
         Arc::new(crate::agents::load(&crate::agents::Options {
             home: s.home.clone(),

@@ -15,6 +15,9 @@ pub enum Kind {
     List,
     /// float64 (its value kept as Go's `strconv.FormatFloat(v, 'g', -1, 64)`)
     Float,
+    /// a `flag.Var` bool flag (`IsBoolFlag`) whose `Set` is `strconv.ParseBool` and which stays unset until given (the
+    /// service's `triBool`): its error names strconv's own text; "" until set
+    TriBool,
 }
 
 struct Flag {
@@ -72,6 +75,11 @@ impl FlagSet {
     pub fn int(&mut self, name: &'static str, default: i64, usage: &'static str) {
         let d = default.to_string();
         self.flags.push(Flag { name, kind: Kind::Int, usage, default: d.clone(), value: d });
+    }
+
+    /// A bool flag that is "unset" until given (Go's `triBool` in the service): `str` is "" until then.
+    pub fn tribool(&mut self, name: &'static str, usage: &'static str) {
+        self.flags.push(Flag { name, kind: Kind::TriBool, usage, default: "false".into(), value: String::new() });
     }
 
     pub fn float(&mut self, name: &'static str, default: f64, usage: &'static str) {
@@ -141,7 +149,7 @@ impl FlagSet {
             b.push_str(&usage.replace('\n', "\n    \t"));
             let zero = match f.kind {
                 Kind::Str | Kind::List => "",
-                Kind::Bool => "false",
+                Kind::Bool | Kind::TriBool => "false",
                 Kind::Int | Kind::Float => "0",
             };
             if f.default != zero {
@@ -202,6 +210,19 @@ impl FlagSet {
                             // Go's boolValue.Set stores what ParseBool returned, false, before it reports the error
                             self.flags[i].value = "false".into();
                             return Err(self.fail(format!("invalid boolean value {} for -{name}: parse error", quote(&v)), stderr));
+                        }
+                    }
+                }
+                Kind::TriBool => {
+                    let v = value.unwrap_or_else(|| "true".into());
+                    match parse_bool(&v) {
+                        Some(x) => self.flags[i].value = x.to_string(),
+                        None => {
+                            let q = quote(&v);
+                            return Err(self.fail(
+                                format!("invalid boolean value {q} for -{name}: strconv.ParseBool: parsing {q}: invalid syntax"),
+                                stderr,
+                            ));
                         }
                     }
                 }
@@ -303,7 +324,7 @@ fn unquote_usage(f: &Flag) -> (String, String) {
     let name = match f.kind {
         Kind::Str => "string",
         Kind::Int => "int",
-        Kind::Bool => "",
+        Kind::Bool | Kind::TriBool => "",
         Kind::List => "value",
         Kind::Float => "float",
     };
