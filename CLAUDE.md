@@ -238,6 +238,27 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (night, 3) — Rust port: a date bug fixed in Rust, the chat proof widened; a proposal to move five commands
+- Both differentials run again on HEAD. The CLI one found the port's only fault this time: **the prompt's "Today's date
+  is" was UTC's date in the Rust build** and the local date in Go, so a chat or service session started after 17:00 here
+  would have told the model tomorrow's date. Fixed in Rust (Go was right): Go's local time zone is ported (`rust/sarina/
+  src/tz.rs`, from Limbo's, on a new Go fixture `tz.json`); cases with `TZ` east and west of UTC failed before and pass now.
+- 55 wider chat cases (bash, edit, glob/grep, to-dos, sub-agents, an MCP server, compaction, every budget flag, keys,
+  timeouts, a streamed tool call, a Claude tier configured, a Limbo tool) and two service scenarios. **CLI differential 344 cases,
+  1,720 comparisons; service differential 35 scenarios, 283 steps: no difference.** Nothing found in Go.
+- Measured (docs/RUST_PORT.md "Why Rust: measured", README): a one-shot chat turn 68 → 24 ms and 23 → 11 MB; the idle
+  service 23 → 5 MB; the busy service 7-10 MB **more** in Rust (levels off; not a leak).
+- **Proposal (not made; the owner decides):** move chat, resume, skill, memory-review and service from `SARINA_RS_TRY` to
+  always-Rust, keeping the gate that hands a chat to Go while an optional tool set (crypto, math, vault, ...) is on. Order:
+  (1) the owner installs Labyrinth's `sarina-rs-switch` package and uses `SARINA_RS_TRY=chat,resume,skill,memory-review`
+  for a few days; (2) memory-review and skill move; (3) chat and resume; (4) the service last, after a day with
+  `SARINA_RS_TRY=service` in its unit (a drop-in) and a look at its memory. Each step is a one-line change, undone the
+  same way. Detail: docs/RUST_PORT.md "Resume here".
+- **For Heimdall's board (nothing to change):** the CLI cases with a Claude tier point `HEIMDALL_REVIEW_URL` at a loopback
+  stand-in, so no test can file a grant request with a real Heimdall.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (night, 2) — Rust port: the service in Rust behind SARINA_RS_TRY; Go fixes: secrets in the usage, unbounded waits
 - `sarina service` is ported (`rust/sarina/src/service.rs`, with Go's net/http server as `gohttpd.rs`) and proved by a new
   differential, `rust/parity/service-differential.py`: both builds' services on the same raw requests (the API with its
