@@ -9,6 +9,11 @@ servers: Limbo's agent socket (a unix socket named agent.sock) and one loopback 
 endpoints (the tiers' health probes) and Heimdall's review API. Every model address a case can reach is that loopback
 server: OPENAI_BASE_URL and each tier's base_url point at it, so nothing leaves the machine and no real model is asked.
 
+Each case runs in a network namespace of its own (a user and network namespace made for it, only loopback, brought
+up): the scripted servers and both builds live in it, so nothing a case runs can reach the machine's own services (the
+real service on 127.0.0.1:8899 and console on 8765, which `doctor` dials, or a model server on 11434), and a case may
+hold a port of its own (`listen`) without meeting a real one. Without namespaces the harness stops.
+
 sarina-rs runs with SARINA_RS_NO_GO=1: a command it has not ported fails ("is not ported") instead of being handed to
 the Go build, so a case for a command still in Go shows up as a difference, never as a silent pass.
 
@@ -18,6 +23,7 @@ Exit status 0 when the two agree on every case.
 """
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -29,8 +35,10 @@ import subprocess
 import sys
 import tempfile
 import signal
+import struct
 import threading
 import time
+import traceback
 
 HANGUP = "hangup"
 
@@ -812,11 +820,155 @@ def other_cases():
     return cs
 
 
+def route(table):
+    """An answer by the request's path (`table`: path -> answer; anything else 404), for a command whose requests go to
+    several endpoints of the stand-in in an order of its own."""
+    def answer(req):
+        a = table.get(req["target"].split("?")[0])
+        return a if a is not None else resp("404 page not found", "404 Not Found", ctype="text/plain")
+    return answer
+
+
+def doctor_cases():
+    """`sarina doctor` (and its JSON form): every check against stand-ins, in the case's own network namespace, where
+    the ports check finds 8899 and 8765 free unless the case holds them (`listen`) and a default address reaches
+    nothing; the trust folder is the case's (empty)."""
+    cs = []
+    env = {"OPENAI_BASE_URL": "{H}/v1", "OPENAI_MODEL": "made-up-model", "SARINA_TRUST_DIR": "{W}/trust", "SARINA_RS_TRY": "doctor"}
+    models = resp({"data": [{"id": "other"}, {"id": "made-up-model"}]})
+    ps = lambda n: resp({"models": [{"name": "made-up-model", "model": "made-up-model", "context_length": n}]})
+    ok = {"/v1/models": models, "/api/ps": ps(16384), "/healthz": resp("ok", ctype="text/plain"), "/desk/v1/models": MODELS}
+
+    def add(name, args=(), table=None, e=None, files=None, json_out=True, listen=(), sockmode=None, **k):
+        t = dict(ok, **(table or {}))
+        c = C(name, ["doctor"] + (["--json"] if json_out else []) + list(args), files=files or state(),
+              env=dict(env, **(e or {})), http=[route(t)] * 40, **k)
+        c["listen"] = list(listen)
+        if sockmode is not None:
+            c["sockmode"] = sockmode
+        cs.append(c)
+
+    # the command line
+    add("doctor text", json_out=False)
+    add("doctor json")
+    add("doctor -h", ["-h"], json_out=False)
+    add("doctor bogus flag", ["--bogus"])
+    add("doctor extra argument", ["extra"])
+    add("doctor --cwd elsewhere", ["--cwd", "{W}/empty"])
+    add("doctor --session-dir", ["--session-dir", "{W}/ws/.port_sessions/agent"], cwd="empty")
+    add("doctor --session-dir relative", ["--session-dir", "ws/.port_sessions/agent"], cwd="")
+    # the backend and its context window
+    add("doctor backend unreachable", e={"OPENAI_BASE_URL": "http://127.0.0.1:9/v1", "OPENAI_API_KEY": "sk-made-up-key-0123456789"})
+    add("doctor backend default address", e={"OPENAI_BASE_URL": ""})
+    add("doctor backend url with a token", e={"OPENAI_BASE_URL": "http://user:sk-in-the-url-123456@{H_HOSTPORT}/v1?key=sk-q"})
+    add("doctor backend url unparseable", e={"OPENAI_BASE_URL": "http://[::1/v1"})
+    add("doctor backend 401", e={"OPENAI_API_KEY": "sk-made-up-key-0123456789"}, table={"/v1/models": resp({"error": "no"}, "401 Unauthorized")})
+    add("doctor backend 403", table={"/v1/models": resp({"error": "no"}, "403 Forbidden")})
+    add("doctor backend 500", table={"/v1/models": resp("oops", "500 Internal Server Error", ctype="text/plain")})
+    # not a case: a redirect from /models (Go follows it, gohttp does not: docs/RUST_PORT.md "Differences")
+    add("doctor backend hangs up", table={"/v1/models": HANGUP})
+    add("doctor backend lists nothing", table={"/v1/models": resp({"data": []})})
+    add("doctor backend not json", table={"/v1/models": resp("<html>", ctype="text/html")})
+    add("doctor backend data of the wrong shape", table={"/v1/models": resp({"data": [{"id": 5}, "x", {"id": "made-up-model"}]})})
+    add("doctor backend model not listed", e={"OPENAI_MODEL": "absent"})
+    add("doctor backend model with a tag", e={"OPENAI_MODEL": "made-up-model:7b"})
+    add("doctor backend listed with a tag", table={"/v1/models": resp({"data": [{"id": "made-up-model:latest"}]})})
+    add("doctor context window small", table={"/api/ps": ps(4096)})
+    add("doctor context window unknown", table={"/api/ps": None})
+    add("doctor context window from props", table={"/api/ps": None, "/props": resp({"default_generation_settings": {"n_ctx": 8192}})})
+    add("doctor context window from the environment", e={"SARINA_CONTEXT_WINDOW": "32768"})
+    add("doctor context window small from the environment", e={"SARINA_CONTEXT_WINDOW": "2048"})
+    # sessions
+    add("doctor sessions missing", files=state(**{SESSIONS + "s1.json": None, SESSIONS + "s2.json": None}))
+    add("doctor sessions empty", ["--session-dir", "{W}/empty"])
+    add("doctor sessions a file", ["--session-dir", "{W}/ws/notes.txt"], files=state(**{"ws/notes.txt": "x"}))
+    leak = session("leak", [u("hi")], model_config={"model": "m", "api_key": "sk-stored-in-a-session-12345"})
+    add("doctor sessions of every kind", files=state(**{
+        SESSIONS + "broken.json": "{not json", SESSIONS + "strings.json": session("strings", ["hello", "there"]),
+        SESSIONS + "nested.json": session("nested", [u("x")], extra={"deep": [{"API-Key": "sk-deeper-0123456789"}]}),
+        SESSIONS + "leak.json": leak, SESSIONS + "blank-key.json": session("blank", [u("x")], api_key="  "),
+        SESSIONS + "old.json": session("old", [u("x"), call("c1", "task_next", "{}"), result("c1", "task_next", "none")]),
+        SESSIONS + "oldresult.json": session("oldr", [u("x"), result("c1", "plan_clear", "done")]),
+        SESSIONS + "norole.json": session("norole", [{"content": "x"}]), SESSIONS + "array.json": "[1, 2]",
+        SESSIONS + "null.json": "null", SESSIONS + "notes.txt": "not a session", SESSIONS + "sub.json/": "",
+        SESSIONS + "planted.json|": "", SESSIONS + "link.json@": "{W}/ws/.port_sessions/agent/s1.json",
+        SESSIONS + "dangling.json@": "{W}/nowhere.json"}))
+    add("doctor sessions many unreadable", files=state(**{SESSIONS + f"bad{i}.json": "{" for i in range(8)}))
+    add("doctor sessions only bad shape", files=state(**{SESSIONS + "strings.json": session("strings", ["hello"])}))
+    add("doctor sessions not writable", files=state(), e={"__chmod": "ws/.port_sessions/agent=555"})
+    add("doctor sessions not readable", files=state(), e={"__chmod": "ws/.port_sessions/agent=311"})
+    # tiers
+    local = {"name": "local", "kind": "openai_compat", "allow_data": "all"}
+    desk = {"name": "Desk Top!", "kind": "openai_compat", "base_url": "{H}/desk/v1", "model": "big"}
+    down = {"name": "down", "kind": "openai_compat", "base_url": "{H}/down/v1", "model": "big"}
+    claude = {"name": "claude", "kind": "claude", "base_url": "{H}/anthropic", "model": "c", "api_key_env": "TEST_CLAUDE_KEY"}
+    cli = {"name": "cli", "kind": "claude_cli"}
+    cli_here = {"name": "cli here", "kind": "claude_cli", "cli_path": "{W}/bin/claude"}
+    off = dict(desk, name="off", enabled=False)
+    tf = lambda ts, **x: state(**{"home/.sarina/tiers.json": tiers_file(ts, **x), "bin/claude*": "#!/bin/sh\nexit 0\n"})
+    add("doctor tiers", files=tf([local, desk, down, claude, cli, cli_here, off]),
+        table={"/down/v1/models": resp("down", "503 Service Unavailable", ctype="text/plain")})
+    add("doctor tiers with a key", files=tf([local, claude]), e={"TEST_CLAUDE_KEY": "sk-ant-made-up-0123456789"})
+    add("doctor tiers warnings", files=tf([local, dict(cli, triggers=["context_overflow"]), dict(desk, allow_data=["no_secrets", "made_up"])]))
+    # user information in a tier's URL: left out of the Host and sent as Basic credentials (no key of its own)
+    add("doctor tiers url with user information", files=tf([local, dict(desk, base_url="http://u%40x:p%3Ass@{H_HOSTPORT}/desk/v1")]))
+    add("doctor tiers url with a bad escape", files=tf([local, dict(desk, base_url="http://u%zz@{H_HOSTPORT}/desk/v1")]))
+    add("doctor tiers damaged", files=state(**{"home/.sarina/tiers.json": "{"}))
+    add("doctor tiers invalid", files=state(**{"home/.sarina/tiers.json": tiers_file([local, {"name": "x", "kind": "warp"}])}))
+    add("doctor tiers from the environment", files=state(**{"home/other.json": tiers_file([local])}),
+        e={"SARINA_TIERS_FILE": "{W}/home/other.json"})
+    # skills, MCP and the operator policy
+    add("doctor extensions", files=state(**{
+        "home/.sarina/skills/good/SKILL.md": "---\nname: good\ndescription: a good skill\n---\nDo it.\n",
+        "home/.sarina/skills/loose.md": "no front matter\n",
+        "home/.sarina/mcp.json": json.dumps({"mcpServers": {"a": {"command": "x"}, "b": {"command": "y", "args": ["1"]}}}),
+        "home/.sarina/policy.json": json.dumps({"deny": [{"tool": "bash", "pattern": "rm "}]})}))
+    add("doctor extensions damaged", files=state(**{"home/.sarina/mcp.json": "{", "home/.sarina/policy.json": "{"}))
+    add("doctor extensions workspace", files=state(**{"ws/.sarina/policy.json": json.dumps({"deny": [{"tool": "bash"}]}),
+                                                      "ws/.sarina/mcp.json": json.dumps({"mcpServers": {"w": {"command": "z"}}}),
+                                                      "ws/.sarina/skills/w/SKILL.md": "---\nname: w\ndescription: w\n---\nw\n"}))
+    # Limbo
+    sock = {"SARINA_LIMBO_SOCKET": "{S}"}
+    add("doctor limbo", e=sock, limbo=[resp(PROFILES)])
+    add("doctor limbo wrong name", e={"SARINA_LIMBO_SOCKET": "{W}/control.sock"})
+    add("doctor limbo windows separator", e={"SARINA_LIMBO_SOCKET": "{W}\\agent.sock"})
+    add("doctor limbo missing", e={"SARINA_LIMBO_SOCKET": "{W}/agent.sock"})
+    add("doctor limbo not a socket", e={"SARINA_LIMBO_SOCKET": "{W}/x/agent.sock"}, files=state(**{"x/agent.sock": "x"}))
+    add("doctor limbo stale socket", e={"SARINA_LIMBO_SOCKET": "{W}/x/agent.sock"}, files=state(**{"x/agent.sock~": ""}))
+    add("doctor limbo world-writable", e=sock, sockmode=0o777, limbo=[resp(PROFILES)])
+    add("doctor limbo open to others", e=sock, sockmode=0o775, limbo=[resp(PROFILES)])
+    add("doctor limbo not permitted", e=sock, sockmode=0o000, limbo=[resp(PROFILES)])
+    add("doctor limbo no profiles", e=sock, limbo=[resp({"profiles": []})])
+    add("doctor limbo skipped", e=sock, limbo=[resp({"profiles": ["lab"], "skipped": PROFILES["skipped"]})])
+    add("doctor limbo many skipped", e=sock, limbo=[resp({"profiles": [], "skipped": [
+        {"name": f"p{i}" if i else "", "code": "image_missing", "reason": "gone", "remedy": "" if i else "rebuild " * 40} for i in range(9)]})])
+    add("doctor limbo error code", e=sock, limbo=[resp({"error": "busy: two runs at a time"}, "429 Too Many Requests")])
+    add("doctor limbo unknown code", e=sock, limbo=[resp({"error": "made_up: odd"}, "500 Internal Server Error")])
+    add("doctor limbo error without code", e=sock, limbo=[resp({"error": "Something broke " * 30}, "500 Internal Server Error")])
+    add("doctor limbo hangs up", e=sock, limbo=[HANGUP])
+    # Heimdall
+    add("doctor heimdall", e={"HEIMDALL_REVIEW_URL": "{H}/v1/review"})
+    add("doctor heimdall legacy name", e={"SENTRY_REVIEW_URL": "{H}/v1/review/"})
+    add("doctor heimdall not http", e={"HEIMDALL_REVIEW_URL": "ftp://127.0.0.1/v1/review"})
+    add("doctor heimdall no host", e={"HEIMDALL_REVIEW_URL": "http:///v1/review"})
+    add("doctor heimdall unreachable", e={"HEIMDALL_REVIEW_URL": "http://127.0.0.1:9/v1/review"})
+    add("doctor heimdall unhealthy", e={"HEIMDALL_REVIEW_URL": "{H}/v1/review"}, table={"/healthz": resp("no", "500 Internal Server Error")})
+    add("doctor heimdall wrong path", e={"HEIMDALL_REVIEW_URL": "{H}/review"})
+    # the ports check, in the case's own namespace
+    add("doctor ports service in use", listen=[8899])
+    add("doctor ports both in use", listen=[8765, 8899], json_out=False)
+    # all at once, failing
+    add("doctor everything failing", json_out=False, files=state(**{"home/.sarina/policy.json": "{", "home/.sarina/tiers.json": "{"}),
+        e={"OPENAI_BASE_URL": "http://127.0.0.1:9/v1", "SARINA_LIMBO_SOCKET": "{W}/agent.sock", "HEIMDALL_REVIEW_URL": "http://127.0.0.1:9/v1/review"},
+        listen=[8899])
+    return cs
+
+
 # ---- running -------------------------------------------------------------------------------------------------------
 
 def make_files(work, files, sub):
     for name, content in files.items():
-        p = os.path.join(work, name.rstrip("/@*%|"))
+        p = os.path.join(work, name.rstrip("/@*%|~"))
         os.makedirs(os.path.dirname(p), exist_ok=True)
         if name.endswith("/"):
             os.makedirs(p, exist_ok=True)
@@ -826,6 +978,11 @@ def make_files(work, files, sub):
             continue
         if name.endswith("|"):  # a named pipe planted under the name; content is ignored
             os.mkfifo(p, 0o644)
+            continue
+        if name.endswith("~"):  # a unix socket nobody listens on (a crashed server's); content is ignored
+            st = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            st.bind(p)
+            st.close()
             continue
         data = content if isinstance(content, bytes) else sub(content).encode()
         with open(p, "wb") as f:
@@ -876,6 +1033,66 @@ def snapshot(work, norm=()):
     return out
 
 
+def enter_netns():
+    """A user and network namespace of this process's own (the user mapped to itself, so files and permissions read as
+    outside), with loopback up: nothing in it can reach a port of the machine's own."""
+    uid, gid = os.getuid(), os.getgid()
+    os.unshare(os.CLONE_NEWUSER | os.CLONE_NEWNET)
+    with open("/proc/self/setgroups", "w") as f:
+        f.write("deny")
+    with open("/proc/self/uid_map", "w") as f:
+        f.write("%d %d 1\n" % (uid, uid))
+    with open("/proc/self/gid_map", "w") as f:
+        f.write("%d %d 1\n" % (gid, gid))
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    flags = struct.unpack_from("16sH", fcntl.ioctl(s, 0x8913, struct.pack("16sH22x", b"lo", 0)))[1]  # SIOCGIFFLAGS
+    fcntl.ioctl(s, 0x8914, struct.pack("16sH22x", b"lo", flags | 1))  # SIOCSIFFLAGS: lo up
+    s.close()
+
+
+def start_servers(base):
+    """The scripted servers, in the case's namespace: Limbo's agent socket and the loopback HTTP stand-in."""
+    us = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sockp = os.path.join(base, "agent.sock")
+    if os.path.exists(sockp):
+        os.unlink(sockp)
+    us.bind(sockp)
+    ts = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    ts.bind(("127.0.0.1", 0))
+    return Server(us), Server(ts), "http://127.0.0.1:%d" % ts.getsockname()[1]
+
+
+def run_case(case, go, rs, base):
+    """Both builds on one case, in a child process in a network namespace of its own (made afresh for each case)."""
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(r)
+        try:
+            enter_netns()
+            limbo, http, hurl = start_servers(base)
+            held = []
+            for port in case.get("listen", ()):
+                ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                ls.bind(("127.0.0.1", port))
+                ls.listen(4)
+                held.append(ls)
+            out = json.dumps([run_one(go, case, base, limbo, http, hurl, go), run_one(rs, case, base, limbo, http, hurl, go)])
+        except BaseException:
+            out = json.dumps({"error": traceback.format_exc()})
+        with os.fdopen(w, "w") as f:
+            f.write(out)
+        os._exit(0)
+    os.close(w)
+    with os.fdopen(r) as f:
+        data = f.read()
+    os.waitpid(pid, 0)
+    res = json.loads(data) if data else {"error": "the case's process ended without a result"}
+    if isinstance(res, dict):
+        sys.exit(f"{case['name']}: {res['error']}")
+    return res
+
+
 def run_one(binary, case, base, limbo, http, hurl, gobin):
     work = os.path.join(base, "w")
     if os.path.exists(work):
@@ -885,7 +1102,8 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
         shutil.rmtree(work)
     os.makedirs(work)
     sockp = os.path.join(base, "agent.sock")
-    sub = lambda s: s.replace("{W}", work).replace("{S}", sockp).replace("{H}", hurl).replace("{G}", gobin)
+    sub = lambda s: (s.replace("{W}", work).replace("{S}", sockp).replace("{H_HOSTPORT}", hurl[len("http://"):])
+                     .replace("{H}", hurl).replace("{G}", gobin))
     make_files(work, case["files"], sub)
     env = {"PATH": os.path.join(work, "bin"), "LANG": "C.UTF-8", "HOME": os.path.join(work, "home"), "USER": "tester",
            "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"), "SARINA_RS_NO_GO": "1"}
@@ -898,6 +1116,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
     for c in chmods:
         path, mode = c.split("=")
         os.chmod(os.path.join(work, path), int(mode, 8))
+    os.chmod(sockp, case.get("sockmode", 0o755))
     limbo.reset(case["limbo"])
     http.reset([sub(x) if isinstance(x, str) and x != HANGUP else x for x in case["http"]], case.get("model", False))
     argv = [binary] + [sub(x) for x in case["args"]]
@@ -945,7 +1164,8 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 
 def cases():
-    return memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
+    return (memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
+            + doctor_cases())
 
 
 def main():
@@ -962,21 +1182,11 @@ def main():
     if len(os.path.join(base, "agent.sock")) >= 100:
         sys.exit(f"{base}: too long for a socket path")
     os.umask(0o022)
-    us = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sockp = os.path.join(base, "agent.sock")
-    if os.path.exists(sockp):
-        os.unlink(sockp)
-    us.bind(sockp)
-    limbo = Server(us)
-    ts = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    ts.bind(("127.0.0.1", 0))
-    http = Server(ts)
-    hurl = "http://127.0.0.1:%d" % ts.getsockname()[1]
     cs = [c for c in cases() if o.only in c["name"]]
     bad = 0
     for c in cs:
-        g = run_one(go, c, base, limbo, http, hurl, go)
-        r = run_one(rs, c, base, limbo, http, hurl, go)
+        g, r = run_case(c, go, rs, base)
         diffs = [k for k in ("stdout", "stderr", "exit", "requests", "files") if g[k] != r[k]]
         if o.show:
             print(f"== {c['name']}: {json.dumps(g, indent=1, ensure_ascii=False)}")
@@ -996,7 +1206,8 @@ def main():
             for d in dirs:
                 os.chmod(os.path.join(root, d), 0o755)
         shutil.rmtree(w)
-    os.unlink(sockp)
+    if os.path.exists(sockp):
+        os.unlink(sockp)
     if not o.out:
         shutil.rmtree(base, ignore_errors=True)
     print(f"{len(cs)} cases, {len(cs) * 5} comparisons (stdout, stderr, exit status, requests, files): "

@@ -4,6 +4,7 @@
 
 pub mod chat;
 pub mod chatopts;
+pub mod doctorcmd;
 pub mod entry;
 pub mod guicmd;
 pub mod limbocmd;
@@ -110,6 +111,7 @@ pub fn proving(name: &str) -> Option<Command> {
         "memory-review" => chat::memory_review_command,
         "service" => servicecmd::service,
         "gui" => guicmd::gui,
+        "doctor" => doctorcmd::doctor,
         _ => return None,
     })
 }

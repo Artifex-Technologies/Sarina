@@ -27,9 +27,11 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - working-directory: rust
         run: cargo test --locked
-      # both builds on the same command lines (rust/parity/cli-differential.py): the commands sarina-rs runs itself
+      # both builds on the same command lines (rust/parity/cli-differential.py): the commands sarina-rs runs itself; each
+      # case in a user and network namespace of its own, which Ubuntu's AppArmor keeps from unprivileged users by default
       - name: the CLI differential
         run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           (cd go && go build -o "$RUNNER_TEMP/sarina-go" ./cmd/sarina)
           (cd rust && cargo build --locked --bin sarina-rs)
           python3 -I rust/parity/cli-differential.py --go "$RUNNER_TEMP/sarina-go" --rs rust/target/debug/sarina-rs

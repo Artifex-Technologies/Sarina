@@ -9,6 +9,9 @@
 //! system's authorities read from the files Go's crypto/x509 reads on Linux (`roots`), or against the caller's own
 //! (tests). The words of the common refusals are Go's (`tls_text`).
 //!
+//! A URL's user information is left out of the Host and sent as Basic credentials when the request has no Authorization
+//! header of its own, as Go's client does.
+//!
 //! Not as Go, written down in docs/RUST_PORT.md: redirects are not followed (an answer is taken only from the address
 //! configured, and an API key never goes elsewhere); no proxy from the environment; no `Accept-Encoding: gzip` is sent, so
 //! a body with a `Content-Encoding` is not decoded and reads as an error; one request per connection.
@@ -104,6 +107,52 @@ struct Target {
     host_port: String,
     host_header: String,
     request_uri: String,
+    /// the URL's user information as Go's client sends it (`Basic` and the base64 of "user:password") when the
+    /// request has no Authorization header of its own
+    basic: Option<String>,
+}
+
+/// Go's `unescape` in its user-information mode: %XX decoded ('+' stays); a bad escape is Go's error, naming at most
+/// three bytes from the '%'.
+fn unescape_userinfo(s: &str) -> Result<Vec<u8>, String> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            let hex = |c: Option<&u8>| c.and_then(|c| (*c as char).to_digit(16));
+            match (hex(b.get(i + 1)), hex(b.get(i + 2))) {
+                (Some(h), Some(l)) => out.push((h * 16 + l) as u8),
+                _ => {
+                    let bad = String::from_utf8_lossy(&b[i..(i + 3).min(b.len())]).into_owned();
+                    return Err(format!("invalid URL escape {}", crate::gotext::quote(&bad)));
+                }
+            }
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    Ok(out)
+}
+
+/// Standard base64 with padding (Go's `base64.StdEncoding`), for the `Basic` credentials.
+fn base64_std(b: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(b.len().div_ceil(3) * 4);
+    for c in b.chunks(3) {
+        let n = (u32::from(c[0]) << 16) | (u32::from(*c.get(1).unwrap_or(&0)) << 8) | u32::from(*c.get(2).unwrap_or(&0));
+        for k in 0..4 {
+            out.push(if k <= c.len() { A[(n >> (18 - 6 * k) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}
+
+/// Go's `url.validUserinfo`: the characters user information may hold.
+fn valid_userinfo(s: &str) -> bool {
+    s.bytes().all(|c| c.is_ascii_alphanumeric() || b"-._:~!$&'()*+,;=%@".contains(&c))
 }
 
 /// Go's `url.Parse` plus the transport's checks, as far as an `http://` or `https://` URL goes.
@@ -122,9 +171,24 @@ fn target(url: &str) -> Result<Target, String> {
         Some(i) => (&rest[..i], &rest[i..]),
         None => (rest, ""),
     };
-    if authority.contains('@') {
-        return Err("user information in the URL is not supported".into());
-    }
+    // user information (up to the last '@'): left out of the Host, sent as Basic credentials (Go's client)
+    let (basic, authority) = match authority.rfind('@') {
+        Some(i) => {
+            let info = &authority[..i];
+            if !valid_userinfo(info) {
+                return Err("net/url: invalid userinfo".into());
+            }
+            let (user, pass) = match info.find(':') {
+                Some(j) => (&info[..j], &info[j + 1..]),
+                None => (info, ""),
+            };
+            let mut cred = unescape_userinfo(user)?;
+            cred.push(b':');
+            cred.extend(unescape_userinfo(pass)?);
+            (Some(format!("Basic {}", base64_std(&cred))), &authority[i + 1..])
+        }
+        None => (None, authority),
+    };
     if authority.is_empty() {
         return Err("no Host in request URL".into());
     }
@@ -142,7 +206,7 @@ fn target(url: &str) -> Result<Target, String> {
     } else {
         path.to_string()
     };
-    Ok(Target { https, host, host_port, host_header: authority.to_string(), request_uri })
+    Ok(Target { https, host, host_port, host_header: authority.to_string(), request_uri, basic })
 }
 
 // ---- TLS ----
@@ -363,6 +427,11 @@ pub fn open(o: &Opts, ctx: &Ctx, deadline: &Deadline) -> Result<Response, Fail> 
     }
     for (k, v) in o.headers {
         req.push_str(&format!("{k}: {v}\r\n"));
+    }
+    if let Some(b) = &t.basic {
+        if !o.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Authorization")) {
+            req.push_str(&format!("Authorization: {b}\r\n"));
+        }
     }
     req.push_str("Connection: close\r\n\r\n");
     let mut req = req.into_bytes();

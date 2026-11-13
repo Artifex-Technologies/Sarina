@@ -2,8 +2,8 @@
 //! `stdinConfirm`, `linesConfirm`, `/tier`) and `memorycmd.go` (`memory-review`, the review when a conversation ends):
 //! `sarina chat`, `sarina resume`, `sarina skill list|run` and `sarina memory-review`, on `agent::run`.
 //!
-//! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`, whose
-//! check-up runs in the Go build: `doctor_tool`). The optional tool sets that are not ported yet (vault, system, crypto
+//! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`:
+//! `doctor_tool`). The optional tool sets that are not ported yet (vault, system, crypto
 //! and steganography, Trachtenberg, quantum, reverse engineering, the forge, the council) make [`needs_go`] answer, and
 //! the command is then handed to the Go build whole.
 
@@ -605,70 +605,17 @@ pub fn builtins() -> Vec<Tool> {
     out
 }
 
-/// The most a check-up's report may be (it is a JSON list of short findings).
-const MAX_DOCTOR_OUTPUT: usize = 4 << 20;
-
-/// `sarina_doctor` (Go's `doctor.Tools`): the read-only check-up runs in the Go build (`doctor --json`), which is where
-/// the check-up is until it is ported; the answer is its JSON list, `doctor_failed` whether a check failed.
+/// `sarina_doctor` (Go's `doctor.Tools`): the read-only check-up ([`crate::doctor`]) of the session's workspace and
+/// session folder, its JSON list the answer, `doctor_failed` whether a check failed.
 pub fn doctor_tool() -> Tool {
     crate::tools::defs::tool(
         "sarina_doctor",
         Arc::new(|_args: &BTreeMap<String, Any>, tc: &Context| {
-            let go = super::entry::go_binary(&|k: &str| std::env::var_os(k).map(|v| v.into_encoded_bytes()).unwrap_or_default());
-            let go = gotext::lossy(&go);
-            let args = vec![
-                "doctor".to_owned(),
-                "--json".to_owned(),
-                "--cwd".to_owned(),
-                tc.root.clone(),
-                "--session-dir".to_owned(),
-                tc.session_directory.clone(),
-            ];
-            let mut out = Vec::new();
-            let mut over = false;
-            let mut sink = |stream: &'static str, b: &[u8]| {
-                if stream == "stdout" {
-                    let room = MAX_DOCTOR_OUTPUT - out.len();
-                    over |= b.len() > room;
-                    out.extend_from_slice(&b[..b.len().min(room)]);
-                }
-            };
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
-            let run = crate::tools::exec::run_group(
-                &go,
-                &args,
-                &crate::tools::exec::parent_env(),
-                None,
-                deadline,
-                &tc.ctx,
-                crate::tools::exec::GroupKill::Group,
-                &mut sink,
-            );
-            let code = run.as_ref().ok().and_then(|e| e.status).and_then(|s| s.code());
-            match code {
-                Some(c @ (0 | 1)) if !over => {
-                    let mut text = gotext::lossy(&out);
-                    if text.ends_with('\n') {
-                        text.pop();
-                    }
-                    let mut md = BTreeMap::new();
-                    md.insert("doctor_failed".to_owned(), Any::Bool(c == 1));
-                    Output { content: text, metadata: md, error: None }
-                }
-                _ => {
-                    let why = match &run {
-                        Err(e) => e.clone(),
-                        Ok(_) if over => format!("its report is larger than {MAX_DOCTOR_OUTPUT} bytes"),
-                        Ok(e) => format!("it ended with {:?}", e.status),
-                    };
-                    Output {
-                        error: Some(crate::tools::registry::ToolError::Failed(format!(
-                            "the check-up could not run in the Go build ({go}): {why}"
-                        ))),
-                        ..Output::default()
-                    }
-                }
-            }
+            let o = crate::doctor::Options { cwd: tc.root.clone(), session_dir: tc.session_directory.clone(), ..Default::default() };
+            let cs = crate::doctor::run(&tc.ctx, o);
+            let mut md = BTreeMap::new();
+            md.insert("doctor_failed".to_owned(), Any::Bool(crate::doctor::has_failure(&cs)));
+            Output { content: crate::doctor::json(&cs), metadata: md, error: None }
         }),
     )
 }
