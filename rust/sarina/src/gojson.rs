@@ -654,6 +654,41 @@ pub fn write_f64(out: &mut String, f: f64) -> Result<(), Error> {
     Ok(())
 }
 
+/// A float32 as Go's encoder writes it (`strconv.AppendFloat(f, fmt, -1, 32)`): the shortest text that reads back as
+/// that float32, in plain notation from 1e-6 up to (not including) 1e21 (both as float32), else with an exponent.
+pub fn write_f32(out: &mut String, f: f32) -> Result<(), Error> {
+    if f.is_nan() || f.is_infinite() {
+        return Err(Error(format!("json: unsupported value: {}", gotext::float_v(f as f64))));
+    }
+    if f == 0.0 {
+        out.push_str(if f.is_sign_negative() { "-0" } else { "0" });
+        return Ok(());
+    }
+    let abs = f.abs();
+    if (1e-6f32..1e21f32).contains(&abs) {
+        out.push_str(&format!("{f}"));
+        return Ok(());
+    }
+    let s = format!("{f:e}");
+    let (mant, exp) = s.split_once('e').unwrap_or((&s, "0"));
+    out.push_str(mant);
+    out.push('e');
+    match exp.strip_prefix('-') {
+        Some(d) => {
+            out.push('-');
+            out.push_str(d);
+        }
+        None => {
+            out.push('+');
+            if exp.len() < 2 {
+                out.push('0');
+            }
+            out.push_str(exp);
+        }
+    }
+    Ok(())
+}
+
 /// Writes an `any` compactly as Go does (an object's keys sorted, as Go sorts a map's), without recursion.
 pub fn write_any(out: &mut String, v: &Any, html: bool) -> Result<(), Error> {
     enum Open<'a> {

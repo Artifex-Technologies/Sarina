@@ -48,6 +48,11 @@ fn getrandom(buf: &mut [u8]) {
 
 /// Go's `os.MkdirAll(dir, 0o755)` with Go's error texts.
 pub fn mkdir_all(dir: &[u8]) -> Result<(), String> {
+    mkdir_all_mode(dir, 0o755)
+}
+
+/// Go's `os.MkdirAll(dir, mode)` with Go's error texts.
+pub fn mkdir_all_mode(dir: &[u8], mode: u32) -> Result<(), String> {
     match std::fs::metadata(gopath::os_path(dir)) {
         Ok(m) if m.is_dir() => return Ok(()),
         Ok(_) => return Err(goerr::path("mkdir", dir, &std::io::Error::from_raw_os_error(20))),
@@ -55,9 +60,9 @@ pub fn mkdir_all(dir: &[u8]) -> Result<(), String> {
     }
     let parent = gopath::dir(dir);
     if parent != dir && !parent.is_empty() {
-        mkdir_all(&parent)?;
+        mkdir_all_mode(&parent, mode)?;
     }
-    match std::fs::DirBuilder::new().mode(0o755).create(gopath::os_path(dir)) {
+    match std::fs::DirBuilder::new().mode(mode).create(gopath::os_path(dir)) {
         Ok(()) => Ok(()),
         // made meanwhile (Go: a folder that exists now is fine)
         Err(e) if std::fs::metadata(gopath::os_path(dir)).is_ok_and(|m| m.is_dir()) => {

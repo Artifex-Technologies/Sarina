@@ -532,6 +532,9 @@ pub(crate) fn run_program(
 pub(crate) enum GroupKill {
     Group,
     Process,
+    /// no group of its own (Go's plain `CommandContext`: a Ctrl-C at the terminal reaches it too), only it killed, and
+    /// its standard error to the null device (Go's `Stderr` left nil: nothing waits on it)
+    Inherit,
 }
 
 /// How a `run_group` program ended: its status (None when it could not be waited for), and whether its pipes were still
@@ -560,7 +563,12 @@ pub(crate) fn run_group(
     let path = if path.contains('/') { path.to_string() } else { look_path_go(path)? };
     // a folder that cannot be entered fails the start as Go's does: "fork/exec <program>: ..."
     let mut cmd = Command::new(&path);
-    cmd.args(args).env_clear().stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0);
+    cmd.args(args).env_clear().stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if kill != GroupKill::Inherit {
+        cmd.process_group(0);
+    } else {
+        cmd.stderr(Stdio::null());
+    }
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
@@ -588,7 +596,7 @@ pub(crate) fn run_group(
             if now >= deadline || ctx.err().is_some() {
                 match kill {
                     GroupKill::Group => hard_kill(pid),
-                    GroupKill::Process => {
+                    GroupKill::Process | GroupKill::Inherit => {
                         let _ = child.kill();
                     }
                 }

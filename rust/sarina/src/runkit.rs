@@ -288,6 +288,7 @@ pub fn build(s: Spec) -> Result<Built, String> {
         client,
         tools: Builder {
             allowlist: s.allowlist.clone(),
+            per_prompt: if s.builtins.is_none() { crate::cli::chat::per_prompt() } else { Vec::new() },
             builtins: s.builtins.unwrap_or_else(crate::cli::chat::builtins),
             deny: Some(Arc::new(move |t: &str| p2.denied(t))),
             ..Builder::default()

@@ -558,6 +558,17 @@ fn dial_tcp(host_port: &str, ctx: &Ctx, deadline: &Deadline) -> Result<TcpStream
             }
         };
         let mut last = Fail::Other("dial tcp: no address".into());
+        // Go dials an IPv4-mapped IPv6 address as the IPv4 address it holds (and names it so in an error)
+        let addrs: Vec<std::net::SocketAddr> = addrs
+            .into_iter()
+            .map(|a| match a {
+                std::net::SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
+                    Some(v4) => std::net::SocketAddr::new(v4.into(), v6.port()),
+                    None => a,
+                },
+                _ => a,
+            })
+            .collect();
         for a in &addrs {
             let left = by.saturating_duration_since(Instant::now());
             if left.is_zero() {

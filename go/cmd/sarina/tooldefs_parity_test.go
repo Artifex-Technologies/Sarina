@@ -39,7 +39,8 @@ func toolDefs(t *testing.T, env map[string]string) []any {
 
 func TestParityToolDefs(t *testing.T) {
 	var cases []parity.Case
-	for _, env := range []map[string]string{{}, {"SARINA_CRYPTO": "on", "SARINA_MATH": "on", "SARINA_QUANTUM": "on"}} {
+	for _, env := range []map[string]string{{}, {"SARINA_SYSTEM": "on"},
+		{"SARINA_CRYPTO": "on", "SARINA_MATH": "on", "SARINA_QUANTUM": "on", "SARINA_SYSTEM": "on"}} {
 		cases = append(cases, parity.Case{Fn: "Builtins", In: env, Out: toolDefs(t, env)})
 	}
 	parity.Fixture(t, "tooldefs", cases)

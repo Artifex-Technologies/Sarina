@@ -98,6 +98,52 @@ impl Time {
         format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", rem / 3600, rem % 3600 / 60, rem % 60)
     }
 
+    /// Whether this is Go's zero time (`IsZero`).
+    pub fn is_zero(&self) -> bool {
+        self.secs == 0 && self.nanos == 0
+    }
+
+    /// The same instant in the local zone (Go's `t.Local()`).
+    pub fn local(&self) -> Time {
+        Time { offset: crate::tz::local_offset(self.unix()), ..*self }
+    }
+
+    /// The civil date and time in the time's own offset: year, month, day, hour, minute, second, weekday (0 Sunday).
+    pub fn civil(&self) -> (i64, i64, i64, i64, i64, i64, usize) {
+        let t = self.unix() + self.offset as i64;
+        let days = t.div_euclid(86_400);
+        let rem = t.rem_euclid(86_400);
+        let z = days + 719_468;
+        let era = z.div_euclid(146_097);
+        let doe = z.rem_euclid(146_097);
+        let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = if mp < 10 { mp + 3 } else { mp - 9 };
+        let y = yoe + era * 400 + i64::from(m <= 2);
+        // 1970-01-01 was a Thursday
+        let wd = (days + 4).rem_euclid(7) as usize;
+        (y, m, d, rem / 3600, rem % 3600 / 60, rem % 60, wd)
+    }
+
+    /// Go's `t.Format("2006-01-02 15:04")` (years 0 to 9999).
+    pub fn format_date_minute(&self) -> String {
+        let (y, m, d, hh, mm, _, _) = self.civil();
+        format!("{y:04}-{m:02}-{d:02} {hh:02}:{mm:02}")
+    }
+
+    /// Go's `t.Format("Mon 2006-01-02 15:04")` (years 0 to 9999).
+    pub fn format_weekday_date_minute(&self) -> String {
+        const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        format!("{} {}", DAYS[self.civil().6], self.format_date_minute())
+    }
+
+    /// Go's `t.Year()` in the time's own offset.
+    pub fn year(&self) -> i64 {
+        self.civil().0
+    }
+
     /// Go's `time.Parse(time.RFC3339, s)`, which Go 1.27's JSON reading of a `time.Time` uses (the v1 API keeps the loose
     /// parse: a one-digit hour, an offset up to 24:60, a comma before the fraction, fraction digits past nine dropped), with
     /// Go's error texts.

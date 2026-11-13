@@ -46,6 +46,15 @@ fn main() {
         eprint!("{}", entry::contained_message(&why));
         std::process::exit(3);
     }
+    // Go's cli.Main: SARINA_CRYPTO=auto and SARINA_MATH=auto decided from the command line's words, for every command, in
+    // the process's environment (the commands' children see it); the Go build a command is handed to finds it decided
+    if !args.is_empty() && !matches!(args[0].as_slice(), b"-h" | b"--help" | b"help") {
+        let words: Vec<String> = args.iter().map(|a| sarina::gotext::lossy(a)).collect();
+        for (k, v) in sarina::trachtenberg::auto_decisions(&|k: &str| sarina::gotext::lossy(&getenv(k)), &words) {
+            // at the start of main, before any thread is started
+            std::env::set_var(k, v);
+        }
+    }
     let command = args.first().map(Vec::as_slice).unwrap_or_default();
     let name = std::str::from_utf8(command).unwrap_or_default();
     let tried = std::env::var("SARINA_RS_TRY").unwrap_or_default().split(',').any(|c| c == name);

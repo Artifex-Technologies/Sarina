@@ -346,13 +346,41 @@ pub fn by_words(list: &[&Skill], query: &str, limit: usize) -> Vec<Passage> {
     out
 }
 
-type ContextFn = Arc<dyn Fn(&str) -> String + Send + Sync>;
+/// A prefetch: the task in, the context out (bytes, as Go's string: what a command printed may not be UTF-8).
+pub type ContextFn = Arc<dyn Fn(&str) -> Vec<u8> + Send + Sync>;
 
-static CONTEXTS: LazyLock<RwLock<HashMap<String, ContextFn>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
+/// Go's registered contexts: the ones its packages add at start (sysinfo's "status" and "security"), and any added later.
+static CONTEXTS: LazyLock<RwLock<HashMap<String, ContextFn>>> = LazyLock::new(|| {
+    let mut m: HashMap<String, ContextFn> = HashMap::new();
+    m.insert("status".into(), Arc::new(crate::sysinfo::status_context));
+    m.insert("security".into(), Arc::new(crate::sysinfo::security_context));
+    RwLock::new(m)
+});
 
 /// Go's `RegisterContext`: a kind of context a skill can ask for with "prefetch".
 pub fn register_context(name: &str, f: ContextFn) {
     CONTEXTS.write().unwrap_or_else(|p| p.into_inner()).insert(name.to_owned(), f);
+}
+
+/// The first piece Go's `cutParts(text, max)` makes of bytes longer than `max`: cut at the last paragraph or line break in
+/// the second half, else at `max` (stepped back to a character's start), trimmed.
+fn first_part(b: &[u8], max: usize) -> &[u8] {
+    let last = |pat: &[u8]| b[..max].windows(pat.len()).rposition(|w| w == pat).map_or(-1, |i| i as i64);
+    let half = (max / 2) as i64;
+    let mut cut = last(b"\n\n");
+    if cut < half {
+        cut = last(b"\n");
+    }
+    let cut = if cut < half {
+        let mut c = max;
+        while c > 0 && b[c] & 0xC0 == 0x80 {
+            c -= 1;
+        }
+        c
+    } else {
+        cut as usize
+    };
+    gotext::trim_space_bytes(&b[..cut])
 }
 
 impl Skill {
@@ -361,21 +389,24 @@ impl Skill {
         if names.is_empty() || trim_space(task).is_empty() {
             return String::new();
         }
-        let mut b = String::new();
+        let mut b: Vec<u8> = Vec::new();
         for name in names {
             let f = CONTEXTS.read().unwrap_or_else(|p| p.into_inner()).get(name).cloned();
             let Some(f) = f else { continue };
             let t = f(task);
-            let t = trim_space(&t);
+            let t = gotext::trim_space_bytes(&t);
             if !t.is_empty() {
-                b.push_str(t);
-                b.push_str("\n\n");
+                b.extend_from_slice(t);
+                b.extend_from_slice(b"\n\n");
             }
         }
         if b.len() > CONTEXT_BUDGET {
-            b = format!("{}\n[…]\n\n", cut_parts(&b, CONTEXT_BUDGET)[0]);
+            let mut cut = first_part(&b, CONTEXT_BUDGET).to_vec();
+            cut.extend_from_slice("\n[…]\n\n".as_bytes());
+            b = cut;
         }
-        b
+        // Go's string goes into the prompt as it is; a byte that is not UTF-8 is one U+FFFD when it is sent
+        gotext::lossy(&b)
     }
 
     /// Go's `ExpandWith`: Expand for a run with a task: the context the skill asks for first, and for a long skill the

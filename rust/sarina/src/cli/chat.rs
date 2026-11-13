@@ -3,9 +3,11 @@
 //! `sarina chat`, `sarina resume`, `sarina skill list|run` and `sarina memory-review`, on `agent::run`.
 //!
 //! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`:
-//! `doctor_tool`). The optional tool sets that are not ported yet (vault, system, crypto
-//! and steganography, Trachtenberg, quantum, reverse engineering, the forge, the council) make [`needs_go`] answer, and
-//! the command is then handed to the Go build whole.
+//! `doctor_tool`), the system set (`sysinfo`) with SARINA_SYSTEM=on and the Trachtenberg tool with SARINA_MATH=on. The
+//! optional tool sets that are not ported yet (vault, crypto and steganography, quantum, reverse engineering, the forge,
+//! the council) make [`needs_go`] answer, and the command is then handed to the Go build whole. SARINA_CRYPTO=auto and
+//! SARINA_MATH=auto are decided from the command line before that (`sarina-rs`'s main, as Go's `cli.Main`), so an auto
+//! that comes out "off" needs no Go build.
 
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -45,10 +47,8 @@ pub const DRAFT_WITHDRAWN: &str = "\u{1e}draft withdrawn\u{1e}";
 pub fn needs_go(getenv: &dyn Fn(&str) -> String, home: &str) -> Option<String> {
     for (k, on) in [
         ("SARINA_CRYPTO", &["on", "auto"][..]),
-        ("SARINA_MATH", &["on", "auto"][..]),
         ("SARINA_QUANTUM", &["on"][..]),
         ("SARINA_REVERSE", &["on"][..]),
-        ("SARINA_SYSTEM", &["on"][..]),
         ("SARINA_FORGE", &["on"][..]),
     ] {
         if on.contains(&getenv(k).as_str()) {
@@ -539,8 +539,13 @@ impl Chat {
         }
         let pol = Arc::new(pol);
         let p2 = pol.clone();
-        let mut builder =
-            Builder { allowlist: allow, builtins: builtins(), deny: Some(Arc::new(move |t: &str| p2.denied(t))), ..Builder::default() };
+        let mut builder = Builder {
+            allowlist: allow,
+            builtins: builtins(),
+            per_prompt: per_prompt(),
+            deny: Some(Arc::new(move |t: &str| p2.denied(t))),
+            ..Builder::default()
+        };
         let cat = self.catalog();
         let lib = self.library();
         if let Some(t) = crate::skills::tool::skill_tool(cat.clone(), Some(lib.clone())) {
@@ -583,7 +588,8 @@ impl Chat {
 }
 
 /// Go's stable built-ins: the default tools and every provider's, in the Go build's order (go/cmd/sarina's
-/// TestParityToolDefs records it): the file, shell, to-do and plan tools, memory, Limbo, sarina_doctor.
+/// TestParityToolDefs records it): the file, shell, to-do and plan tools, memory, Limbo, sarina_doctor, and the system
+/// set with SARINA_SYSTEM=on (quantum_sim, between them in Go's order, still hands the chat to Go: [`needs_go`]).
 pub fn builtins() -> Vec<Tool> {
     let mut files = crate::tools::files::file_tools();
     let take = |v: &mut Vec<Tool>, n: &str| {
@@ -602,7 +608,14 @@ pub fn builtins() -> Vec<Tool> {
     out.extend(crate::memory::tools());
     out.extend(crate::limbo::tools());
     out.push(doctor_tool());
+    out.extend(crate::sysinfo::tools());
     out
+}
+
+/// Go's per-question tools, after every other tool (the Builder's extra ones too): the Trachtenberg tool with
+/// SARINA_MATH=on (the crypto and stego tools, before it in Go's order, still hand the chat to Go: [`needs_go`]).
+pub fn per_prompt() -> Vec<Tool> {
+    crate::trachtenberg::tools()
 }
 
 /// `sarina_doctor` (Go's `doctor.Tools`): the read-only check-up ([`crate::doctor`]) of the session's workspace and

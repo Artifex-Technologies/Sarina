@@ -179,7 +179,7 @@ fn skills_match_go() {
                 std::fs::write(format!("{top}/home/.sarina/skills.json"), format!("{{\"paths\":[\"{top}/jsondir\",\"{top}/envdir1\"]}}"))
                     .unwrap();
                 let cat = Arc::new(discover(&opts));
-                register_context("status", Arc::new(|task: &str| format!("STATUS about {task}")));
+                register_context("status", Arc::new(|task: &str| format!("STATUS about {task}").into_bytes()));
                 let emb = c["in"][0].as_str().unwrap();
                 let e: Option<Arc<dyn Embedder + Send + Sync>> = match emb {
                     "fake" => Some(Arc::new(FakeEmbedder { fail: false })),
