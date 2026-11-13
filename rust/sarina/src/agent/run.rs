@@ -149,7 +149,13 @@ pub struct Agent {
     tier_events: Arc<Mutex<Vec<Event>>>,
     pub cumulative_usage: Usage,
     pub cumulative_cost_usd: f64,
+    /// the registry's tools as each rebuild leaves them, for a reader outside the loop ([`Agent::watch_registry`])
+    registry_watch: Option<RegistryWatch>,
 }
+
+/// Go's `Registry()` read while the loop runs (the GUI names a starting tool's effect from the registry as it is then):
+/// each rebuilt registry's tools and what they need.
+pub type RegistryWatch = Arc<Mutex<BTreeMap<String, crate::tools::registry::Permission>>>;
 
 /// Go's `run`: one Run or Resume in progress.
 struct Run {
@@ -264,6 +270,7 @@ impl Agent {
             ctx_settings,
             cumulative_usage: Usage::default(),
             cumulative_cost_usd: 0.0,
+            registry_watch: None,
             opts,
         };
         let cwd = a.opts.runtime.cwd.clone();
@@ -339,6 +346,16 @@ impl Agent {
 
     fn refresh_registry(&mut self) {
         self.registry = self.effective_builder().build();
+        if let Some(w) = &self.registry_watch {
+            *w.lock().unwrap_or_else(|p| p.into_inner()) = self.registry.requirements();
+        }
+    }
+
+    /// The registry's tools as every rebuild leaves them (Go's `Registry()` from another goroutine).
+    pub fn watch_registry(&mut self) -> RegistryWatch {
+        let w = Arc::new(Mutex::new(self.registry.requirements()));
+        self.registry_watch = Some(w.clone());
+        w
     }
 
     /// Go's `baseToolNames`: the allowlist's tools alone, for the system prompt.

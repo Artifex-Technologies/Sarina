@@ -27,6 +27,7 @@ pub mod gotext;
 pub mod gotime;
 pub mod gourl;
 pub mod guard;
+pub mod gui;
 pub mod heimdall;
 pub mod helpers;
 pub mod limbo;

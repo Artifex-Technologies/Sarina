@@ -153,6 +153,16 @@ pub fn result_json(res: &RunResult, scrub: Option<&dyn Fn(&str) -> String>) -> R
     ))
 }
 
+/// Go's `ErrorType` of a run's error: the errors the agent wraps (`fmt.Errorf` with `%w`) are `wrapError`, the rest
+/// `errorString`.
+pub fn error_type(e: &str) -> &'static str {
+    if e.starts_with("saving session: ") || e.starts_with("cannot create scratchpad: ") {
+        "wrapError"
+    } else {
+        "errorString"
+    }
+}
+
 // ---- building an agent -------------------------------------------------------------------------------------------------
 
 /// Go's `Spec`: everything needed to build one agent.

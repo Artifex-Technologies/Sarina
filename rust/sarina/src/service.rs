@@ -461,11 +461,7 @@ fn turns(agent: &mut crate::agent::run::Agent, rx: Receiver<Job>, session_dir: &
                 result_response(&res, scrub)
             }
             (_, Some(e)) => {
-                let typ = if e.starts_with("saving session: ") || e.starts_with("cannot create scratchpad: ") {
-                    "wrapError"
-                } else {
-                    "errorString"
-                };
+                let typ = runkit::error_type(&e);
                 json(500, &obj(vec![("error", s(&scrub(&e))), ("error_type", s(typ))]))
             }
             (None, None) => run_failed("the run produced no result"),
@@ -702,7 +698,7 @@ fn resolve(p: &str) -> Vec<u8> {
 }
 
 /// Go's `inside`: `p` is `root` or below it, links followed.
-fn inside(root: &str, p: &str) -> bool {
+pub(crate) fn inside(root: &str, p: &str) -> bool {
     let Ok(rel) = gopath::rel(&resolve(root), &resolve(p)) else { return false };
     rel == b"." || (rel != b".." && !rel.starts_with(b"../") && !gopath::is_abs(&rel))
 }

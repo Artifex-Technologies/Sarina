@@ -753,7 +753,7 @@ struct SlashResult {
     narrow: Option<Vec<String>>,
 }
 
-const SLASH: [(&str, &str); 4] = [
+pub(crate) const SLASH: [(&str, &str); 4] = [
     ("help", "list the slash commands"),
     ("plan", "plan mode: /plan (enter), /plan show, /plan approve, /plan revise <feedback>, /plan reject"),
     ("skill", "run a skill: /skill <name> [args]; /skill alone lists them"),

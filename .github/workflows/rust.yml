@@ -36,3 +36,6 @@ jobs:
       # both builds' services on the same scripted requests (rust/parity/service-differential.py)
       - name: the service differential
         run: python3 -I rust/parity/service-differential.py --go "$RUNNER_TEMP/sarina-go" --rs rust/target/debug/sarina-rs
+      # both builds' consoles on the same scripted page requests, runs and approvals (rust/parity/gui-differential.py)
+      - name: the GUI differential
+        run: python3 -I rust/parity/gui-differential.py --go "$RUNNER_TEMP/sarina-go" --rs rust/target/debug/sarina-rs

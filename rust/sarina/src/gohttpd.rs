@@ -33,18 +33,25 @@ const RST_AVOIDANCE: Duration = Duration::from_millis(500);
 /// The most connections served at once (each is a thread); Go has no limit.
 pub const MAX_CONNS: usize = 256;
 
-/// Go's `StatusText` for the codes the service answers with.
+/// Go's `StatusText` for the codes the service and the console answer with.
 pub fn status_text(code: u16) -> &'static str {
     match code {
         100 => "Continue",
         200 => "OK",
+        206 => "Partial Content",
+        301 => "Moved Permanently",
+        304 => "Not Modified",
         307 => "Temporary Redirect",
         400 => "Bad Request",
         401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
         405 => "Method Not Allowed",
+        409 => "Conflict",
+        412 => "Precondition Failed",
         413 => "Request Entity Too Large",
+        415 => "Unsupported Media Type",
+        416 => "Requested Range Not Satisfiable",
         417 => "Expectation Failed",
         422 => "Unprocessable Entity",
         431 => "Request Header Fields Too Large",
@@ -224,7 +231,8 @@ impl Request {
         self.values(name).first().map(|v| v.as_slice()).unwrap_or_default()
     }
 
-    fn values(&self, name: &str) -> &[Vec<u8>] {
+    /// Go's `Header[name]`: every value of a canonical name.
+    pub fn values(&self, name: &str) -> &[Vec<u8>] {
         self.header.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_slice()).unwrap_or_default()
     }
 
@@ -774,18 +782,22 @@ pub struct Response {
     pub status: u16,
     pub header: BTreeMap<String, Vec<String>>,
     pub body: Vec<u8>,
+    /// the body was written with `io.WriteString`: through the 2 KiB buffer, so a chunked body goes out in 2 KiB chunks
+    /// (a plain `Write` of a long body is one chunk)
+    pub buffered: bool,
 }
 
 impl Response {
     pub fn new(status: u16) -> Response {
-        Response { status, header: BTreeMap::new(), body: Vec::new() }
+        Response { status, header: BTreeMap::new(), body: Vec::new(), buffered: false }
     }
 
     pub fn set(&mut self, k: &str, v: &str) {
         self.header.insert(k.to_owned(), vec![v.to_owned()]);
     }
 
-    fn get(&self, k: &str) -> &str {
+    /// Go's `Header().Get` of a canonical name.
+    pub fn get(&self, k: &str) -> &str {
         self.header.get(k).and_then(|v| v.first()).map(String::as_str).unwrap_or("")
     }
 }
@@ -802,6 +814,18 @@ pub struct Exchange<'a> {
     limit_hit: bool,
     /// the connection's state, shared with the server (for a shutdown)
     peer: TcpStream,
+    /// the server is shutting down (Go's `doKeepAlives` false)
+    shutting: &'a AtomicBool,
+    /// an answer whose head was written by [`Exchange::begin_stream`]
+    stream: Option<Streamed>,
+}
+
+/// What a streamed answer's head decided.
+struct Streamed {
+    chunking: bool,
+    close_after: bool,
+    eat: bool,
+    wrote: bool,
 }
 
 impl Exchange<'_> {
@@ -824,6 +848,34 @@ impl Exchange<'_> {
     /// Go's `ResponseController.SetReadDeadline`.
     pub fn set_read_deadline(&mut self, d: Option<Instant>) {
         self.conn.deadline = d;
+    }
+
+    /// Go's `WriteHeader` then `Flush` with nothing written yet: the head is written at once (no length: chunked for
+    /// HTTP/1.1, else the connection closes after the body); the body follows with [`Exchange::stream_write`]. The
+    /// handler's own returned answer is then ignored, and the end of the body is written when it returns.
+    pub fn begin_stream(&mut self, resp: &Response) {
+        let h = head(self, resp, &[], false);
+        let wrote = self.conn.write_all(&h.bytes);
+        self.stream = Some(Streamed { chunking: h.chunking, close_after: h.close_after, eat: h.is_head || !h.body_allowed, wrote });
+    }
+
+    /// Go's `Write` then `Flush` on a streamed answer: one chunk (or the bytes as they are without chunking). False once
+    /// the connection is broken.
+    pub fn stream_write(&mut self, b: &[u8]) -> bool {
+        let Some(st) = self.stream.as_mut() else { return false };
+        if st.eat || b.is_empty() {
+            return st.wrote;
+        }
+        let ok = if st.chunking {
+            let mut out = format!("{:x}\r\n", b.len()).into_bytes();
+            out.extend_from_slice(b);
+            out.extend_from_slice(b"\r\n");
+            self.conn.write_all(&out)
+        } else {
+            self.conn.write_all(b)
+        };
+        st.wrote &= ok;
+        st.wrote
     }
 
     /// While a turn runs: whether the client hung up (Go's background read after the body: the end of input, or an
@@ -991,6 +1043,8 @@ fn serve_loop(c: &mut Conn, peer: TcpStream, settings: &Settings, handler: &Hand
                 Ok(p) => p,
                 Err(_) => return,
             },
+            shutting: &tracker.shutting_down,
+            stream: None,
         };
         if !expects && !ex.req.header("Expect").is_empty() {
             // Go's sendExpectationFailed
@@ -1019,17 +1073,25 @@ fn serve_loop(c: &mut Conn, peer: TcpStream, settings: &Settings, handler: &Hand
     }
 }
 
-/// Writes the answer as Go's `chunkWriter.writeHeader`, `Write` and `finishRequest` do; whether the connection may serve
-/// another request (Go's `shouldReuseConnection`).
-fn finish(ex: &mut Exchange, resp: Response, tracker: &Tracker) -> bool {
-    let keep_alives = !tracker.shutting_down.load(Ordering::SeqCst);
+/// The head of an answer as Go's `chunkWriter.writeHeader` writes it, and what it decided.
+struct Head {
+    bytes: Vec<u8>,
+    chunking: bool,
+    close_after: bool,
+    content_length: i64,
+    body_allowed: bool,
+    is_head: bool,
+}
+
+/// Go's `chunkWriter.writeHeader` for an answer whose first bytes are `p` (`handler_done`: the handler returned with no
+/// more than these; else the head goes out before the body is known).
+fn head(ex: &mut Exchange, resp: &Response, p: &[u8], handler_done: bool) -> Head {
+    let keep_alives = !ex.shutting.load(Ordering::SeqCst);
     let req = &ex.req;
     let is_head = req.method == "HEAD";
     let is_connect = req.method == "CONNECT";
     let status = resp.status;
     let body_allowed = !(100..200).contains(&status) && status != 204 && status != 304;
-    let p = &resp.body;
-    let handler_done = p.len() <= BUFFER_BEFORE_CHUNKING;
     let mut header = resp.header.clone();
     let get = |h: &BTreeMap<String, Vec<String>>, k: &str| h.get(k).and_then(|v| v.first()).cloned().unwrap_or_default();
     // WriteHeader: an explicit Content-Length
@@ -1097,6 +1159,7 @@ fn finish(ex: &mut Exchange, resp: Response, tracker: &Tracker) -> bool {
             x_conn = "close".into();
         }
     }
+    let req = &ex.req;
     let mut chunking = false;
     if is_head || !body_allowed || status == 204 || has_cl {
         header.remove("Transfer-Encoding");
@@ -1138,29 +1201,49 @@ fn finish(ex: &mut Exchange, resp: Response, tracker: &Tracker) -> bool {
         }
     }
     out.extend_from_slice(b"\r\n");
+    Head { bytes: out, chunking, close_after, content_length, body_allowed, is_head }
+}
+
+/// Writes the answer as Go's `chunkWriter.writeHeader`, `Write` and `finishRequest` do (a streamed answer only gets its
+/// end); whether the connection may serve another request (Go's `shouldReuseConnection`).
+fn finish(ex: &mut Exchange, resp: Response, _tracker: &Tracker) -> bool {
+    if let Some(st) = ex.stream.take() {
+        let mut wrote = st.wrote;
+        if st.chunking && !st.eat && wrote {
+            wrote = ex.conn.write_all(b"0\r\n\r\n");
+        }
+        ex.body.close(ex.conn);
+        ex.close_after = st.close_after;
+        return !st.close_after && wrote && !ex.body.early_close;
+    }
+    let p = &resp.body;
+    let h = head(ex, &resp, p, p.len() <= BUFFER_BEFORE_CHUNKING);
+    let mut out = h.bytes;
     let mut written = 0usize;
-    if !is_head && body_allowed && !p.is_empty() {
+    if !h.is_head && h.body_allowed && !p.is_empty() {
         written = p.len();
-        if chunking {
-            out.extend_from_slice(format!("{:x}\r\n", p.len()).as_bytes());
-            out.extend_from_slice(p);
-            out.extend_from_slice(b"\r\n");
+        if h.chunking {
+            let size = if resp.buffered { BUFFER_BEFORE_CHUNKING } else { p.len() };
+            for c in p.chunks(size) {
+                out.extend_from_slice(format!("{:x}\r\n", c.len()).as_bytes());
+                out.extend_from_slice(c);
+                out.extend_from_slice(b"\r\n");
+            }
         } else {
             out.extend_from_slice(p);
         }
     }
-    if chunking {
+    if h.chunking {
         out.extend_from_slice(b"0\r\n\r\n");
     }
     let wrote = ex.conn.write_all(&out);
-    let _ = resp.get("Content-Type");
     // finishRequest: the body closed (drained up to 256 KiB, with the connection's read deadline)
     ex.body.close(ex.conn);
-    ex.close_after = close_after;
-    if close_after || !wrote {
+    ex.close_after = h.close_after;
+    if h.close_after || !wrote {
         return false;
     }
-    if !is_head && content_length != -1 && body_allowed && content_length != written as i64 {
+    if !h.is_head && h.content_length != -1 && h.body_allowed && h.content_length != written as i64 {
         return false;
     }
     !ex.body.early_close
@@ -1232,7 +1315,7 @@ fn path_unescape(s: &[u8]) -> Vec<u8> {
 }
 
 /// Go's routing-tree segments of an escaped path: each unescaped, a trailing slash as a segment "/" of its own.
-fn segments(path: &[u8]) -> Vec<Vec<u8>> {
+pub fn segments(path: &[u8]) -> Vec<Vec<u8>> {
     let mut out = Vec::new();
     let mut rest = path;
     while !rest.is_empty() {

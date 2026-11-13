@@ -217,6 +217,11 @@ impl Registry {
     }
 
     /// The offered tool names in registration order.
+    /// Every tool held (hidden ones too) and what it needs: what Go's `Get(name).Requires` would answer.
+    pub fn requirements(&self) -> std::collections::BTreeMap<String, Permission> {
+        self.tools.iter().map(|(n, t)| (n.clone(), t.requires)).collect()
+    }
+
     pub fn names(&self) -> Vec<String> {
         self.order.iter().filter(|n| !self.hidden(n)).cloned().collect()
     }

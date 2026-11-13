@@ -27,7 +27,7 @@ fn resolve(fs: &FlagSet, name: &str, env: &str, def: bool) -> bool {
 
 /// Go's `net.Listen("tcp", JoinHostPort(host, port))` with its error texts: a port out of range, a name that does not
 /// resolve, the kernel's refusal to bind.
-fn listen(host: &str, port: i64) -> Result<TcpListener, String> {
+pub(crate) fn listen(host: &str, port: i64) -> Result<TcpListener, String> {
     let ps = port.to_string();
     if !(0..=65535).contains(&port) {
         return Err(format!("listen tcp: address {ps}: invalid port"));
@@ -52,7 +52,7 @@ fn listen(host: &str, port: i64) -> Result<TcpListener, String> {
 
 /// SIGINT and SIGTERM blocked in this thread (and the threads it starts) and taken by one thread of their own, which
 /// tells `stop` (Go's `signal.NotifyContext`).
-fn signals(stop: std::sync::mpsc::Sender<()>) {
+pub(crate) fn signals(stop: std::sync::mpsc::Sender<()>) {
     // SAFETY: a signal set built and used locally; pthread_sigmask on the calling thread only.
     unsafe {
         let mut set: libc::sigset_t = std::mem::zeroed();
