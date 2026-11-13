@@ -238,6 +238,28 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (night, 2) — Rust port: the service in Rust behind SARINA_RS_TRY; Go fixes: secrets in the usage, unbounded waits
+- `sarina service` is ported (`rust/sarina/src/service.rs`, with Go's net/http server as `gohttpd.rs`) and proved by a new
+  differential, `rust/parity/service-differential.py`: both builds' services on the same raw requests (the API with its
+  token, the browser guard, every create and chat check, resumes, the pool, hang-ups, bodies of every form, odd and
+  malformed requests, signals) against a scripted model, Heimdall and Limbo; answers, stderr, exit status, every request
+  sent out and every file compared byte for byte: 33 scenarios, no difference; CI runs it. Not moved: sarina-rs runs it
+  only under `SARINA_RS_TRY=service`, so the installed unit keeps reaching the Go build until it moves with chat.
+- **Go fixes (live code), in Go and Rust both, each with a test that failed before:** the usage printed for `-h` or a
+  mistyped flag showed OPENAI_API_KEY and SARINA_SERVICE_TOKEN (chat, resume, service, gui) and the Argus console token
+  (chymaera-console): they were the flags' defaults; a mistyped flag in sarina-service's unit put them in the journal
+  (`b6a597f`). The service waited for ever for a request body that never came (also when draining one after answering)
+  and kept idle kept-alive connections for ever: now a 30 s body deadline per request and a 120 s idle timeout
+  (`b6e62aa`, `a9e7278`); `OPTIONS *` now reaches the service's own handler (net/http's read its body without a
+  deadline, `f85e3cf`).
+- **For Heimdall's board (nothing to change):** the advisory's requests and answers are the same in both builds. Two
+  answers changed in Go itself: a body that cannot be read (cut short, too slow, badly chunked) is now `400 request body
+  could not be read` with `Connection: close` (was `413 request body too large`), and `OPTIONS *` is `400` (was `200`).
+- The GUI's server (`go/gui`) had the same two unbounded waits: fixed in Go too (`e38dca6`; its Rust port is next), with
+  the same 400 for a body that cannot be read; its event stream is untouched (no deadline for a request without a body).
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (evening, 2) — Rust port: packaging for the switch; chat, resume, runkit in Rust; two Go fixes
 - **Packaging** (CONTRACT, on Labyrinth's board): sarina-git builds both builds on Labyrinth's branch `sarina-rs-switch`
   (not on main: its publish builds main, so merging is the switch). `/usr/bin/sarina` becomes sarina-rs, the Go build moves

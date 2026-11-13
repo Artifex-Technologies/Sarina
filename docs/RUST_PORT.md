@@ -15,9 +15,9 @@ equal.
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
-| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); next runkit, service, cli chat/resume, gui |
+| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); next gui |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill and memory-review ported and proving (run in Rust only under `SARINA_RS_TRY`); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review and service ported and proving (run in Rust only under `SARINA_RS_TRY`; the service proved by `rust/parity/service-differential.py`); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -280,6 +280,7 @@ reaches it any more (dead code is a risk).
 | `runkit.rs` | `runkit`: `Scrubber` (literals, the redactor's shapes, bearer tokens, secret-named JSON keys, key=value), `Entry`, `Transcript`, `Result` as the service and the GUI send them; `Build` from plain settings (allowlists, policy, compute tiers, the claude CLI escalation, sub-agents, prompt options), each built agent run once against the same scripted model as Go's | `runkit.json`, `runkitbuild.json` | 17 + 11 (every request body) |
 | `agent/run.rs` (`Options.confirm`, `set_confirm`), `tools/registry.rs` (`Confirm`, `Context.confirm`) | `agent.Options.Confirm`, `SetConfirm`, `tools.RuntimeOperatorConfirm`: the per-call operator question (council_ask's channel), not the Approver; sub-agents get the parent's | Go's `TestSetConfirmAddsOnlyItsOwnRuntimeKey`, as a unit test | 1 |
 | `bin/sarina-rs.rs`, `cli/entry.rs` | `cmd/sarina/main.go`: the names it answers to (`aliasCommand`), Heimdall's lock first (the built Go program run with a made-up lock under each name and command line: which are refused, the message, exit 3), and the hand-over to the Go build by execve: the arguments unchanged (bytes that are not UTF-8 too), the environment, the folder, the exit status, the caller's SIGPIPE (ignored or not); a missing Go build (127) | `entry.json` | 41, and 9 hand-over checks |
+| `service.rs`, `gohttpd.rs`, `cli/servicecmd.rs`, `gourl.rs` (`parse_request_uri`), `goflag.rs` (`tribool`) | `service/service.go` (the pool with its LRU, create with every check of the ceiling, chat with resume and the local /help, delete, the browser guard, the bearer token, the 422, 403 and 404 bodies; each pooled session's agent on a thread of its own, which serialises its turns; a client that hangs up cancels its turn) and `command.go` (the flags with `triBool`, the banner, the listen errors, SIGINT and SIGTERM with Go's 5 s shutdown); Go 1.27's `net/http` server as the service uses it (request reading and its errors, keep-alive, 100-continue, the answer's header order, chunking past 2 KiB, draining an unread body, the mux's cleaned-path redirects) | the service differential | 33 scenarios, 279 steps |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -527,6 +528,13 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 - **Found on the way** (not Sarina's): Limbo's port of the flag package (`rust/limbo/src/cli/flags.rs`, where `goflag.rs`
   comes from) kept a bool flag's old value after an invalid one (`-w=x`); Go stores false before it reports the error.
   Harmless there (the command stops on the error); fixed here.
+- **The service's HTTP server** (`gohttpd.rs`, Go's `net/http` server). The head's 1 MiB + 4 KiB limit counts the head's
+  own bytes where Go counts what its 4 KiB reads took from the socket, so the two may differ within 4 KiB of the limit
+  (both answer 431 well past it); a trailer after a chunked body must already be buffered with the last chunk (Go waits
+  for it within its buffer, the same in practice); at most 256 connections are served at once (a thread each), a
+  further one is closed at once (Go has no limit); `--host` with a name other than localhost (only allowed with a token)
+  is resolved by the system's resolver and a failure reads "lookup NAME: no such host". Each pooled session's agent runs
+  on a thread of its own (8 MiB of stack reserved, used as needed); nothing of it shows on the wire.
 - **Paths**: `realRoot` follows links with a port of Go's `EvalSymlinks` (not `std::fs::canonicalize`, which differs for
   relative paths and missing parts).
 
@@ -583,6 +591,48 @@ question answered and revised, the memory review at the end proposing an entry),
 flags on a session waiting on a plan, flags over a stored session, retired tool names, an old server), memory-review,
 compute tiers (a fall-over to a second tier, /tier, a damaged file), the operator policy (and a damaged one), and Ctrl-C
 at the prompt, after a turn (the review still runs), during a one-shot turn and during an interactive turn.
+
+## The service differential (`rust/parity/service-differential.py`)
+
+Both builds' `sarina service` on the same scripted steps: each scenario starts the Go build's service and then
+sarina-rs's (`SARINA_RS_TRY=service`, `SARINA_RS_NO_GO=1`), each in a throwaway folder made afresh (the made-up home and
+workspace of the CLI differential, whose helpers it imports), with the same flags and environment, on a port the kernel
+picks (`--port 0` before the scenario's own flags: never 8899, where the real service listens). Behind it: one loopback
+server for the model's chat completions (the context-window probes answered 404) and Heimdall's review and grant-request
+API (`HEIMDALL_REVIEW_URL` always points there: a grant request would otherwise go to 127.0.0.1:8930), and Limbo's agent
+socket. The steps: requests sent raw on fresh or kept-alive connections, sessions created, chats, resumes and deletes
+(the pool's ids and the agent's session ids carried from answer to request), a client hanging up mid-turn, two turns at
+once (on one session and on two), bodies of every form (Content-Length, chunked with extensions and trailers,
+100-continue, HTTP/1.0, Connection: close, past 8 MiB, one that never arrives), SIGINT and SIGTERM. Compared byte for
+byte: every answer (the Date header, the port, times and random ids normalised: the ids numbered in the order they
+first appear), the service's stderr and exit status, every request the model, Heimdall and Limbo got, and every file
+left (sessions, notes, scratchpads, memory).
+
+The scenarios: the healthz and the pool (HEAD, a query, unknown paths and methods, delete twice); every create check
+(missing, empty, blank, missing and file cwd; wrong types of each kind, numbers past int and float64, a top-level array,
+null, duplicate keys, keys in any case, trailing data, `~`; the ceiling for shell, write, base_url and api_key; session
+and scratchpad folders inside and outside; allowlists empty, named, unknown, duplicated; budgets); chat's checks and
+the local /help (in any case, with a resume id), resume ids that are hostile, unknown, too long, of another folder; the
+token (missing, wrong, other schemes, case, extra spaces, bytes that are not UTF-8) and the permits from flags and
+environment; cwd roots (repeated flags, the environment's list, a link out); the browser guard (rebound names, loopback
+forms, IPv4-mapped and IPv6 hosts, no Host in 1.1 and 1.0, Sec-Fetch-Site, Origin of every kind, absolute-form targets,
+two Hosts, a malformed Host); 75 odd requests (malformed request lines, methods, versions, header lines, continuation
+lines, NUL and non-ASCII values, a 2 MiB header, cut-off heads, cleaned paths and their 307s, escapes, `*` and
+`OPTIONS *`, CONNECT, the HTTP/2 preface, bad, duplicate and signed lengths, transfer encodings, Expect, keep-alive and
+pipelining, CR/LF after a POST, bodies past 8 MiB and past the 256 KiB drain); tools with Heimdall and Limbo (reads,
+writes and bash refused then allowed, memory_add allowed and denied, limbo_profiles); backend failures (500, hang-ups),
+the turn limit, a tool budget, no tools; the pool's eviction with resume from disk; session folders of their own; a
+session folder that cannot be made (the 500 and its error type); the escalation flags with the grant gate; the command
+line (help with secrets in the environment, bad flags, extra words, non-loopback without a token, ports out of range or
+in use, localhost and ::1, the banner with every flag, the `sarina-service` name, Heimdall's lock, SIGINT, SIGTERM
+during a turn). On 2026-11-12: 33 scenarios, 279 steps, no difference; a mutation run of the port (10 changes: the
+hang-up's cancel, the chunking threshold, the guard's site rule, Connection: close, the drain limit, the LRU, the
+Bearer prefix, the permits' default, the resume id, an empty chunk size) caught 9 of 10 (the tenth, dropping the empty chunk-size check, is equivalent: the hex parse refuses an empty size too). CI runs it after the
+CLI differential (about five minutes: one case waits out the 30 s body deadline in each build).
+
+```bash
+python3 -I rust/parity/service-differential.py --go /tmp/sarina-go --rs rust/target/debug/sarina-rs [--only NAME] [--show]
+```
 
 ## Running the tests
 
@@ -713,13 +763,35 @@ Fifth session of 2026-11-12 (evening): packaging and chat.
   the CLI differential's chat cases ("The chat cases" above). Not moved: they run in Rust only under `SARINA_RS_TRY`.
 - Two CI timing flakes in fixtures fixed (MCP's long lines `a9b0b6d`, the helper stand-ins `9f5adb4`).
 
+Sixth session of 2026-11-12 (night): the service.
+
+- **The service differential** (`rust/parity/service-differential.py`, "The service differential" above): both builds'
+  services on the same raw requests against a scripted model, Heimdall and Limbo; 33 scenarios, 279 steps, no
+  difference; in CI. Run Go against Go first to find what is not deterministic (the ids, numbered by first appearance).
+- **service in Rust** (`service.rs`, `gohttpd.rs` for Go's net/http server, `cli/servicecmd.rs`), proving: it runs in
+  Rust only under `SARINA_RS_TRY=service` (the differential's setting), as chat does. The packaged unit still reaches the
+  Go build until `service` moves to `cli::ported`. `runkit` now shares one context-window discoverer per process (Go's
+  `DefaultDiscoverer`): the service builds an agent per session and Go's cache is shared.
+- **Go fixes, in Go and Rust both, each with a Go test that failed before**: `sarina chat -h`, `sarina-service --typo`
+  (into the journal), `sarina gui -h` and `chymaera-console -h` printed the API key and tokens, which were the flags'
+  default values (`b6a597f`); the service waited for ever for a request body that never came (also after answering,
+  draining it) and kept idle connections for ever: now a 30 s body deadline per request and a 120 s idle timeout
+  (`b6e62aa`), and `OPTIONS *` goes through the service's own handler instead of net/http's, which read its body without
+  any deadline (`f85e3cf`; the deadline only for a request with a body, `a9e7278`). A body that fails for another reason than its size is "400 request body could not be read" with the
+  connection closed (it was "413 request body too large").
+- **The same two bounds in the GUI's server** (`go/gui`, Go only until it is ported; `e38dca6`): the body deadline only
+  for a request with a body (the event stream's GET must live on: a deadline reaching net/http's background read cancels
+  the request), the idle timeout, `OPTIONS *` through its own handler; tests that failed before.
+
 Next, in this order:
 
-1. **Move chat, resume, skill, memory-review** (from `cli::proving` to `cli::ported`) once the owner has run the switch
-   package (Labyrinth's branch) and used the moved commands for a while; `needs_go` keeps handing the optional tool sets to
-   Go until they are ported (step 5). Owner steps for the switch: the board entry on Labyrinth's TEAM_BOARD (2026-11-12).
-2. **service** on `runkit::build` after a differential run of both services on the same requests (the always-on unit; a
-   loopback model as here; `runkit::result_json` and `scrubber` are what it answers with), then `gui`.
+1. **Move chat, resume, skill, memory-review and service** (from `cli::proving` to `cli::ported`) once the owner has run
+   the switch package (Labyrinth's branch) and used the moved commands for a while; `needs_go` keeps handing the optional
+   tool sets to Go until they are ported (step 5). For the service the package needs nothing more:
+   `sarina-service.service` runs `/usr/bin/sarina-service`, which is sarina-rs. Owner steps for the switch: the board
+   entry on Labyrinth's TEAM_BOARD (2026-11-12).
+2. **gui** on `runkit::build` and `gohttpd` (SSE streaming, the approval flow, the page's token, the launch link):
+   first its differential, as the service's (a scripted model; the page's requests raw); the bounds above come with it.
 3. Doctor (last of the core): its check-up, so `sarina_doctor` stops running in the Go build.
 
 Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself
