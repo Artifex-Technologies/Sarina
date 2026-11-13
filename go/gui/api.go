@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/cli"
@@ -233,7 +235,7 @@ func (s *Server) getTasks(w http.ResponseWriter, _ *http.Request) {
 	scrub := s.scrubber()
 	path := filepath.Join(st.CWD, ".port_sessions", "task_runtime.json")
 	out := map[string]any{"tasks": []any{}, "counts": map[string]int{}}
-	raw, err := os.ReadFile(path)
+	raw, err := session.ReadFile(path) // a regular file of bounded size: never a pipe planted under the name
 	if err != nil {
 		s.writeJSON(w, 200, out)
 		return
@@ -492,18 +494,34 @@ func (s *Server) readInstruction(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, e)
 		return
 	}
-	raw, err := os.ReadFile(f.Path)
+	raw, err := readHead(f.Path, 400<<10)
 	if err != nil {
 		s.detail(w, 404, "file not found")
 		return
-	}
-	if len(raw) > 400<<10 {
-		raw = raw[:400<<10]
 	}
 	scrub := s.scrubber()
 	text := string(raw)
 	clean := scrub(text)
 	s.writeJSON(w, 200, map[string]any{"path": f.Path, "content": clean, "redacted": clean != text, "writable": f.Writable})
+}
+
+// readHead reads at most max bytes of a regular file. It opens without blocking, so a named pipe (or a device)
+// planted under an instruction file's name is refused at once instead of waiting for a writer, and a huge file is not
+// read whole to show its first 400 KiB.
+func readHead(path string, max int64) ([]byte, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	return io.ReadAll(io.LimitReader(f, max))
 }
 
 func (s *Server) writeInstruction(w http.ResponseWriter, r *http.Request) {
