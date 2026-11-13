@@ -221,10 +221,16 @@ fn v_strs(v: &Val) -> Vec<String> {
     }
 }
 
+/// Go's `readStore`: the to-do list's or the plan's file as a bounded regular file (as the console reads the list); a
+/// named pipe under the name is refused at once, a file larger than any real list is not read. Either reads as no list.
+fn read_store(path: &[u8]) -> Result<Vec<u8>, String> {
+    crate::session::readfile::read_file(path)
+}
+
 /// Go's `loadTasks`: the list, tolerantly read (a task without an id or a title is dropped, statuses normalised); a file
 /// that is missing, damaged or of the wrong shape reads as empty.
 fn load_tasks(path: &[u8]) -> Vec<Task> {
-    let Ok(data) = std::fs::read(gopath::os_path(path)) else { return Vec::new() };
+    let Ok(data) = read_store(path) else { return Vec::new() };
     let (val, err) = gostruct::unmarshal(&TASK_FILE_TY, &data);
     if err.is_some() {
         return Vec::new();
@@ -347,7 +353,7 @@ fn encode_tasks(tasks: &[Task]) -> Vec<u8> {
 
 /// Go's `loadPlan`.
 fn load_plan(path: &[u8]) -> PlanFile {
-    let Ok(data) = std::fs::read(gopath::os_path(path)) else { return PlanFile::default() };
+    let Ok(data) = read_store(path) else { return PlanFile::default() };
     let (val, err) = gostruct::unmarshal(&PLAN_TY, &data);
     if err.is_some() {
         return PlanFile::default();
@@ -673,7 +679,7 @@ fn mutate_tasks(tc: &Context, action: &str, f: impl FnOnce(&mut Vec<Task>) -> Re
         Ok(p) => p,
         Err(e) => return fail(format!("cannot use the task list: {e}")),
     };
-    let before = std::fs::read(gopath::os_path(&path)).ok();
+    let before = read_store(&path).ok();
     let mut ts = load_tasks(&path);
     let nb = ts.len();
     let (msg, touched) = match f(&mut ts) {
@@ -1146,7 +1152,7 @@ pub fn update_plan(args: &BTreeMap<String, Any>, tc: &Context) -> Output {
         Ok(p) => p,
         Err(e) => return fail(format!("cannot use the task list: {e}")),
     };
-    let before = std::fs::read(gopath::os_path(&ppath)).ok();
+    let before = read_store(&ppath).ok();
     let old = load_plan(&ppath);
     let mut plan = PlanFile::default();
     let items = match args.get("items") {

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/llm"
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // The to-do list ("tasks") and the plan live in two small JSON files under
@@ -154,8 +155,13 @@ func writeFileAtomic(path string, data []byte) error {
 	return nil
 }
 
+// readStore reads the to-do list's or the plan's file as a bounded regular file (session.ReadFile, as the console reads
+// the to-do list): a named pipe planted under the name is refused at once instead of waiting for a writer, and a file
+// larger than any real list is not read. Either reads as no list.
+func readStore(path string) ([]byte, error) { return session.ReadFile(path) }
+
 func loadTasks(path string) []Task {
-	data, err := os.ReadFile(path)
+	data, err := readStore(path)
 	if err != nil {
 		return []Task{}
 	}
@@ -201,7 +207,7 @@ func encodeTasks(tasks []Task) []byte {
 }
 
 func loadPlan(path string) planFile {
-	data, err := os.ReadFile(path)
+	data, err := readStore(path)
 	p := planFile{Steps: []PlanStep{}}
 	if err != nil || json.Unmarshal(data, &p) != nil {
 		return planFile{Steps: []PlanStep{}}
@@ -521,7 +527,7 @@ func mutateTasks(tc *Context, action string, fn func(ts *[]Task) (string, *Task,
 		return "", nil, fmt.Errorf("cannot use the task list: %v", err)
 	}
 	var before []byte
-	if raw, err := os.ReadFile(path); err == nil {
+	if raw, err := readStore(path); err == nil {
 		before = raw
 	}
 	ts := loadTasks(path)
@@ -1030,7 +1036,7 @@ func updatePlan() Tool {
 				return "", nil, fmt.Errorf("cannot use the task list: %v", err)
 			}
 			var before []byte
-			if raw, err := os.ReadFile(ppath); err == nil {
+			if raw, err := readStore(ppath); err == nil {
 				before = raw
 			}
 			old := loadPlan(ppath)

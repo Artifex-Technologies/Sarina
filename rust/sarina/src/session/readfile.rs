@@ -23,6 +23,10 @@ pub fn read_regular(path: &[u8], max: u64) -> Result<Vec<u8>, String> {
     if !st.file_type().is_file() {
         return Err(format!("{shown} is not a regular file"));
     }
+    if st.len() > max {
+        // refused before reading: a sparse file of gigabytes is not read to find it too long
+        return Err(format!("{shown} is larger than {max} bytes; not read"));
+    }
     let mut b = Vec::new();
     f.take(max + 1).read_to_end(&mut b).map_err(|e| crate::goerr::path("read", path, &e))?;
     if b.len() as u64 > max {

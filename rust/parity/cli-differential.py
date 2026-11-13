@@ -695,6 +695,13 @@ def chat_more_cases(add):
                completion("Planned.")],
          # a to-do without an id gets a random one (task_N_ and six hex digits), and the snapshot id hashes the list
          norm=[(r"task_(\d+)_[0-9a-f]{6}", r"task_\1_ID"), (r"task_runtime\.json:[0-9a-f]{12}", "task_runtime.json:HASH")])
+    # named pipes planted under the to-do list's and the plan's names: read as no list at once (before 2026-11-12, night,
+    # every to-do and plan tool waited for a writer for ever, in both builds); the create replaces the list's pipe
+    more("chat to-dos on planted pipes", ["chat", "--allow-write", "plan"],
+         files=dict(sh, **{"ws/.port_sessions/task_runtime.json|": "", "ws/.port_sessions/plan_runtime.json|": ""}),
+         http=[completion(calls=[("task_list", {}), ("plan_get", {}), ("task_create", {"title": "Read notes", "task_id": "t1"})]),
+               completion("Listed.")],
+         norm=[(r"task_runtime\.json:[0-9a-f]{12}", "task_runtime.json:HASH")])
     more("chat memory replace and remove", ["chat", "tidy memory"],
          http=[completion(calls=[("memory_replace", {"scope": "agent", "old_text": "cargo", "content": "The build uses cargo -j4."}),
                                  ("memory_remove", {"scope": "user", "old_text": "short answers"})]), completion("Tidied.")])
@@ -809,13 +816,16 @@ def other_cases():
 
 def make_files(work, files, sub):
     for name, content in files.items():
-        p = os.path.join(work, name.rstrip("/@*%"))
+        p = os.path.join(work, name.rstrip("/@*%|"))
         os.makedirs(os.path.dirname(p), exist_ok=True)
         if name.endswith("/"):
             os.makedirs(p, exist_ok=True)
             continue
         if name.endswith("@"):
             os.symlink(sub(content), p)
+            continue
+        if name.endswith("|"):  # a named pipe planted under the name; content is ignored
+            os.mkfifo(p, 0o644)
             continue
         data = content if isinstance(content, bytes) else sub(content).encode()
         with open(p, "wb") as f:

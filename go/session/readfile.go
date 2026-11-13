@@ -30,6 +30,9 @@ func ReadRegular(path string, max int64) ([]byte, error) {
 	if !st.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
+	if st.Size() > max { // refused before reading: a sparse file of gigabytes is not read to find it too long
+		return nil, fmt.Errorf("%s is larger than %d bytes; not read", path, max)
+	}
 	b, err := io.ReadAll(io.LimitReader(f, max+1))
 	if err != nil {
 		return nil, err
