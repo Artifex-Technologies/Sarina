@@ -238,6 +238,32 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-13 (night) — Rust port step 5: the system and math tool sets in Rust; four Go fixes
+- **Ported, proved first by new CLI differential cases run Go against Go:** the system set (`rust/sarina/src/sysinfo/`,
+  `route.rs`: system_status for every topic, crash_detail, system_fix, and the skills' "status" and "security"
+  prefetches, which Go runs even with the set off) on 102 cases against stand-in programs on the case's own PATH and a
+  stand-in Heimdall (never the real one on 8930); the math set (`trachtenberg.rs`) on 47 cases, with Go's decision of
+  SARINA_MATH=auto and SARINA_CRYPTO=auto from the command line's words now made in sarina-rs's main. `needs_go` hands a
+  chat to Go only for SARINA_CRYPTO=on (or auto asking for crypto), SARINA_QUANTUM, SARINA_REVERSE, SARINA_FORGE,
+  SARINA_VAULT or a council file. **CLI differential 566 cases, 2,830 comparisons; service 35 and GUI 59 scenarios: no
+  difference.** Nothing moved to always-Rust (the owner decides; the proposal in docs/RUST_PORT.md "Resume here" stands).
+- **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** system_status, crash_detail and
+  the "status" prefetch kept a command's whole output (64 MiB took 576 MiB) and waited for a child holding it open past
+  the 8 s timeout (now the first MiB, `WaitDelay` 2 s); a held file's id shorter than 12 characters from Heimdall's
+  quarantine panicked the security report and ended `sarina skill run security-advisor` (`30464a4`); a named pipe at the
+  route cache's name (`~/.local/state/sarina/route-*.json`) held a skill run for ever (`a334499`); a 40-digit multiplier
+  that wrapped Go's int to a rule number was worked as 9 (`12 × 1844674407370955161600000000000000000009 = 108`, `45da0f6`).
+- The GUI differential's file-history flake (whole-second times straddling a second) is gone: that step checks each run
+  against its own times and compares the entries as a set.
+- Measured (release builds, stand-in programs, 30 runs each, medians): a chat turn with a `system_status` call 72.7 → 29.0 ms
+  (−60 %), 23.8 → 11.9 MB; with `crash_detail` 70.1 → 26.6 ms; a skill run with the "status" prefetch 77.0 → 34.7 ms; with
+  a `trachtenberg` call 67.0 → 23.6 ms (−65 %); peak memory about half in each. sarina-rs is 6.9 MB on disk.
+- **For Heimdall's board (nothing to change):** the security topic's `GET /v1/audit` and `/v1/quarantine` are Go's in both
+  builds; an id shorter than 12 characters is now shown whole instead of crashing Sarina. **For Labyrinth's board:**
+  nothing changes (no package or contract change).
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (night, 5) — Rust port: doctor in Rust behind SARINA_RS_TRY; Go fixes for planted pipes in the to-do tools and doctor
 - **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** every to-do and plan tool read
   `.port_sessions/task_runtime.json` and `plan_runtime.json` with `os.ReadFile`, so a named pipe planted under either name

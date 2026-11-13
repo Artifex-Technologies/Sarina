@@ -16,8 +16,8 @@ equal.
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
-| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **begun** (2026-11-12, night): `doctor` (the command and the `sarina_doctor` tool) ported and proving (`SARINA_RS_TRY=doctor`; 73 differential cases, each in a network namespace of its own); the rest open |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 417 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; quantum, crypto and stego, vault, reverse, forge, council open |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -283,6 +283,8 @@ reaches it any more (dead code is a risk).
 | `service.rs`, `gohttpd.rs`, `cli/servicecmd.rs`, `gourl.rs` (`parse_request_uri`), `goflag.rs` (`tribool`) | `service/service.go` (the pool with its LRU, create with every check of the ceiling, chat with resume and the local /help, delete, the browser guard, the bearer token, the 422, 403 and 404 bodies; each pooled session's agent on a thread of its own, which serialises its turns; a client that hangs up cancels its turn) and `command.go` (the flags with `triBool`, the banner, the listen errors, SIGINT and SIGTERM with Go's 5 s shutdown); Go 1.27's `net/http` server as the service uses it (request reading and its errors, keep-alive, 100-continue, the answer's header order, chunking past 2 KiB, draining an unread body, the mux's cleaned-path redirects) | the service differential | 33 scenarios, 279 steps |
 | `gui/` (`mod.rs`, `state.rs`, `run.rs`, `api.rs`, `files.rs`), `cli/guicmd.rs`, `gohttpd.rs` (streamed answers, `io.WriteString` bodies), `agent/run.rs` (`watch_registry`) | `gui/` (the guard with its token, Host, Origin, Sec-Fetch-Site and JSON rules; the mux with its patterns, cleaned-path and slash redirects and the 405 a CONNECT gets; the page with its token and cookie; `http.FileServerFS` over the built-in page with its redirects, conditions and byte ranges; the settings and their patch; runs answered as JSON or as an event stream, the re-attachable stream with its keep-alive, approvals of tool calls and plans, cancel, a client that hangs up; sessions, file history, the plan, the to-do list, memory and its review, the instruction files, tiers, the backend probe) and `command.go` (the flags, the banner, the launch link, the browser, SIGINT and SIGTERM with Go's 3 s shutdown) | the GUI differential | see "The GUI differential" |
 | `doctor.rs`, `cli/doctorcmd.rs`, `cli/chat.rs` (`doctor_tool`), `gohttp.rs` (user information in a URL) | `doctor/` (every check: the backend's `/models` and context window, the session folder's scan with the shape Heimdall reads, keys stored, retired tool names, the tiers with their health, skills, MCP and policy files, Limbo's socket and answers, Heimdall's /healthz, the ports; the table and the JSON; the command's flags; the tool, now in-process); Go's client sending a URL's user information as Basic credentials | the CLI differential's doctor cases, each in a network namespace of its own | 73 cases, 365 comparisons |
+| `sysinfo/` (`mod.rs`, `crash.rs`, `gaming.rs`, `security.rs`), `route.rs`, `skills/recall.rs` (the prefetches as bytes), `tools/exec.rs` (`GroupKill::Inherit`), `gohttp.rs` (an IPv4-mapped address dialled as IPv4), `gojson.rs` (`write_f32`), `gotime.rs` (civil time, `Local`), `goos.rs` (`mkdir_all_mode`) | `sysinfo/` (every topic's commands with their line and column cuts, the boot, gaming and crashes summaries, `GameRunning`, Heimdall's audit and quarantine with the facts counted in code, `CrashDetail` with addr2line and the source line, `system_fix`'s table, the "status" and "security" prefetches), `route` (the cache file byte for byte Go's, scores, `pick`) | the CLI differential's system cases, against stand-in programs and a stand-in Heimdall | 102 cases, 510 comparisons |
+| `trachtenberg.rs`, `bin/sarina-rs.rs` (the auto decisions), `cli/chat.rs` (`per_prompt`) | `trachtenberg` (every rule, the two-finger method, the exactness check with a product of its own, `Grade`, `Report`), `cli.Main`'s `cryptoForPrompt` and `mathForPrompt` | the CLI differential's math cases | 47 cases, 235 comparisons |
 | `tz.rs` (from Limbo's) | Go's `time.Local`: initLocal ($TZ, /etc/localtime), LoadLocationFromTZData, `lookup` with the POSIX TZ footer; the prompt's "Today's date is" | `tz.json` (`go/internal/parity/tz_parity_test.go`) | 47 files, 1,080 lookups |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
@@ -543,6 +545,16 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   1.27.4 (CI's Go), where 1.27.3 (this PC's, 2026-11-12) put it first, into the handler's own header. The port writes
   1.27.4's form; the service differential reads the Go build's version (`go version FILE`) and compares an older build's
   answers in the newer form (found by the first CI run of the differential).
+- **A failed dial to a name with several addresses** (`localhost`) names the address the system's resolver gives first
+  (`[::1]:9` here), where Go names its own resolver's first (`127.0.0.1:9`, from /etc/hosts' order); only the words of
+  "does not answer" differ. An IPv4-mapped address (`[::ffff:127.0.0.1]`) is dialled as the IPv4 address it holds and
+  named so, as Go does (fixed 2026-11-13; it was dialled over IPv6 and named as written).
+- **sysinfo's summaries quote a command's text as UTF-8**: a byte that is not UTF-8 inside what the boot, gaming or crash
+  summary quotes, or in a source line `crash_detail` shows, is one U+FFFD (three bytes) at once, where Go keeps the byte
+  until the text is sent (where it becomes the same U+FFFD). The report itself and the prefetches keep Go's bytes, so the
+  only place this could show is the 3,500-byte cut of a "status" prefetch or the 8 KiB budget of a skill's prefetched
+  context, falling a byte or two elsewhere when such a byte is in a summary. Heimdall's audit and quarantine are read
+  with gohttp, so a redirect is not followed and a compressed answer is not read (as everywhere, above).
 - **Paths**: `realRoot` follows links with a port of Go's `EvalSymlinks` (not `std::fs::canonicalize`, which differs for
   relative paths and missing parts).
 
@@ -569,7 +581,8 @@ unix sockets (`~`), and the Limbo stand-in's socket can take a mode of the case'
 
 On 2026-11-12: 195 cases, 975 comparisons, no difference; with the chat cases (below) 289 cases, 1,445 comparisons, no
 difference; with the wider chat cases (night) 344 cases, 1,720 comparisons, no difference; with the to-do pipe case and the
-doctor cases (night, later) 417 cases, 2,085 comparisons, no difference. The cases: the memory commands on usual, missing, damaged,
+doctor cases (night, later) 417 cases, 2,085 comparisons, no difference; with the system and math cases (2026-11-13) 566
+cases, 2,830 comparisons, no difference. The cases: the memory commands on usual, missing, damaged,
 over-full, linked, non-UTF-8 and invisible-character memory, every review entry approved and rejected (also with Heimdall
 denying, allowing and failing, and through the old `SENTRY_REVIEW_URL`); session-search with flags among the words,
 bad and huge `--max`, links, damaged files, 30 sessions, a long message; session-migrate on retired calls, dry runs, a bad
@@ -612,12 +625,61 @@ it as `Authorization: Basic ...` when the request has no Authorization header of
 request (chat's model transport, the tier probes, the console's backend probe), not only doctor's. Now as Go
 (`gohttp::target`), with Go's checks of the characters and escapes.
 
+### The system cases (2026-11-13)
+
+The system set (`SARINA_SYSTEM=on`, 102 cases): `system_status` for each of the twelve topics with stand-ins for every
+program it runs (shell scripts on the case's own PATH that log how they were called and print what the case needs: lines
+over the cut, columns over the cut, 3,500 characters with characters of several bytes, bytes that are not UTF-8, nothing,
+a failure, a 3 MB output and a child left holding the output open) and with none at all; the boot summary with the login
+screen's chain, the slow units outside it, nothing to read; the gaming summary with game mode active, a game Steam launched
+(its own pgrep line skipped), gamescope, Ollama holding the card, a line that does not parse; the crashes summary with a
+game, a program that is not one, none; an unknown topic, capitals, no topic, the set off, a time zone; the security topic
+against a stand-in Heimdall (never the real one on 8930): packages, kernels running and not, the worst holes, settings, what
+is missing, held files with every part of their report (entropy, the ELF facts, strings quoted, a head with text aimed at
+AI assistants cut inside a character, Limbo's analysis done, failed, not yet), an id shorter than twelve characters,
+nothing open, a quarantine that is not JSON, trailing data after the value, the wrong shape, a time that is not one, 500,
+not answering, the default address, a hang-up, an answer over 2 MiB, and every kind of address (not loopback, no port,
+localhost, ::1, IPv4-mapped, `127.1`, leading zeros, a zone, not a URL, no host, a name); `crash_detail` with a crash record
+whose frames are named by a stand-in addr2line (a return address one back, a source line cut at 120 characters, frames in
+files that do not exist), by absolute path, missing, not on PATH, seven refused names, nothing recorded, named frames
+only, no symbols, no addr2line; `system_fix` refused without `--allow-shell`, each repair, Bluetooth off, an unknown one,
+in plan mode; the skills' prefetches (which run with the set off): "status" by keywords for five tasks, an empty task, long
+reports, by meaning (the embedding model a stand-in whose vectors come from the words, so no two scores tie; the route's
+cache made, read, stale, a named pipe at its name, `XDG_STATE_HOME` and another model), the embedding model failing, and
+"security" with Heimdall answering, not answering, both prefetches at once, an id shorter than twelve characters. Two
+harness additions: a path the stand-in answers the same way every time beside the scripted model (`routes`), and requests
+compared as a set where Go's order is its map's (`unordered`: the route embeds its topics in map order).
+
+**Found by these cases, fixed in Go and Rust both, each with a Go test that failed before**: system_status, crash_detail
+and the "status" prefetch kept a command's whole output (64 MiB of output took 576 MiB to read) and waited for a child
+left holding the output open, past the 8 s timeout (20 s for a background sleep): now the first MiB, standard error to
+the null device, `WaitDelay` 2 s (`30464a4`); a held file's id shorter than twelve characters panicked the security
+report (the tool answered "failed internally" and the security-advisor skill's prefetch, which has no recover, ended the
+whole command; `30464a4`); the route's cache was read with `os.ReadFile` and written with `os.WriteFile`, so a named pipe
+planted at its name held `sarina skill run` for ever (`a334499`: a bounded regular file, replaced by a rename). Fixed in
+Rust (Go was right): an IPv4-mapped address was dialled over IPv6 and named as written in the error.
+
+### The math cases (2026-11-13)
+
+The math set (47 cases): the `trachtenberg` tool on every rule (3 to 9, 11, 12), the rule number given first, the
+general method, zero, leading zeros, commas, underscores and spaces, 40 digits by 40, a learner's answer right, wrong in
+a middle digit, short, not a number, with commas, the nines check catching and missing a slip; refused numbers (empty, a
+letter, 41 digits, a full-width digit, a minus sign) and arguments of the wrong type; the set off; with the system set.
+SARINA_MATH=auto (and SARINA_CRYPTO=auto) decided from the command line's words, as Go's `cli.Main` decides it for every
+command: a multiplication, the method's name, "multiplying", "speed math", nothing to do with it, flags and paths left
+out, in a skill run and in resume, and what the variables then are in a shell command's environment.
+
+**Found by these cases, fixed in Go and Rust both, with a Go test that failed before** (`45da0f6`): a multiplier of up to
+40 digits whose value wrapped around Go's int to a rule number was worked by that rule: `12 ×
+1844674407370955161600000000000000000009` came out as "12 × 9 ... 108", and the exactness check passed because it
+multiplied the same 12 × 9.
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them
 (the differential sets `chat,resume,skill,memory-review`) and `cli::chat::needs_go` finds none of the optional tool sets
-the port lacks switched on (`SARINA_CRYPTO` or `SARINA_MATH` on/auto, `SARINA_QUANTUM`, `SARINA_REVERSE`, `SARINA_SYSTEM`,
-`SARINA_FORGE` on, `SARINA_VAULT` set, a council file): with one of them the Go build would offer the model tools the
+the port lacks switched on (`SARINA_CRYPTO` on, or auto asking for crypto; `SARINA_QUANTUM`, `SARINA_REVERSE`,
+`SARINA_FORGE` on, `SARINA_VAULT` set, a council file; the system and math sets are ported since 2026-11-13): with one of them the Go build would offer the model tools the
 port does not have, so the Go build answers. For these cases the loopback server is the model: the chat completions take
 the scripted answers (plain JSON, or a stream of `data:` lines), the context-window discovery's probes (`/api/ps`,
 `/api/show`, `/props`, `/v1/models`) get 404. Compared as everywhere: output, exit status, every request (whole bodies:
@@ -733,6 +795,14 @@ event stream's end chunk before it came (the reader now waits half a second afte
 python3 -I rust/parity/gui-differential.py --go /tmp/sarina-go --rs rust/target/debug/sarina-rs [--only NAME] [--skip-slow] [--show]
 ```
 
+**The file history listed in a run's own order** (since 2026-11-13): the console sorts the history newest first by a time
+of whole seconds and keeps the session's order among the entries of one second, so a run whose writes straddle a second
+lists them in another order than a run whose writes fall in one, in either build (the flake of 2026-11-12, one run in
+seven). The step of "a write approved once, then for the session" now checks each run against its own times (newest
+first; each second's entries in the order the session file holds them) and then compares the entries as a set
+(`history_by_set`); the answer's status, headers and counts stay byte for byte. The other history steps read made-up
+sessions with fixed times and stay as they were.
+
 On 2026-11-12 (night): 59 scenarios, 531 steps, 413 comparisons, no difference (about 20 minutes; two scenarios wait out
 the 30 s body deadline and the 15 s keep-alive, `--skip-slow` leaves them out). Two harness faults found on the way and
 fixed before counting: the console streams the model's answers by default, so the scripted plain-JSON answers ended
@@ -769,7 +839,20 @@ forked from Python carries Python's pages into its own peak).
 | `gui`, resident memory after 30 / 100 runs | 26.1 / 27.7 MB | 11.1 / 12.0 MB | −57 % (one agent per run, on one thread) |
 | `doctor --json` (a stand-in model, two sessions), wall time | 65.5 ms | 10.0 ms | −85 % (55 ms sooner) |
 | `doctor --json`, peak memory | 22.8 MB | 8.1 MB | −64 % |
-| size on disk | 12.0 MB | 6.7 MB (with the GUI and doctor, 2026-11-12 night) | −44 % (both are installed while commands still go to Go) |
+| `chat` with SARINA_SYSTEM=on, a `system_status performance` call (stand-in programs) then the answer, wall time | 72.7 ms | 29.0 ms | −60 % (44 ms sooner) |
+| the same, peak memory | 23.8 MB | 11.9 MB | −50 % |
+| `chat`, a `crash_detail` call (coredumpctl, addr2line, pacman, journalctl stand-ins), wall time | 70.1 ms | 26.6 ms | −62 % |
+| the same, peak memory | 23.6 MB | 12.3 MB | −48 % |
+| `skill run` with the "status" prefetch (two topics by keywords), wall time | 77.0 ms | 34.7 ms | −55 % |
+| the same, peak memory | 23.5 MB | 11.4 MB | −51 % |
+| `chat` with SARINA_MATH=auto ("what is 3459 x 8"), a `trachtenberg` call, wall time | 67.0 ms | 23.6 ms | −65 % |
+| the same, peak memory | 23.3 MB | 12.0 MB | −48 % |
+| size on disk | 12.0 MB | 6.9 MB (with the system and math sets, 2026-11-13) | −43 % (both are installed while commands still go to Go) |
+
+The system and math rows (2026-11-13, night) the same way, inside a user and network namespace of the measurement's own,
+the stand-in programs of the CLI differential's system cases on the run's own PATH (so the programs' own time is a shell
+script's, the same for both builds), 30 runs of each interleaved; the release builds of the same commits. Before
+these, a chat with one of these sets on ran the Go build whole.
 
 The GUI rows were measured the same way (night of 2026-11-12, 30 starts of each, interleaved; the runs 100 in a row on
 one console, after `/api/clear`). The doctor rows too, later that night, inside a user and network namespace of the
@@ -1007,6 +1090,25 @@ Ninth session of 2026-11-12 (night): the to-do tools' reads, the MCP fixture's f
   either build. A harness flake, not a port difference (next item 5).
 - Measured: `doctor --json` 65.5 → 10.0 ms (−85 %), 22.8 → 8.1 MB (−64 %); sarina-rs 6.7 MB on disk.
 
+Tenth session (2026-11-13, night): step 5, the system and math tool sets; the GUI history flake.
+
+- **The system set in Rust** (`sysinfo/`, `route.rs`): `system_status` (every topic), `crash_detail`, `system_fix`, and the
+  skills' "status" and "security" prefetches, which Go runs with the set off too (the Rust `skill run` of a skill with
+  `prefetch: [status]` gave the model less than Go's before this). Proved by 102 CLI cases written first and run Go
+  against Go ("The system cases"). `needs_go` no longer names SARINA_SYSTEM.
+- **Go fixes, in Go and Rust both, each with a Go test that failed before**: the commands' output bounded and a child
+  holding it not waited for, a short held id no longer panics (`30464a4`); the route's cache read as a bounded regular
+  file and replaced by a rename (`a334499`). Fixed in Rust (Go was right): an IPv4-mapped address dialled over IPv6.
+- **The math set in Rust** (`trachtenberg.rs`), with Go's `cli.Main` decision of SARINA_MATH=auto and SARINA_CRYPTO=auto
+  from the command line's words in sarina-rs's main (so an auto that comes out "off" stays in Rust, and a shell command's
+  environment holds what Go's would). 47 cases. **Go fix** (`45da0f6`): a 40-digit multiplier that wrapped Go's int to a
+  rule number was worked by that rule (12 × 1844674407370955161600000000000000000009 = 108).
+- `needs_go` now hands a chat to Go only for SARINA_CRYPTO=on (or auto asking for crypto), SARINA_QUANTUM, SARINA_REVERSE,
+  SARINA_FORGE, SARINA_VAULT and a council file.
+- **Item 5 (the GUI history flake)**: that step now checks each run against its own times and compares the entries as a
+  set ("The GUI differential").
+- CLI differential **566 cases, 2,830 comparisons, no difference**; service 35 scenarios and GUI 59 scenarios, no difference.
+
 Next, in this order:
 
 1. **Proposed, not made: moving chat, resume, skill, memory-review, service, gui and doctor to always-Rust.** All six agree with
@@ -1017,7 +1119,7 @@ Next, in this order:
       `SARINA_RS_TRY=chat,resume,skill,memory-review,gui` in his shell for a few days of normal use.
    2. Then **memory-review and skill** move first: short, bounded, no interactive terminal; skill run is one chat turn.
    3. Then **chat and resume** (what the owner sees every day). Note: wherever his `sarina.env` turns on an optional set
-      (`SARINA_CRYPTO`, `SARINA_MATH`, `SARINA_VAULT`, ...), `needs_go` keeps chat in Go until step 5 ports that set, so
+      (`SARINA_CRYPTO=on`, `SARINA_QUANTUM`, `SARINA_VAULT`, ...), `needs_go` keeps chat in Go until step 5 ports that set, so
       the move changes nothing there yet; that is the next big piece of work after this.
    4. **gui** with them or right after (the owner opens it by hand; the same gate).
    5. **service** last: the always-on unit, and Heimdall's advisory sessions go through it. Before it moves: one
@@ -1026,14 +1128,17 @@ Next, in this order:
       it matters. The unit needs no change: `sarina-service` is sarina-rs.
    Going back at any step is removing the name from `cli::ported` (or reinstalling the previous package).
 2. **doctor's move**: with the others (it is read-only and quick; `SARINA_RS_TRY=doctor` for the owner's days of use).
-3. **Step 5, the optional tool sets**, so `needs_go` stops handing chats to Go where `sarina.env` turns one on: sysinfo
-   (`system_status`, read-only probes) first, then vault/daily/insight/route, cryptotools/stego, quantum/trachtenberg,
-   reverse, forge, council; each with fixtures and differential cases first.
+3. **Step 5, the optional tool sets left** (sysinfo and trachtenberg done 2026-11-13): **quantum** next (a stable
+   provider between doctor and sysinfo in Go's order; it needs Go's own `math.Sin`/`Cos` ported as `gomath` has `Exp`
+   and `Log`, Go's `%g` for its numbers, and its shots drawn with `math/rand` seeded by the clock, so the differential
+   compares the exact amplitudes and leaves `shots` to cases that check only the counts' total), then cryptotools and
+   stego (about 4,900 lines of Go with the "crypto" and "stego" prefetches; SARINA_CRYPTO=auto is decided already), then
+   vault (a temporary vault only, never ~/Documents/Obsidian) with daily and insight, reverse, forge, council. Each with
+   differential cases first, run Go against Go.
 4. The service and GUI differentials do not run in a namespace of their own: their servers take ports from the kernel and
    every address they are given is the scripted server's, so nothing reaches 8899 or 8765 today. If a scenario ever runs
    doctor (or anything that dials a fixed port), give them the CLI differential's `run_case` wrapper first.
-5. The GUI differential's file-history step can flake (above): compare that list with entries of equal timestamps (after
-   normalising) in a fixed order, or make the scenario's writes fall in one second.
+5. Done (2026-11-13): the GUI differential's file-history step ("The GUI differential").
 
 Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself
 (it happened to a test's expected string here); build such strings from parts or check them with grep. The timed client
