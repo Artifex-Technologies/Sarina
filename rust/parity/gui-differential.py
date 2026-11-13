@@ -494,7 +494,7 @@ def approval_scenarios():
         R("POST", "/api/approvals/{AP0}", {"decision": "allow_once"}), AP(1),
         R("POST", "/api/approvals/{AP1}", {"decision": "allow_session"}), JOIN, ("sleep", 0.3),
         R("POST", "/api/approvals/{AP1}", {"decision": "deny"}), R("GET", "/api/approvals"), events(),
-        R("GET", "/api/file-history")],
+        R("GET", "/api/file-history", ties=True)],
         model=[completion(calls=[("write_file", {"path": "a.txt", "content": "one\n"})]),
                completion(calls=[("write_file", {"path": "b.txt", "content": "two\n"})], first_id=1),
                completion(calls=[("write_file", {"path": "c.txt", "content": "three\n"})], first_id=2),
@@ -859,6 +859,8 @@ def run_scenario(binary, sc, base, backend, limbo, gobin, busy_port):
     def do_req(step):
         r = sd.exchange(port, [build(step)])
         note_ids(r[0])
+        if step[4].get("ties"):
+            r = [history_by_set(r[0], work)]
         return r
 
     def do_sse(step):
@@ -990,6 +992,44 @@ def run_scenario(binary, sc, base, backend, limbo, gobin, busy_port):
            "stdout": stdout.decode("utf-8", "backslashreplace"), "exit": code, "requests": reqs, "limbo": lreqs,
            "files": sd.snapshot(work)}
     return normalize(res, port, token, work)
+
+
+def history_by_set(raw, work):
+    """A file-history answer whose entries' times are whole seconds made a run's own (item 5 of "Resume here"): the
+    console sorts newest first and keeps the session's order among entries of one second, so a run whose writes straddle a
+    second lists them in another order than one whose writes fall in one second, in either build. The real checks are
+    made on this run's own times: newest first, and each second's entries in the order the session file holds them; then
+    the entries are listed as a set (sorted), the rest of the answer (status, headers, total) as it came."""
+    head, sep, body = raw.partition("\r\n\r\n")
+    if "Transfer-Encoding: chunked" in head:
+        b = dechunk(body.encode("utf-8", "surrogateescape"))
+        body = b[:-len(b"[END]")].decode("utf-8", "surrogateescape") if b.endswith(b"[END]") else ""
+    try:
+        doc = json.loads(body)
+        es = doc["entries"]
+    except (ValueError, KeyError, TypeError):
+        return raw
+    ts = [e.get("timestamp", "") for e in es]
+    newest_first = all(ts[i] >= ts[i + 1] for i in range(len(ts) - 1))
+    order = {}
+    for root, _, names in os.walk(work):
+        for n in names:
+            if n.endswith(".json"):
+                try:
+                    with open(os.path.join(root, n), "rb") as f:
+                        sess = json.loads(f.read())
+                    for i, h in enumerate(sess.get("file_history") or []):
+                        order.setdefault((sess.get("session_id"), json.dumps(h, sort_keys=True)), i)
+                except (ValueError, OSError, AttributeError):
+                    pass
+    def pos(e):
+        k = {x: y for x, y in e.items() if x != "session_id"}
+        return order.get((e.get("session_id"), json.dumps(k, sort_keys=True)), -1)
+    ties_in_file_order = all(pos(es[i]) < pos(es[i + 1]) for i in range(len(es) - 1)
+                             if ts[i] == ts[i + 1] and es[i].get("session_id") == es[i + 1].get("session_id"))
+    doc["entries"] = sorted(es, key=lambda e: json.dumps(e, sort_keys=True))
+    doc["newest first"], doc["a second's entries in the session's order"] = newest_first, ties_in_file_order
+    return head + sep + json.dumps(doc, sort_keys=True, ensure_ascii=False)
 
 
 NORM = [(r"[0-9a-f]{60}", "BOUNDARY"), (r"mem_[0-9a-f]{12}", "mem_ID"),
