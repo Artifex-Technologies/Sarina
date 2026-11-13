@@ -266,7 +266,7 @@ is a gain):
 | `labyrinth-sarina-checkup` | Python | 54-57 ms → 2.1-3.6 ms (−94 to −96 %), 26 MB → 4-5 MB | [sarina-voice](packaging/voice/README.md#why-rust-measured) |
 | `labyrinth-sarina-speak-voiced` (per spoken sentence) | Python | 24-26 ms → 0.7-1.1 ms (−96 to −97 %), 13-14 MB → 3.5-3.8 MB | [sarina-voice](packaging/voice/README.md#why-rust-measured) |
 | `labyrinth-voiced` (the voice service, Chatterbox) | Python | on the processor: a sentence the same (−0.8 %; it is all ONNX Runtime), peak memory 2.48 → 2.21 GB (−11 %), waiting 13 → 4 MB; the card's numbers are still to come | [sarina-voiced](packaging/voiced/README.md#why-rust-measured) |
-| `sarina` (the Go core, being ported: `sarina-rs`) | Go | a chat turn 68 → 24 ms (−65 %), 23 → 11 MB (−54 %); `memory-status` 7.4 → 1.4 ms, 21.5 → 5.2 MB; the idle service 23 → 5.2 MB (−78 %), the busy one **+7-10 MB (worse)**; 12 → 6.2 MB on disk (2026-11-12) | [RUST_PORT](docs/RUST_PORT.md#why-rust-measured) |
+| `sarina` (the Go core, being ported: `sarina-rs`) | Go | a chat turn 68 → 24 ms (−65 %), 23 → 11 MB (−54 %); `memory-status` 7.4 → 1.4 ms, 21.5 → 5.2 MB; the idle service 23 → 5.2 MB (−78 %), the busy one **+7-10 MB (worse)**; the console (`gui`) starts in 1.3 ms instead of 7.8, idles at 5.7 MB instead of 23.1 and holds 12 MB instead of 28 after 100 runs; 12 → 6.6 MB on disk (2026-11-12) | [RUST_PORT](docs/RUST_PORT.md#why-rust-measured) |
 
 Every case gave the same output in both. **Worse in Rust:** the size on disk (2.3 MB against 74 KB of scripts; Python stays
 installed for the voice service either way).

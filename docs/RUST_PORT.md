@@ -15,9 +15,9 @@ equal.
 | 1 | the workspace (`rust/`), the fixture writer (`go/internal/parity`), the first leaves with fixtures, properties and fuzz targets | **in progress**: shellparse, the bash guards, ValidateArgs, the file tools' guards, testguard, pyfmt, flagx, version (see "Ported"); CI since 2026-11-11 |
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
-| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; next gui |
+| 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review and service ported and proving (run in Rust only under `SARINA_RS_TRY`; 344 CLI cases and 35 service scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service and gui ported and proving (run in Rust only under `SARINA_RS_TRY`; 344 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -281,6 +281,7 @@ reaches it any more (dead code is a risk).
 | `agent/run.rs` (`Options.confirm`, `set_confirm`), `tools/registry.rs` (`Confirm`, `Context.confirm`) | `agent.Options.Confirm`, `SetConfirm`, `tools.RuntimeOperatorConfirm`: the per-call operator question (council_ask's channel), not the Approver; sub-agents get the parent's | Go's `TestSetConfirmAddsOnlyItsOwnRuntimeKey`, as a unit test | 1 |
 | `bin/sarina-rs.rs`, `cli/entry.rs` | `cmd/sarina/main.go`: the names it answers to (`aliasCommand`), Heimdall's lock first (the built Go program run with a made-up lock under each name and command line: which are refused, the message, exit 3), and the hand-over to the Go build by execve: the arguments unchanged (bytes that are not UTF-8 too), the environment, the folder, the exit status, the caller's SIGPIPE (ignored or not); a missing Go build (127) | `entry.json` | 41, and 9 hand-over checks |
 | `service.rs`, `gohttpd.rs`, `cli/servicecmd.rs`, `gourl.rs` (`parse_request_uri`), `goflag.rs` (`tribool`) | `service/service.go` (the pool with its LRU, create with every check of the ceiling, chat with resume and the local /help, delete, the browser guard, the bearer token, the 422, 403 and 404 bodies; each pooled session's agent on a thread of its own, which serialises its turns; a client that hangs up cancels its turn) and `command.go` (the flags with `triBool`, the banner, the listen errors, SIGINT and SIGTERM with Go's 5 s shutdown); Go 1.27's `net/http` server as the service uses it (request reading and its errors, keep-alive, 100-continue, the answer's header order, chunking past 2 KiB, draining an unread body, the mux's cleaned-path redirects) | the service differential | 33 scenarios, 279 steps |
+| `gui/` (`mod.rs`, `state.rs`, `run.rs`, `api.rs`, `files.rs`), `cli/guicmd.rs`, `gohttpd.rs` (streamed answers, `io.WriteString` bodies), `agent/run.rs` (`watch_registry`) | `gui/` (the guard with its token, Host, Origin, Sec-Fetch-Site and JSON rules; the mux with its patterns, cleaned-path and slash redirects and the 405 a CONNECT gets; the page with its token and cookie; `http.FileServerFS` over the built-in page with its redirects, conditions and byte ranges; the settings and their patch; runs answered as JSON or as an event stream, the re-attachable stream with its keep-alive, approvals of tool calls and plans, cancel, a client that hangs up; sessions, file history, the plan, the to-do list, memory and its review, the instruction files, tiers, the backend probe) and `command.go` (the flags, the banner, the launch link, the browser, SIGINT and SIGTERM with Go's 3 s shutdown) | the GUI differential | see "The GUI differential" |
 | `tz.rs` (from Limbo's) | Go's `time.Local`: initLocal ($TZ, /etc/localtime), LoadLocationFromTZData, `lookup` with the POSIX TZ footer; the prompt's "Today's date is" | `tz.json` (`go/internal/parity/tz_parity_test.go`) | 47 files, 1,080 lookups |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
@@ -456,6 +457,7 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   leads out; folders the operator chose elsewhere are used as given. The operator's own commands (`resume`,
   `session-search`, `memory-review`, `session-migrate`, `doctor`, `gui`) still take the default folder as it is: the
   operator runs them on a folder of their choosing (`TestSessionFilesStayInTheWorkspace`, `TestSessionSearchStaysInTheWorkspace`).
+- **The console's backend probe is gohttp's** (`GET /api/backend`): a base URL whose `/models` redirects is not followed (Go's `http.DefaultClient` follows it), so the page reads "the backend answered HTTP 30x"; no proxy from the environment. As the tier probes and the model transport.
 - **The tier router's HTTP probes are gohttp's.** A health probe or wake URL that redirects is not followed (Go follows
   it); a probe for a context already cancelled is not dialled (as Go). A wake URL Go's `url.Parse` refuses reads "bad
   wake URL: parse "...": invalid URL" (Go names the parse error). nvidia-smi is waited for at most 2 s after it ends
@@ -664,6 +666,49 @@ CLI differential (about five minutes: one case waits out the 30 s body deadline 
 python3 -I rust/parity/service-differential.py --go /tmp/sarina-go --rs rust/target/debug/sarina-rs [--only NAME] [--show]
 ```
 
+## The GUI differential (`rust/parity/gui-differential.py`)
+
+Both builds' `sarina gui` on the same scripted steps, as the service differential (whose scripted servers and helpers it
+imports): each scenario starts the Go build's console and then sarina-rs's (`SARINA_RS_TRY=gui`, `SARINA_RS_NO_GO=1`),
+each in a throwaway folder made afresh, with the same flags and environment, on a port the kernel picks (`--port 0`:
+never 8765) and with `--no-browser`. The two scenarios that leave it out find only their own stand-in `xdg-open` on
+PATH (or none), so no window is ever opened on my desktop, and no display is needed. The console prints its launch link
+with a random token; the steps read it from there and send it as the page does (`X-Sarina-Token`, `?t=`, the cookie).
+Behind it: the scripted model (context-window probes answered 404), Heimdall's review API (`HEIMDALL_REVIEW_URL` always
+points there), a scripted backend for the console's `/models` probe, and Limbo's agent socket.
+
+The steps: raw requests (the page with its token and cookie, every static file with redirects, conditions and byte
+ranges, single and multipart; the guard: Host, Origin, Sec-Fetch-Site, the token, the JSON rule with every media-type
+form; odd requests, chunked and 100-continue bodies, bodies past 8 MiB and past the 256 KiB drain, one that never
+arrives); every settings patch and its checks; runs answered as JSON and as an event stream (de-chunked for the
+comparison: the chunk boundaries depend on timing), the stream re-attached with `?after=`, its keep-alive comment;
+approvals of writes (once, for the session, refused, answered twice, unknown, wrong decisions), of a shell command (with
+the destructive-command risk), of a plan (approved, revised, rejected); cancel while a run waits for the model or for an
+approval; a client that hangs up; one run at a time; backend errors; secrets in prompts, tool arguments and answers;
+sessions, file history, the plan, the to-do list, memory and its review (with Heimdall allowing and denying), the
+instruction files (read, written, made, refused, through a link, out of their folder, deleted), named pipes planted at
+the to-do file and at CLAUDE.md, tiers and the backend probe; the command line (help with a key in the environment, bad
+flags, non-loopback hosts, a missing workspace or extra folder, a port in use, localhost and ::1, the banner with every
+flag, the `sarina-gui` name, the browser stand-in, Heimdall's lock, SIGINT, SIGTERM with a stream open, the local time
+zone east and west of UTC). Compared byte for byte: every answer, stderr and exit status, every request the scripted
+servers got, every file left. Normalised: the port, the token, Date headers, times, run, approval and session ids (by
+first appearance), a multipart boundary, file times written during a run. Go against Go first: two scenarios read an
+event stream's end chunk before it came (the reader now waits half a second after the last event).
+
+```bash
+python3 -I rust/parity/gui-differential.py --go /tmp/sarina-go --rs rust/target/debug/sarina-rs [--only NAME] [--skip-slow] [--show]
+```
+
+On 2026-11-12 (night): 59 scenarios, 531 steps, 413 comparisons, no difference (about 20 minutes; two scenarios wait out
+the 30 s body deadline and the 15 s keep-alive, `--skip-slow` leaves them out). Two harness faults found on the way and
+fixed before counting: the console streams the model's answers by default, so the scripted plain-JSON answers ended
+every run after one call in both builds (equal, and proving little): the consoles now start with `--stream=false` but
+for the streamed scenario, which gets streamed answers and streamed tool calls; and calls scripted with the same id in
+one run were refused by the agent as already run (the ids now differ). A mutation run of the port (12 changes: the
+guard's site rule, the token check, a media-type parameter named twice, the cookie, If-None-Match, the session-long
+grant, a run's own stream, the max_turns bound, cancel, the probe's key, writing through a link, the pipe bound) caught
+12 of 12 (the grant only after the call-id fix).
+
 ## Why Rust: measured
 
 The Go build (`go build -ldflags "-s -w"`, as the package builds it) against sarina-rs (`cargo build --release`), on my
@@ -684,9 +729,17 @@ forked from Python carries Python's pages into its own peak).
 | `service`, resident memory idle | 23.2 MB | 5.2 MB | −78 % |
 | `service`, a new session and a turn with a tool call | 6.3 ms | 6.4 ms | the same (±5 % between runs) |
 | `service`, resident memory after 30 / 100 / 400 sessions (the pool keeps 20) | 28.0 / 27.6 / 30.4 MB | 35.5 / 38.4 / 37.5 MB | **+24 to +39 %, worse in Rust** |
-| size on disk | 12.0 MB | 6.2 MB | −48 % (both are installed while commands still go to Go) |
+| `gui`, start to the first API answer | 7.8 ms | 1.3 ms | −83 % |
+| `gui`, resident memory idle | 23.1 MB | 5.7 MB | −75 % |
+| `gui`, a run with a read_file call (blocking `POST /api/chat`) | 2.9 ms | 2.7 ms | about the same |
+| `gui`, resident memory after 30 / 100 runs | 26.1 / 27.7 MB | 11.1 / 12.0 MB | −57 % (one agent per run, on one thread) |
+| size on disk | 12.0 MB | 6.6 MB (with the GUI, 2026-11-12 night) | −45 % (both are installed while commands still go to Go) |
 
-**Worse in Rust:** the busy service's resident memory, by 7-10 MB. It levels off (no growth from 100 to 400 sessions, so
+The GUI rows were measured the same way (night of 2026-11-12, 30 starts of each, interleaved; the runs 100 in a row on
+one console, after `/api/clear`).
+
+**Worse in Rust:** the busy service's resident memory, by 7-10 MB (the busy console is the other way round: 12 MB against
+Go's 28). It levels off (no growth from 100 to 400 sessions, so
 not a leak); my guess is glibc's per-thread malloc arenas (a thread per connection), not measured further. Every
 interactive or one-shot `sarina` command starts in about a third of the time and half the memory; the model's own time
 (seconds) is untouched by either build.
@@ -855,26 +908,55 @@ Seventh session of 2026-11-12 (night): the proof widened before the move.
   service +24 to +39 % memory (worse).
 - Nothing found in Go this time.
 
+Eighth session of 2026-11-12 (night): the GUI.
+
+- **The GUI differential** (`rust/parity/gui-differential.py`, "The GUI differential" above), written first and run Go
+  against Go (two scenarios read an event stream's end before it came; the reader now waits for it). In CI after the
+  service differential.
+- **gui in Rust** (`gui/`: the guard, Go's mux patterns and FileServer over the built-in page, the settings, runs with
+  their event stream and approvals, the API; `cli/guicmd.rs`), on `runkit::build` and `gohttpd`, which now writes
+  streamed answers (Go's `Flush`: the head first, then a chunk per flush) and `io.WriteString` bodies (2 KiB chunks).
+  The agent publishes its rebuilt registry's tools (`Agent::watch_registry`), so a starting tool's effect is named from
+  the registry as it is then, as Go's `Registry().Get`. Proving, not moved: sarina-rs runs it only under
+  `SARINA_RS_TRY=gui`. The bounds of `e38dca6` (the 30 s body deadline only for a request with a body, the 120 s idle
+  timeout, `OPTIONS *` through the console's own handler) are kept and covered (a body that never arrives, the stream
+  living on). **59 scenarios, 531 steps, 413 comparisons: no difference.**
+- Found by the differential, fixed in Rust (Go was right): Go answers the page with `io.WriteString` (2 KiB chunks, not
+  one); a CONNECT without a path is Go's 405 naming `GET, HEAD` (the console has a pattern for `/`); Go's `os.Remove`
+  also removes an empty folder (deleting a session or an instruction file); the v2 engine names
+  `map[string]jsontext.Value` in a type error.
+- **Go fix, in Go and Rust, with a Go test that failed before** (`e965cf3`): `GET /api/tasks` and `GET
+  /api/instructions/file` read their file with `os.ReadFile`: a named pipe planted at `.port_sessions/task_runtime.json`
+  or at a CLAUDE.md held the request for ever, and an instruction file of any size was read whole to show 400 KiB. Now a
+  bounded regular file (`session.ReadFile`; `readHead`, opened without blocking).
+- Measured ("Why Rust: measured"): the console starts in 1.3 ms instead of 7.8, idles at 5.7 MB instead of 23.1, and
+  after 100 runs holds 12 MB instead of 28.
+- `doctor` not begun: its ports check dials 127.0.0.1:8899 and :8765, which on my PC are the real service and console,
+  so its differential first needs a private network namespace (`unshare -rn` around both builds) or the ports from the
+  case; that comes first.
+
 Next, in this order:
 
-1. **Proposed, not made: moving chat, resume, skill, memory-review and service to always-Rust.** All five agree with Go on
-   every case; what is left is use on the real machine, which only the owner can give. The proposal, in steps (each a
-   one-line move from `cli::proving` to `cli::ported` that **keeps the `needs_go` gate** for these five: with an optional
-   tool set on, the Go build answers, or the model would be offered fewer tools):
+1. **Proposed, not made: moving chat, resume, skill, memory-review, service and gui to always-Rust.** All six agree with
+   Go on every case; what is left is use on the real machine, which only the owner can give. The proposal, in steps (each
+   a one-line move from `cli::proving` to `cli::ported` that **keeps the `needs_go` gate**: with an optional tool set on,
+   the Go build answers, or the model would be offered fewer tools):
    1. The owner installs the switch package (Labyrinth's branch `sarina-rs-switch`) and runs with
-      `SARINA_RS_TRY=chat,resume,skill,memory-review` in his shell for a few days of normal use.
+      `SARINA_RS_TRY=chat,resume,skill,memory-review,gui` in his shell for a few days of normal use.
    2. Then **memory-review and skill** move first: short, bounded, no interactive terminal; skill run is one chat turn.
    3. Then **chat and resume** (what the owner sees every day). Note: wherever his `sarina.env` turns on an optional set
       (`SARINA_CRYPTO`, `SARINA_MATH`, `SARINA_VAULT`, ...), `needs_go` keeps chat in Go until step 5 ports that set, so
       the move changes nothing there yet; that is the next big piece of work after this.
-   4. **service** last: the always-on unit, and Heimdall's advisory sessions go through it. Before it moves: one
+   4. **gui** with them or right after (the owner opens it by hand; the same gate).
+   5. **service** last: the always-on unit, and Heimdall's advisory sessions go through it. Before it moves: one
       day with `SARINA_RS_TRY=service` in the unit's environment (a drop-in, the owner's), and a look at the busy
       service's memory (+7-10 MB, "Why Rust: measured"); `M_ARENA_MAX`-style limits are the first thing to measure if
       it matters. The unit needs no change: `sarina-service` is sarina-rs.
    Going back at any step is removing the name from `cli::ported` (or reinstalling the previous package).
-2. **gui** on `runkit::build` and `gohttpd` (SSE streaming, the approval flow, the page's token, the launch link):
-   first its differential, as the service's (a scripted model; the page's requests raw); the bounds above come with it.
-3. Doctor (last of the core): its check-up, so `sarina_doctor` stops running in the Go build.
+2. **Doctor** (last of the core): its check-up, so `sarina_doctor` stops running in the Go build. Its differential needs
+   the ports check kept off the real 8899/8765 first (a network namespace of its own, see above).
+3. The to-do tools read `task_runtime.json` and the plan file with `os.ReadFile` (Go and the port alike): the same named
+   pipe hang the console had; bound them as the console's (a Go fix with a failing test first).
 
 Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself
 (it happened to a test's expected string here); build such strings from parts or check them with grep. The timed client

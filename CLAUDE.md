@@ -238,6 +238,28 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (night, 4) — Rust port: the console (`sarina gui`) in Rust behind SARINA_RS_TRY; a Go fix for planted pipes
+- `sarina gui` is ported (`rust/sarina/src/gui/`, `cli/guicmd.rs`) and proved by a new differential written first,
+  `rust/parity/gui-differential.py`: both builds' consoles on the same page requests, static files (redirects, conditions,
+  byte ranges), guard checks, settings patches, runs as JSON and as an event stream, approvals of writes, shell commands
+  and plans, cancels, hang-ups, sessions, memory review, instruction files, tiers, the backend probe, the command line and
+  signals, against a scripted model, Heimdall and Limbo; `--no-browser` everywhere (a stand-in xdg-open where the browser
+  path is tested), so no window ever opens and no display is needed. **59 scenarios, 531 steps, no difference**; CI runs
+  it. Not moved: sarina-rs runs it only under `SARINA_RS_TRY=gui`. The unbounded-wait fixes of `e38dca6` are kept and
+  covered.
+- **Go fix (live code), in Go and Rust both, with a test that failed before** (`e965cf3`): the console read
+  `.port_sessions/task_runtime.json` and the instruction files with `os.ReadFile`, so a named pipe planted under either
+  name held the request for ever, and a CLAUDE.md of any size was read whole to show 400 KiB. Now bounded regular files.
+  The to-do tools have the same read (Go and port): next on the list.
+- Measured: the console starts in 1.3 ms instead of 7.8, idles at 5.7 MB instead of 23.1, holds 12 MB instead of 28
+  after 100 runs; sarina-rs is 6.6 MB on disk.
+- The always-Rust proposal of the entry below now covers gui too (with chat, after the owner's days of use). `doctor` is
+  next of the core; its ports check dials 8899 and 8765, so its differential needs a network namespace of its own first.
+- **For Heimdall's and Labyrinth's boards:** nothing changes (no package or contract change; the console's port and API
+  are the same in both builds).
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (night, 3) — Rust port: a date bug fixed in Rust, the chat proof widened; a proposal to move five commands
 - Both differentials run again on HEAD. The CLI one found the port's only fault this time: **the prompt's "Today's date
   is" was UTC's date in the Rust build** and the local date in Go, so a chat or service session started after 17:00 here
