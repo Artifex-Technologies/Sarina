@@ -41,6 +41,13 @@ impl Time {
         Time { secs: d.as_secs() as i64 + GO_ZERO_TO_UNIX, nanos: d.subsec_nanos(), offset: 0 }
     }
 
+    /// Go's `time.Now()`: the clock in the local zone (`time.Local`, from $TZ or /etc/localtime as Go chooses it). Only the
+    /// offset differs from [`Time::now`]; it shows where a time is written in its own zone (the prompt's date).
+    pub fn now_local() -> Time {
+        let t = Time::now();
+        Time { offset: crate::tz::local_offset(t.unix()), ..t }
+    }
+
     pub fn from_unix(secs: i64, nanos: u32) -> Time {
         Time { secs: secs + GO_ZERO_TO_UNIX, nanos, offset: 0 }
     }

@@ -566,7 +566,7 @@ impl Chat {
                 override_: self.o.fs.str("override-system-prompt"),
             },
             context_window: self.o.fs.num("context-window"),
-            now: Arc::new(crate::gotime::Time::now),
+            now: Arc::new(crate::gotime::Time::now_local),
             home: self.home.clone(),
             on_event: None,
             getenv: Arc::new(move |k: &str| g3(k)),

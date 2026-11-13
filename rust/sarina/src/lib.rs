@@ -45,5 +45,6 @@ pub mod testguard;
 pub mod tiers;
 pub mod tools;
 pub mod trust;
+pub mod tz;
 pub mod vecindex;
 pub mod version;

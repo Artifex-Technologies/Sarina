@@ -284,7 +284,7 @@ pub fn build(s: Spec) -> Result<Built, String> {
         },
         prompt: s.prompt,
         context_window: 0,
-        now: Arc::new(crate::gotime::Time::now),
+        now: Arc::new(crate::gotime::Time::now_local),
         home: s.home,
         on_event: None,
         getenv: Arc::new(move |k: &str| g(k)),

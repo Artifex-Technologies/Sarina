@@ -620,6 +620,9 @@ def cli_scenarios():
                       "--escalate-to-claude-code", "--claude-code-cli-path", "/nonexistent/claude", "--permit-write"],
                 env={"OPENAI_API_KEY": KEY, "SARINA_SERVICE_CWD_ROOTS": "{W}/ws:{W}/empty"}))
     sc.append(S("started as sarina-service", [R("GET", "/healthz")], argv0="sarina-service"))
+    # the prompt's date is written in the local zone (Go's time.Now()): east and west of UTC, one of them is another day
+    for tz in ("Pacific/Kiritimati", "Etc/GMT+12"):
+        sc.append(S(f"time zone {tz}", [create(), chat(0, "what day is it")], env={"TZ": tz}, model=[completion("today")]))
     sc.append(S("contained", [], files=dict(state(), **{"lock": '{"reason": "a made-up lock"}'}),
                 env={"SARINA_CONTAINED_PATH": "{W}/lock"}))
     sc.append(S("SIGINT", [R("GET", "/healthz"), ("signal", signal.SIGINT)]))
