@@ -931,6 +931,8 @@ Eighth session of 2026-11-12 (night): the GUI.
   bounded regular file (`session.ReadFile`; `readHead`, opened without blocking).
 - Measured ("Why Rust: measured"): the console starts in 1.3 ms instead of 7.8, idles at 5.7 MB instead of 23.1, and
   after 100 runs holds 12 MB instead of 28.
+- CI green on `354f560` (the GUI differential included, on CI's Go 1.27.4); the run of `e965cf3` failed only on the
+  MCP fixture's flake (item 4 below).
 - `doctor` not begun: its ports check dials 127.0.0.1:8899 and :8765, which on my PC are the real service and console,
   so its differential first needs a private network namespace (`unshare -rn` around both builds) or the ports from the
   case; that comes first.
@@ -957,6 +959,10 @@ Next, in this order:
    the ports check kept off the real 8899/8765 first (a network namespace of its own, see above).
 3. The to-do tools read `task_runtime.json` and the plan file with `os.ReadFile` (Go and the port alike): the same named
    pipe hang the console had; bound them as the console's (a Go fix with a failing test first).
+4. A CI flake in `parity_mcp` (`lines`, run of `e965cf3`): the over-long answer's call times out by design, and the
+   client's `notifications/cancelled` for it was in the Rust run's recorded notes but not in Go's; the stand-in's notes
+   are read before a late cancel arrives. The fixture should settle the notes (as `bae7378` did for requests) or leave
+   the cancel out of them.
 
 Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself
 (it happened to a test's expected string here); build such strings from parts or check them with grep. The timed client
