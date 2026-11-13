@@ -114,7 +114,7 @@ class Server:
             }
             with self.lock:
                 self.requests.append(req)
-                if self.model and not req["target"].endswith("/chat/completions"):
+                if self.model and not req["target"].endswith(("/chat/completions", "/v1/messages")):
                     a = resp("404 page not found", "404 Not Found", ctype="text/plain")
                 else:
                     a = self.answers.pop(0) if self.answers else resp("no answer scripted", "599 Script Ended", ctype="text/plain")
@@ -468,11 +468,11 @@ def tiers_cases():
     return cs
 
 
-def completion(content="", calls=(), finish="stop", usage=(12, 5)):
-    """A non-streamed chat completion answer."""
+def completion(content="", calls=(), finish="stop", usage=(12, 5), first_id=0):
+    """A non-streamed chat completion answer; its calls' ids count from `first_id`."""
     msg = {"role": "assistant", "content": content}
     if calls:
-        msg["tool_calls"] = [{"id": f"call_{i}", "type": "function", "function": {"name": n, "arguments": json.dumps(a)}}
+        msg["tool_calls"] = [{"id": f"call_{first_id + i}", "type": "function", "function": {"name": n, "arguments": json.dumps(a)}}
                              for i, (n, a) in enumerate(calls)]
         finish = "tool_calls"
     return resp({"id": "c1", "object": "chat.completion", "model": "made-up-model",
@@ -498,8 +498,9 @@ CHAT_NORM = [(r"[0-9a-f]{32}", "SESSIONID"), (r"mem_[0-9a-f]{12}", "mem_ID"), (r
 def chat_cases():
     cs = []
 
-    def add(name, args, http=(), env=None, files=None, stdin=None, norm=()):
-        c = C(name, args, files=files, env=dict(MODEL_ENV, **(env or {})), http=http, stdin=stdin, norm=CHAT_NORM + list(norm))
+    def add(name, args, http=(), env=None, files=None, stdin=None, norm=(), limbo=()):
+        c = C(name, args, files=files, env=dict(MODEL_ENV, **(env or {})), http=http, stdin=stdin, norm=CHAT_NORM + list(norm),
+              limbo=limbo)
         c["model"] = True
         cs.append(c)
     add("chat one turn", ["chat", "hello there"], http=[completion("Hello!")])
@@ -638,7 +639,152 @@ def chat_cases():
     add("chat policy", ["chat", "x"], files=state(**{"home/.sarina/policy.json": '{"denyTools":["bash"],"budget":{"maxToolCalls":2}}'}),
         http=[completion("ok")])
     add("chat damaged policy", ["chat", "x"], files=state(**{"home/.sarina/policy.json": "{"}))
+    chat_more_cases(add)
     return cs
+
+
+MCP_STANDIN = r"""#!/usr/bin/bash
+# a stand-in MCP server in bash's builtins: one tool, "shout"; every request logged
+while IFS= read -r line; do
+  printf '%s\n' "$line" >> "$1"
+  [[ $line =~ \"id\":([0-9]+) ]] || continue
+  id=${BASH_REMATCH[1]}
+  case "$line" in
+    *'"initialize"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"fake","version":"1"}}}\n' "$id" ;;
+    *'"tools/list"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"tools":[{"name":"shout","description":"Shout a word.","inputSchema":{"type":"object","properties":{"word":{"type":"string"}}}}]}}\n' "$id" ;;
+    *'"resources/list"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"resources":[]}}\n' "$id" ;;
+    *'"tools/call"'*) printf '{"jsonrpc":"2.0","id":%s,"result":{"content":[{"type":"text","text":"HELLO"}]}}\n' "$id" ;;
+    *) printf '{"jsonrpc":"2.0","id":%s,"result":{}}\n' "$id" ;;
+  esac
+done
+"""
+
+
+def chat_more_cases(add):
+    """Added 2026-11-12 (night) before chat could move: the local time zone, the shell, the other file tools, sub-agents,
+    MCP servers, compaction and notes, every budget flag, a Claude tier configured, keys and timeouts."""
+    more = add
+    # the date in the prompt is written in the local zone (Go's time.Now()): east and west of UTC at once, one of them is
+    # another day than UTC at any hour; a name Go cannot find, an absolute path, an empty TZ (UTC), a POSIX string (UTC in Go)
+    for tz in ("Pacific/Kiritimati", "Etc/GMT+12", "Nowhere/Atlantis", ":/usr/share/zoneinfo/Pacific/Kiritimati", "", "<+03>-3",
+               ":Etc/GMT+12"):
+        more(f"chat time zone {tz!r}", ["chat", "what day is it"], env={"TZ": tz}, http=[completion("today")])
+    more("chat time zone from the zone file", ["chat", "x"], env={"TZ": "{W}/zone"}, http=[completion("ok")],
+         files=state(**{"zone": open("/usr/share/zoneinfo/Etc/GMT+12", "rb").read()}))
+    sh = state(**{"bin/bash@": "/usr/bin/bash", "ws/old/keep.txt": "keep\n", "ws/notes.txt": "the widget is blue\n"})
+    more("chat bash refused", ["chat", "run it"], files=sh,
+         http=[completion(calls=[("bash", {"command": "echo hi"})]), completion("I may not run commands.")])
+    more("chat bash", ["chat", "--allow-shell", "run it"], files=sh,
+         http=[completion(calls=[("bash", {"command": "echo hi; pwd; printf 'err\\n' >&2; exit 3"})]), completion("It printed hi.")])
+    more("chat bash destructive refused", ["chat", "--allow-shell", "clean"], files=sh,
+         http=[completion(calls=[("bash", {"command": "rm -rf old"})]), completion("Refused.")])
+    more("chat bash big output", ["chat", "--allow-shell", "x"], files=sh,
+         http=[completion(calls=[("bash", {"command": "printf -v s '%*s' 200000 ''; printf '%s' \"${s// /x}\"; printf '\\xff\\xfe'"})]), completion("Long.")])
+    more("chat bash with tier 3", ["chat", "x"], files=sh, env={"SARINA_ACCESS_TIER": "3"},
+         http=[completion(calls=[("bash", {"command": "echo tier"})]), completion("ok")])
+    more("chat edit file", ["chat", "--allow-write", "fix it"], files=sh,
+         http=[completion(calls=[("read_file", {"path": "notes.txt"})]),
+               completion(calls=[("edit_file", {"path": "notes.txt", "old_text": "blue", "new_text": "red"})], first_id=1),
+               completion("Changed blue to red with edit_file.")] + [completion("Done: edit_file changed it.")] * 2)
+    more("chat glob and grep", ["chat", "find"], files=sh,
+         http=[completion(calls=[("glob_search", {"pattern": "**/*.txt"}), ("grep_search", {"pattern": "widget"})]), completion("found")])
+    more("chat to-dos and plan", ["chat", "--allow-write", "plan"], files=sh,
+         http=[completion(calls=[("todo_write", {"items": [{"title": "Read notes", "task_id": "t1"}, {"title": "Answer"}]})]),
+               completion(calls=[("task_list", {}), ("update_plan", {"steps": [{"step": "read", "status": "done"}]}), ("plan_get", {})],
+                          first_id=1),
+               completion("Planned.")],
+         # a to-do without an id gets a random one (task_N_ and six hex digits), and the snapshot id hashes the list
+         norm=[(r"task_(\d+)_[0-9a-f]{6}", r"task_\1_ID"), (r"task_runtime\.json:[0-9a-f]{12}", "task_runtime.json:HASH")])
+    more("chat memory replace and remove", ["chat", "tidy memory"],
+         http=[completion(calls=[("memory_replace", {"scope": "agent", "old_text": "cargo", "content": "The build uses cargo -j4."}),
+                                 ("memory_remove", {"scope": "user", "old_text": "short answers"})]), completion("Tidied.")])
+    more("chat sub-agent", ["chat", "look around"], files=sh,
+         http=[completion(calls=[("agent", {"profile": "explorer", "prompt": "Read notes.txt and say its colour."})]),
+               completion(calls=[("read_file", {"path": "notes.txt"})]), completion("Blue."), completion("The helper says blue.")])
+    more("chat sub-agent unknown profile", ["chat", "x"],
+         http=[completion(calls=[("agent", {"profile": "wizard", "prompt": "x"})]), completion("No such helper.")])
+    more("chat sub-agent operator profile", ["chat", "x"], files=state(**{
+        "home/.sarina/agents/counter.md": "---\nname: counter\ndescription: Counts things.\ntools: [list_dir]\n---\nCount the files.\n"}),
+        http=[completion(calls=[("agent", {"profile": "counter", "prompt": "count"})]), completion("3"), completion("Three.")])
+    mcpdef = lambda cmd: json.dumps({"mcpServers": {"fake": {"command": cmd, "args": ["{W}/mcp.log"]}}})
+    mcp = state(**{"bin/bash@": "/usr/bin/bash", "bin/fake-mcp*": MCP_STANDIN, "home/.sarina/mcp.json": mcpdef("{W}/bin/fake-mcp")})
+    more("chat mcp tool", ["chat", "shout"], files=mcp,
+         http=[completion(calls=[("mcp__fake__shout", {"word": "hello"})]), completion("It shouted HELLO.")])
+    more("chat mcp workspace file ignored", ["chat", "x"], http=[completion("ok")],
+         files=state(**{"bin/bash@": "/usr/bin/bash", "bin/fake-mcp*": MCP_STANDIN, "ws/.mcp.json": mcpdef("{W}/bin/fake-mcp")}))
+    more("chat mcp workspace file trusted", ["chat", "--trust-workspace-mcp", "x"], http=[completion("ok")],
+         files=state(**{"bin/bash@": "/usr/bin/bash", "bin/fake-mcp*": MCP_STANDIN, "ws/.mcp.json": mcpdef("{W}/bin/fake-mcp")}))
+    more("chat mcp missing program", ["chat", "x"], http=[completion("ok")],
+         files=state(**{"home/.sarina/mcp.json": mcpdef("{W}/bin/nothing-here")}))
+    more("chat mcp damaged file", ["chat", "x"], http=[completion("ok")], files=state(**{"home/.sarina/mcp.json": "{"}))
+    more("chat policy untrusted", ["chat", "x"], http=[completion("ok")],
+         files=dict(mcp, **{"home/.sarina/policy.json": '{"trusted":false}'}))
+    more("chat policy safe env", ["chat", "--allow-shell", "x"], env={"KEEP_ME": "kept", "DROP_ME": "dropped"},
+         files=dict(sh, **{"home/.sarina/policy.json": '{"safeEnv":["KEEP_ME"]}'}),
+         http=[completion(calls=[("bash", {"command": "echo \"[$KEEP_ME][$DROP_ME]\""})]), completion("ok")])
+    wskill = {"ws/.sarina/skills/local/SKILL.md": "---\nname: local\ndescription: From the workspace.\n---\nDo the local thing.\n"}
+    more("chat workspace skills ignored", ["chat", "/skill"], files=state(**wskill))
+    more("chat workspace skills trusted", ["chat", "--trust-workspace-skills", "/skill"], files=state(**wskill))
+    long = session("big", [m for i in range(12) for m in (u(f"question {i} " + "word " * 60), a(f"answer {i} " + "text " * 60))],
+                   **{"model_config": {"model": "made-up-model", "base_url": "{H}/v1", "temperature": 0},
+                      "runtime_config": {"cwd": "{W}/ws", "max_turns": 12, "session_directory": "{W}/ws/.port_sessions/agent",
+                                         "scratchpad_root": "{W}/ws/.port_sessions/scratchpad"}})
+    big = state(**{SESSIONS + "big.json": long})
+    more("resume compaction", ["resume", "--auto-compact-threshold", "300", "--compact-preserve-messages", "2", "big", "go on"],
+         files=big, http=[completion("Summary: twelve questions."), completion("Going on."), completion("ok")])
+    more("resume compaction heuristic", ["resume", "--auto-compact-threshold", "300", "--no-llm-compaction", "big", "go on"],
+         files=big, http=[completion("Going on.")])
+    more("resume snip", ["resume", "--auto-snip-threshold", "200", "big", "go on"], files=big, http=[completion("Going on.")])
+    more("resume context window small", ["resume", "--context-window", "1024", "big", "go on"], files=big,
+         http=[completion("Summary."), completion("Going on."), completion("ok")])
+    more("chat notes every turn", ["chat", "--notes-every", "1", "read"], files=sh,
+         http=[completion(calls=[("read_file", {"path": "notes.txt"})]), completion("- read notes.txt"), completion("Blue.")])
+    more("chat no notes", ["chat", "--no-session-notes", "--no-clear-tool-outputs", "--no-context-discovery", "read"], files=sh,
+         http=[completion(calls=[("read_file", {"path": "notes.txt"})]), completion("Blue.")])
+    two = [completion(calls=[("list_dir", {"path": "."}), ("list_dir", {"path": "."})]), completion("ok"), completion("ok")]
+    more("chat max tool calls", ["chat", "--max-tool-calls", "1", "x"], http=two)
+    more("chat max model calls", ["chat", "--max-model-calls", "1", "x"], http=two)
+    more("chat max session turns", ["chat", "--max-session-turns", "1", "x"], http=two)
+    more("chat max input tokens", ["chat", "--max-input-tokens", "5", "x"], http=[completion("ok")])
+    more("chat max output tokens", ["chat", "--max-output-tokens", "7", "x"], http=[completion("ok")])
+    more("chat max cost", ["chat", "--input-cost-per-million", "5", "--output-cost-per-million", "10", "--max-cost-usd", "0.00001", "x"],
+         http=two)
+    more("chat cost shown", ["chat", "--input-cost-per-million", "3", "--output-cost-per-million", "15", "x"], http=[completion("ok")])
+    more("chat schema strict", ["chat", "--response-schema-file", "{W}/schema.json", "--response-schema-name", "answer",
+                                "--response-schema-strict", "x"],
+         files=state(**{"schema.json": '{"type":"object"}'}), http=[completion('{"a":1}')])
+    more("chat schema not an object", ["chat", "--response-schema-file", "{W}/schema.json", "x"], files=state(**{"schema.json": "[1]"}))
+    more("chat system prompt", ["chat", "--system-prompt", "You are terse.", "x"], http=[completion("ok")])
+    more("chat add-dir", ["chat", "--add-dir", "{W}/empty", "read"], files=state(**{"empty/far.txt": "far away\n"}),
+         http=[completion(calls=[("read_file", {"path": "{W}/empty/far.txt"})]), completion("far")])
+    more("chat api key flag", ["chat", "--api-key", "sk-test-flag-not-real", "x"], http=[completion("ok")])
+    more("chat api key env", ["chat", "x"], env={"OPENAI_API_KEY": "sk-test-env-not-real"}, http=[completion("ok")])
+    more("chat model and url flags", ["chat", "--model", "other-model", "--base-url", "{H}/alt/v1", "x"], http=[completion("ok")])
+    more("chat temperature env", ["chat", "x"], env={"SARINA_TEMPERATURE": "0.7"}, http=[completion("ok")])
+    slow2 = lambda req: (time.sleep(2), completion("late"))[1]
+    more("chat timeout", ["chat", "--timeout-seconds", "0.5", "x"], http=[slow2] * 3)
+    more("chat stream tool call", ["chat", "--stream", "read"], files=sh, http=[resp(
+        "".join("data: " + json.dumps(x) + "\n\n" for x in [
+            {"id": "c1", "choices": [{"index": 0, "delta": {"role": "assistant", "tool_calls": [
+                {"index": 0, "id": "call_0", "type": "function", "function": {"name": "read_file", "arguments": ""}}]}}]},
+            {"id": "c1", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "{\"path\":"}}]}}]},
+            {"id": "c1", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": "\"notes.txt\"}"}}]}}]},
+            {"id": "c1", "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]}]) + "data: [DONE]\n\n",
+        ctype="text/event-stream"), sse_completion(["Blue."])])
+    claude = tiers_file([{"name": "local", "kind": "openai_compat", "allow_data": "all"},
+                         {"name": "claude", "kind": "claude", "base_url": "{H}/anthropic", "model": "made-up-claude",
+                          "api_key_env": "TEST_CLAUDE_KEY", "allow_data": "all", "auto": True}])
+    anth = resp({"id": "msg_1", "type": "message", "role": "assistant", "model": "made-up-claude",
+                 "content": [{"type": "text", "text": "From Claude."}], "stop_reason": "end_turn",
+                 "usage": {"input_tokens": 20, "output_tokens": 4}})
+    # Heimdall's API is the loopback stand-in here: a grant request must never reach a real Heimdall
+    more("chat claude tier", ["chat", "x"], files=state(**{"home/.sarina/tiers.json": claude}),
+         env={"TEST_CLAUDE_KEY": "sk-ant-test-not-real", "HEIMDALL_REVIEW_URL": "{H}/v1/review"},
+         http=[resp("down", "500 Internal Server Error", ctype="text/plain")] * 2 + [anth])
+    more("chat claude tier without key", ["chat", "x"], files=state(**{"home/.sarina/tiers.json": claude}),
+         env={"HEIMDALL_REVIEW_URL": "{H}/v1/review"}, http=[resp("down", "500 Internal Server Error", ctype="text/plain")] * 3)
+    more("chat limbo tool", ["chat", "which profiles"], env={"SARINA_LIMBO_SOCKET": "{S}"}, limbo=[resp(PROFILES)],
+         http=[completion(calls=[("limbo_profiles", {})]), completion("limbo_profiles lists lab.")])
 
 
 def other_cases():
@@ -687,7 +833,10 @@ def normalize(data, norm):
 
 
 def snapshot(work, norm=()):
+    """Every file left, by its normalised path. Two files can take one normalised name (a session and its sub-agent's,
+    both SESSIONID.json): those are listed in the order of their contents, not of their random names."""
     out = {}
+    dup = {}
     for root, dirs, fnames in os.walk(work):
         dirs.sort()
         for n in sorted(dirs + fnames):
@@ -706,6 +855,14 @@ def snapshot(work, norm=()):
                     out[rel] += " " + body.decode("utf-8", "backslashreplace")
             else:
                 out[rel] = "other %o" % stat.S_IFMT(st.st_mode)
+            if rel in dup:
+                dup[rel].append(out[rel])
+            else:
+                dup[rel] = [out[rel]]
+    for rel, vals in dup.items():
+        if len(vals) > 1:
+            for i, v in enumerate(sorted(vals)):
+                out[rel if i == 0 else f"{rel} ({i + 1})"] = v
     return out
 
 
