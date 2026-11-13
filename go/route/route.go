@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // Embedder turns texts into vectors (vault.DefaultEmbedder satisfies it).
@@ -96,11 +98,28 @@ func dot(a, b []float32) float64 {
 	return s
 }
 
+// maxCacheBytes bounds the cache read: 10 topics of a few examples, even at 4096 numbers a vector, are a few MiB.
+const maxCacheBytes = 64 << 20
+
+// writeCache replaces the cache file through a new file renamed over it: writing into whatever is at the name would wait
+// for ever on a named pipe planted there.
+func writeCache(path string, b []byte) {
+	f, err := os.CreateTemp(filepath.Dir(path), ".route-*")
+	if err != nil {
+		return
+	}
+	_, werr := f.Write(b)
+	if cerr := f.Close(); werr != nil || cerr != nil || os.Rename(f.Name(), path) != nil {
+		os.Remove(f.Name())
+	}
+}
+
 // prototypes embeds the example questions once and keeps them in a small cache file.
 func prototypes(emb Embedder) (map[string][][]float32, error) {
 	path := cacheFile(emb.Name())
 	var c cache
-	if b, err := os.ReadFile(path); err == nil && json.Unmarshal(b, &c) == nil && c.Sig == signature() {
+	// a regular file of a bounded size: a named pipe planted at the name is not waited on, a huge file not read
+	if b, err := session.ReadRegular(path, maxCacheBytes); err == nil && json.Unmarshal(b, &c) == nil && c.Sig == signature() {
 		return c.Vecs, nil
 	}
 	c = cache{Sig: signature(), Vecs: map[string][][]float32{}}
@@ -119,7 +138,7 @@ func prototypes(emb Embedder) (map[string][][]float32, error) {
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err == nil {
 		if b, err := json.Marshal(c); err == nil {
-			_ = os.WriteFile(path, b, 0o600)
+			writeCache(path, b)
 		}
 	}
 	return c.Vecs, nil
