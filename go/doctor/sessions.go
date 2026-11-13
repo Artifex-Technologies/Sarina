@@ -12,8 +12,6 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
-const maxSessionFileBytes = 64 << 20
-
 type sessionScan struct {
 	dir        string
 	statErr    error
@@ -53,12 +51,8 @@ func scanSessions(dir string) *sessionScan {
 		}
 		s.total++
 		path := filepath.Join(dir, e.Name())
-		info, err := os.Stat(path)
-		if err != nil || info.Size() > maxSessionFileBytes {
-			s.unreadable = append(s.unreadable, e.Name())
-			continue
-		}
-		raw, err := os.ReadFile(path)
+		// a bounded regular file: a named pipe planted under the name is refused at once, not waited on
+		raw, err := session.ReadFile(path)
 		if err != nil {
 			s.unreadable = append(s.unreadable, e.Name())
 			continue
