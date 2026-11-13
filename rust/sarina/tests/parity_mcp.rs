@@ -34,6 +34,21 @@ fn any(v: &Value) -> Any {
     }
 }
 
+/// Go's `settleCancels`: waits until the stand-in's notes hold `want` notifications/cancelled lines; the condition ends
+/// the wait, the deadline only turns a lost notification into a failure instead of a hang.
+fn settle_cancels(notes: &str, want: usize) {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let b = std::fs::read(notes).unwrap_or_default();
+        let got = String::from_utf8_lossy(&b).matches(r#""method":"notifications/cancelled""#).count();
+        if got >= want {
+            return;
+        }
+        assert!(Instant::now() < deadline, "{notes}: {got} cancel notifications logged, want {want}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 #[test]
 fn mcp_client_matches_go() {
     let mut check = common::Check::new();
@@ -98,6 +113,7 @@ fn mcp_client_matches_go() {
                 }
                 let cl = Client::spawn(&def, &base).unwrap();
                 let mut results = Vec::new();
+                let mut gave_up = 0;
                 for op in input["ops"].as_array().unwrap() {
                     let ctx = Ctx::background();
                     if let Some(ms) = op["cancelMs"].as_u64() {
@@ -148,8 +164,14 @@ fn mcp_client_matches_go() {
                         }
                         other => panic!("op {other}"),
                     };
+                    if err.as_deref().is_some_and(|e| e.contains(": no answer to ") || e == "context canceled") {
+                        gave_up += 1;
+                    }
                     results.push(json!([out, clean(&err.unwrap_or_default())]));
                 }
+                // as Go's: a call given up on sends notifications/cancelled from its own thread, and close right after
+                // could end the server's input first; wait until the stand-in logged one per call given up
+                settle_cancels(&format!("{dir}/notes"), gave_up);
                 let alive = cl.alive();
                 let start = Instant::now();
                 cl.close();

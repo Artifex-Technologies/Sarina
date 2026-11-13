@@ -144,6 +144,22 @@ func mcpScenarios() []mcpScenario {
 	}
 }
 
+// settleCancels waits until the stand-in's notes hold want notifications/cancelled lines: the condition, not a time,
+// ends the wait; the deadline only turns a lost notification into a failure instead of a hang.
+func settleCancels(t *testing.T, notes string, want int) {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		b, _ := os.ReadFile(notes)
+		if got := strings.Count(string(b), `"method":"notifications/cancelled"`); got >= want {
+			return
+		} else if time.Now().After(deadline) {
+			t.Fatalf("%s: %d cancel notifications logged, want %d", notes, got, want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // TestParityMCPClient records the stdio client (testdata/parity/mcp.json) against the shell stand-in: the handshake,
 // tool and resource listings with pages, tool calls and resource reads rendered as text, JSON-RPC errors, the server's
 // own requests answered, noise ignored, a timeout or cancel that leaves the connection usable, a dying server's reason,
@@ -183,6 +199,7 @@ func TestParityMCPClient(t *testing.T) {
 			t.Fatal(err)
 		}
 		var results []any
+		gaveUp := 0
 		for _, op := range sc.Ops {
 			ctx, cancel := context.Background(), context.CancelFunc(func() {})
 			if op.CancelMs > 0 {
@@ -233,8 +250,15 @@ func TestParityMCPClient(t *testing.T) {
 				}
 			}
 			cancel()
+			if err != nil && (strings.Contains(err.Error(), ": no answer to ") || err == context.Canceled) {
+				gaveUp++
+			}
 			results = append(results, []any{out, clean(parity.Err(err))})
 		}
+		// A call the client gave up on sends notifications/cancelled from its own goroutine; Close right after could
+		// end the server's input before it is written (the Rust run of e965cf3's CI had it in the notes, Go's not).
+		// Wait until the stand-in has logged one for every call given up, so the notes compared are always whole.
+		settleCancels(t, filepath.Join(dir, "notes"), gaveUp)
 		alive := c.Alive()
 		start := time.Now()
 		c.Close()
