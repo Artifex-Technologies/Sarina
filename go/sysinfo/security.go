@@ -192,6 +192,14 @@ func fetchHeld(ctx context.Context, base string) []heldEntry {
 	return es
 }
 
+// shortID is the start of a held file's id as Heimdall's commands take it (an id shorter than that whole).
+func shortID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
+}
+
 // heldSummary: what Heimdall holds in quarantine and waits for the owner to judge, with the report Heimdall made by reading each file.
 func heldSummary(es []heldEntry) string {
 	var b strings.Builder
@@ -206,7 +214,7 @@ func heldSummary(es []heldEntry) string {
 		if !e.SeenSince.IsZero() {
 			since = "Heimdall's inventory had exactly this file there since " + e.SeenSince.Local().Format("2006-01-02 15:04")
 		}
-		fmt.Fprintf(&b, "- %s (%s, %d bytes, id %s), held %s from %s: %s. ClamAV does not know it. %s.\n", e.Original, e.Kind, e.Size, e.SHA256[:12],
+		fmt.Fprintf(&b, "- %s (%s, %d bytes, id %s), held %s from %s: %s. ClamAV does not know it. %s.\n", e.Original, e.Kind, e.Size, shortID(e.SHA256),
 			e.HeldAt.Local().Format("2006-01-02 15:04"), e.Source, e.Reason, since)
 		if r := e.Report; r != nil {
 			fmt.Fprintf(&b, "  entropy %.2f bits per byte (near 8: packed or encrypted)\n", r.Entropy)
@@ -335,7 +343,7 @@ func computedSummary(r auditReport, held []heldEntry) string {
 		n++
 		signs := malwareSigns(e)
 		if len(signs) >= 2 {
-			fmt.Fprintf(&b, "- HELD %s: %d signs of malware: %s. Advice that fits these facts: confirm it as malware (sudo heimdalld immunity confirm %s).\n", e.Original, len(signs), strings.Join(signs, "; "), e.SHA256[:12])
+			fmt.Fprintf(&b, "- HELD %s: %d signs of malware: %s. Advice that fits these facts: confirm it as malware (sudo heimdalld immunity confirm %s).\n", e.Original, len(signs), strings.Join(signs, "; "), shortID(e.SHA256))
 		} else {
 			fmt.Fprintf(&b, "- HELD %s: signs of malware: %s. Judge it from its report below.\n", e.Original, map[bool]string{true: "none found by code", false: strings.Join(signs, "; ")}[len(signs) == 0])
 		}

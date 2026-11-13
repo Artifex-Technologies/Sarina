@@ -88,14 +88,33 @@ func names() []string {
 	return out
 }
 
+// maxStepOutput is the most of one command's output that is kept: a report shows a few lines of it, and a program that
+// prints without end must not fill the memory in the 8 seconds it may run.
+const maxStepOutput = 1 << 20
+
+// headBuffer keeps the first max bytes written to it and drops the rest (the program is not stopped by a write error).
+type headBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (h *headBuffer) Write(p []byte) (int, error) {
+	if room := h.max - h.buf.Len(); room > 0 {
+		h.buf.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
+}
+
 func run(ctx context.Context, s step) string {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, s.argv[0], s.argv[1:]...)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
+	out := &headBuffer{max: maxStepOutput}
+	// standard error is not shown; a child left holding the output open is not waited for longer than 2 s
+	cmd.Stdout = out
+	cmd.WaitDelay = 2 * time.Second
 	err := cmd.Run()
-	text := strings.TrimSpace(out.String())
+	text := strings.TrimSpace(out.buf.String())
 	if text == "" {
 		if err != nil {
 			return "(not available here)"
