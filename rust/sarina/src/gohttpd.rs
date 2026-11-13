@@ -806,8 +806,9 @@ pub struct Exchange<'a> {
 
 impl Exchange<'_> {
     /// The body, at most `max` bytes (Go's `io.ReadAll(http.MaxBytesReader(w, r.Body, max))`). Past the limit the
-    /// answer will say `Connection: close` (`requestTooLarge`).
-    pub fn read_body(&mut self, max: usize, resp_header: &mut BTreeMap<String, Vec<String>>) -> Result<Vec<u8>, BodyErr> {
+    /// connection closes after the answer, which says `Connection: close` after its length (Go 1.27.4's
+    /// `requestTooLarge`; 1.27.3 put the header first, into the handler's own).
+    pub fn read_body(&mut self, max: usize) -> Result<Vec<u8>, BodyErr> {
         if self.expect_continue && !self.wrote_continue && self.body.remains() {
             self.wrote_continue = true;
             let _ = self.conn.write_all(b"HTTP/1.1 100 Continue\r\n\r\n");
@@ -816,7 +817,6 @@ impl Exchange<'_> {
         if r == Err(BodyErr::TooLarge) {
             self.close_after = true;
             self.limit_hit = true;
-            resp_header.insert("Connection".into(), vec!["close".into()]);
         }
         r
     }

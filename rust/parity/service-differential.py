@@ -873,6 +873,34 @@ def normalize(res, port):
     return out
 
 
+def go_minor_patch(binary):
+    """The Go release that built `binary` (minor, patch), from `go version FILE`; None when unknown."""
+    go = shutil.which("go")
+    if not go:
+        return None
+    try:
+        out = subprocess.run([go, "version", binary], capture_output=True, text=True, timeout=60).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    m = re.search(r"go1\.(\d+)\.(\d+)", out)
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def as_go_1_27_4(res):
+    """Go 1.27.3 and older put a body-too-large answer's `Connection: close` first, into the handler's header; 1.27.4
+    writes it after the length, as sarina-rs does: an older Go build's answers are moved to the newer form."""
+    def fix(x):
+        if isinstance(x, list):
+            return [fix(y) for y in x]
+        if isinstance(x, str) and x.startswith("HTTP/1.1 413") and "\r\nConnection: close\r\nContent-Type" in x:
+            head, _, body = x.partition("\r\n\r\n")
+            lines = [ln for ln in head.split("\r\n") if ln != "Connection: close"]
+            return "\r\n".join(lines + ["Connection: close"]) + "\r\n\r\n" + body
+        return x
+    res["responses"] = fix(res["responses"])
+    return res
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--go", required=True)
@@ -901,8 +929,14 @@ def main():
     scs = [s for s in scenarios() if o.only in s["name"]]
     keys = ("responses", "stderr", "stdout", "exit", "requests", "limbo", "files")
     bad = 0
+    gov = go_minor_patch(go)
+    old_go = gov is not None and gov < (27, 4)
+    if old_go:
+        print(f"the Go build is go1.{gov[0]}.{gov[1]}: its body-too-large answers are compared in go1.27.4's form")
     for s in scs:
         g = run_scenario(go, s, base, backend, limbo, go, busy_port)
+        if old_go:
+            g = as_go_1_27_4(g)
         r = run_scenario(rs, s, base, backend, limbo, go, busy_port)
         diffs = [k for k in keys if g[k] != r[k]]
         if o.show:

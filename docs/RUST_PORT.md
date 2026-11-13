@@ -535,6 +535,10 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   further one is closed at once (Go has no limit); `--host` with a name other than localhost (only allowed with a token)
   is resolved by the system's resolver and a failure reads "lookup NAME: no such host". Each pooled session's agent runs
   on a thread of its own (8 MiB of stack reserved, used as needed); nothing of it shows on the wire.
+- **Go 1.27.4 against 1.27.3.** A body past the 8 MiB limit is answered with `Connection: close` after the length in Go
+  1.27.4 (CI's Go), where 1.27.3 (this PC's, 2026-11-12) put it first, into the handler's own header. The port writes
+  1.27.4's form; the service differential reads the Go build's version (`go version FILE`) and compares an older build's
+  answers in the newer form (found by the first CI run of the differential).
 - **Paths**: `realRoot` follows links with a port of Go's `EvalSymlinks` (not `std::fs::canonicalize`, which differs for
   relative paths and missing parts).
 

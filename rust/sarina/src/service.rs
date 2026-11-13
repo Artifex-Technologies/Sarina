@@ -600,14 +600,9 @@ static CHAT: Ty = Ty::Struct("service.chatReq", "chatReq", &[Field("prompt", &ST
 
 /// Go's `readBody`: the body (8 MiB at most, within its deadline) read as JSON into the request's struct.
 fn read_body(ex: &mut Exchange, t: &Ty) -> Result<Val, Response> {
-    let mut hdr = BTreeMap::new();
-    let body = match ex.read_body(MAX_BODY, &mut hdr) {
+    let body = match ex.read_body(MAX_BODY) {
         Ok(b) => b,
-        Err(BodyErr::TooLarge) => {
-            let mut r = detail(413, "request body too large");
-            r.header.extend(hdr);
-            return Err(r);
-        }
+        Err(BodyErr::TooLarge) => return Err(detail(413, "request body too large")),
         Err(BodyErr::Broken) => {
             let mut r = detail(400, "request body could not be read");
             r.set("Connection", "close");
