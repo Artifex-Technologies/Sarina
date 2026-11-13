@@ -16,8 +16,8 @@ equal.
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
-| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | open |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service and gui ported and proving (run in Rust only under `SARINA_RS_TRY`; 344 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **begun** (2026-11-12, night): `doctor` (the command and the `sarina_doctor` tool) ported and proving (`SARINA_RS_TRY=doctor`; 73 differential cases, each in a network namespace of its own); the rest open |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 417 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -275,13 +275,14 @@ reaches it any more (dead code is a risk).
 | `agent/run.rs` | `agent.go` with the agent's parts of `plan.go`, `notes.go`, `summarize.go`, `window.go`, `tiers.go` and `subagent.go`: the drive loop against a scripted model from a loopback server, the Go agent and the port given the same answers (go/agent/run_parity_test.go): plain answers, tools, writes, the claim check, empty and thinking-only replies, continuations, every nudge kind the corpus reaches, the no-think rule, budgets, the turn limit, duplicate and broken calls, missing usage, streaming with a secret, backend errors, the repeat-limit retry, the reactive retry, plan mode with each decision, resume, notes by cadence and by window, notes the scan blocks, summaries and a failed one, snipping and compaction thresholds, the hard limit, cancellation, schema and reasoning, sub-agents and refused ones | `agentrun.json` | 41 tasks, 794 comparisons (every request body, the events, results, session files, notes, child sessions, the workspace) |
 | `bin/sarina-rs.rs`, `cli/mod.rs` (`ported`), `cli/sessionmigrate.rs`, `cli/limbocmd.rs`, `cli/tiercmd.rs`, `goflag.rs` (repeatable flags, a usage line of the command's own, back-quoted names) | the commands sarina-rs runs itself: the memory commands above, `cli/sessionmigrate.go`, `limbo/integration.go`'s limbo-profiles and limbo-validate, `cli/tiercmd.go`'s tiers status with `runkit.EscalationFlags`; whole binaries side by side ("The CLI differential") | `rust/parity/cli-differential.py` | 195 cases, 975 comparisons (of the 289 the differential now has) |
 | `cli/chatopts.rs`, `goflag.rs` (float flags with Go's `%v` and range rules, the flags given) | `cli/chat.go`'s `newOpts` (every flag, its order and usage) and `opts.build`: a fresh run, a stored session (given flags only; permissions only widen), another account's session (server, permissions, folders, escalation from this run), the access tier, budgets, the context switches, the schema file, the allowlist | `chatopts.json` | 37 |
-| `cli/chat.rs` | `cli/chat.go` (`opts.agent`, `conversation`, `report`, the event printing, `runTurn` with Ctrl-C), `slash.go` (/help), `plancmd.go` (/plan, `askPlanDecision`), `skillcmd.go` (skill list, skill run, /skill), `tiercmd.go` (`tierRouter`, `stdinConfirm`, `linesConfirm`, /tier), `memorycmd.go` (memory-review, the review when a conversation ends), `owner_unix.go`; the default tools in the Go build's order with `sarina_doctor` run in the Go build | the CLI differential's chat cases (scripted model) | 94 cases |
+| `cli/chat.rs` | `cli/chat.go` (`opts.agent`, `conversation`, `report`, the event printing, `runTurn` with Ctrl-C), `slash.go` (/help), `plancmd.go` (/plan, `askPlanDecision`), `skillcmd.go` (skill list, skill run, /skill), `tiercmd.go` (`tierRouter`, `stdinConfirm`, `linesConfirm`, /tier), `memorycmd.go` (memory-review, the review when a conversation ends), `owner_unix.go`; the default tools in the Go build's order (`sarina_doctor` in-process since doctor was ported) | the CLI differential's chat cases (scripted model) | 94 cases |
 | `session/readfile.rs` | `session/readfile.go` (new 2026-11-12): a session file or a session's notes as a bounded regular file; `Load`, `LoadByID` | Go's tests, `tests/session_reads.rs` | 1 each |
 | `runkit.rs` | `runkit`: `Scrubber` (literals, the redactor's shapes, bearer tokens, secret-named JSON keys, key=value), `Entry`, `Transcript`, `Result` as the service and the GUI send them; `Build` from plain settings (allowlists, policy, compute tiers, the claude CLI escalation, sub-agents, prompt options), each built agent run once against the same scripted model as Go's | `runkit.json`, `runkitbuild.json` | 17 + 11 (every request body) |
 | `agent/run.rs` (`Options.confirm`, `set_confirm`), `tools/registry.rs` (`Confirm`, `Context.confirm`) | `agent.Options.Confirm`, `SetConfirm`, `tools.RuntimeOperatorConfirm`: the per-call operator question (council_ask's channel), not the Approver; sub-agents get the parent's | Go's `TestSetConfirmAddsOnlyItsOwnRuntimeKey`, as a unit test | 1 |
 | `bin/sarina-rs.rs`, `cli/entry.rs` | `cmd/sarina/main.go`: the names it answers to (`aliasCommand`), Heimdall's lock first (the built Go program run with a made-up lock under each name and command line: which are refused, the message, exit 3), and the hand-over to the Go build by execve: the arguments unchanged (bytes that are not UTF-8 too), the environment, the folder, the exit status, the caller's SIGPIPE (ignored or not); a missing Go build (127) | `entry.json` | 41, and 9 hand-over checks |
 | `service.rs`, `gohttpd.rs`, `cli/servicecmd.rs`, `gourl.rs` (`parse_request_uri`), `goflag.rs` (`tribool`) | `service/service.go` (the pool with its LRU, create with every check of the ceiling, chat with resume and the local /help, delete, the browser guard, the bearer token, the 422, 403 and 404 bodies; each pooled session's agent on a thread of its own, which serialises its turns; a client that hangs up cancels its turn) and `command.go` (the flags with `triBool`, the banner, the listen errors, SIGINT and SIGTERM with Go's 5 s shutdown); Go 1.27's `net/http` server as the service uses it (request reading and its errors, keep-alive, 100-continue, the answer's header order, chunking past 2 KiB, draining an unread body, the mux's cleaned-path redirects) | the service differential | 33 scenarios, 279 steps |
 | `gui/` (`mod.rs`, `state.rs`, `run.rs`, `api.rs`, `files.rs`), `cli/guicmd.rs`, `gohttpd.rs` (streamed answers, `io.WriteString` bodies), `agent/run.rs` (`watch_registry`) | `gui/` (the guard with its token, Host, Origin, Sec-Fetch-Site and JSON rules; the mux with its patterns, cleaned-path and slash redirects and the 405 a CONNECT gets; the page with its token and cookie; `http.FileServerFS` over the built-in page with its redirects, conditions and byte ranges; the settings and their patch; runs answered as JSON or as an event stream, the re-attachable stream with its keep-alive, approvals of tool calls and plans, cancel, a client that hangs up; sessions, file history, the plan, the to-do list, memory and its review, the instruction files, tiers, the backend probe) and `command.go` (the flags, the banner, the launch link, the browser, SIGINT and SIGTERM with Go's 3 s shutdown) | the GUI differential | see "The GUI differential" |
+| `doctor.rs`, `cli/doctorcmd.rs`, `cli/chat.rs` (`doctor_tool`), `gohttp.rs` (user information in a URL) | `doctor/` (every check: the backend's `/models` and context window, the session folder's scan with the shape Heimdall reads, keys stored, retired tool names, the tiers with their health, skills, MCP and policy files, Limbo's socket and answers, Heimdall's /healthz, the ports; the table and the JSON; the command's flags; the tool, now in-process); Go's client sending a URL's user information as Basic credentials | the CLI differential's doctor cases, each in a network namespace of its own | 73 cases, 365 comparisons |
 | `tz.rs` (from Limbo's) | Go's `time.Local`: initLocal ($TZ, /etc/localtime), LoadLocationFromTZData, `lookup` with the POSIX TZ footer; the prompt's "Today's date is" | `tz.json` (`go/internal/parity/tz_parity_test.go`) | 47 files, 1,080 lookups |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
@@ -517,10 +518,10 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   by SIGPIPE, as Go's runtime ends the Go build, even when the caller started it with SIGPIPE ignored (Go does that
   too, for fds 1 and 2; the differential checks both). An environment value that is not UTF-8 reads as U+FFFD
   replacements in a ported command (Go keeps the bytes); none of the variables these commands read holds such bytes.
-- **`sarina_doctor` in a chat run by sarina-rs** runs the check-up in the Go build (`doctor --json --cwd ROOT
-  --session-dir DIR`, the process's environment, its report bounded at 4 MiB), where Go runs it in its own process; the
-  report and `doctor_failed` are the same (the differential's chat doctor case). A Go build that cannot be started makes
-  it a tool error, where Go's never fails. It goes when doctor is ported.
+- **`doctor`'s HTTP requests are gohttp's.** A model server whose `/models` redirects, or a Heimdall whose `/healthz`
+  does, is not followed (Go follows it, so Go reports the status at the end of the redirects, sarina-rs the 30x); no proxy
+  from the environment. As the tier probes and the console's backend probe. Every other answer, and every request,
+  is Go's (the differential's doctor cases).
 - **Ctrl-C.** Go's `cli.Main` takes SIGINT for every command, so a Ctrl-C does nothing to a command that does not watch for
   it (limbo-validate waiting on a guest for up to 20 minutes, a session-search over many files); the moved commands in
   sarina-rs keep the default action and end. chat, resume and skill run take it as Go's do (a thread waits for the signal:
@@ -558,8 +559,17 @@ requests (method, target, Host, Content-Type, the key headers, the body; not Use
 Connection, see "Differences" for the HTTP client) and every file left (type, mode, contents). Normalised: only the
 machine's memory percentage in `tiers status` (it changes between the two runs).
 
+**Each case runs in a network namespace of its own** (since 2026-11-12, night): a child process of the harness makes a
+user and network namespace (the user mapped to itself, so files and permissions read as outside; only loopback, brought
+up), starts the scripted servers in it and runs both builds there. Nothing a case runs can reach a port of the machine's
+own: `doctor` dials 127.0.0.1:8899 and :8765 (on my PC the real service and console) and the default model address
+(:8000), and inside the namespace they are free unless the case holds them itself (`listen`). Without user namespaces the
+harness stops (CI turns AppArmor's restriction of them off for the run). Files may also be named pipes (`|`) and stale
+unix sockets (`~`), and the Limbo stand-in's socket can take a mode of the case's (`sockmode`).
+
 On 2026-11-12: 195 cases, 975 comparisons, no difference; with the chat cases (below) 289 cases, 1,445 comparisons, no
-difference; with the wider chat cases (night) 344 cases, 1,720 comparisons, no difference. The cases: the memory commands on usual, missing, damaged,
+difference; with the wider chat cases (night) 344 cases, 1,720 comparisons, no difference; with the to-do pipe case and the
+doctor cases (night, later) 417 cases, 2,085 comparisons, no difference. The cases: the memory commands on usual, missing, damaged,
 over-full, linked, non-UTF-8 and invisible-character memory, every review entry approved and rejected (also with Heimdall
 denying, allowing and failing, and through the old `SENTRY_REVIEW_URL`); session-search with flags among the words,
 bad and huge `--max`, links, damaged files, 30 sessions, a long message; session-migrate on retired calls, dry runs, a bad
@@ -577,6 +587,30 @@ python3 -I rust/parity/cli-differential.py --go /tmp/sarina-go --rs rust/target/
 ```
 
 The socket path must stay under 108 bytes: with a long temporary folder give `--out` a short one (or set `TMPDIR`).
+
+### The doctor cases (2026-11-12, night)
+
+`sarina doctor` and `--json` (73 cases, run with `SARINA_RS_TRY=doctor`; the trust folder the case's own): the flags
+(`-h`, a bad flag, an extra argument, `--cwd`, `--session-dir` absolute and relative); the backend unreachable, at the
+default address, with a token in its URL (user information and a query), unparseable, 401, 403, 500, hanging up, listing
+nothing, not JSON, data of the wrong shape, the model listed, not listed, with a tag either way; the context window from
+Ollama's `/api/ps`, from `/props`, unknown, small, from `SARINA_CONTEXT_WINDOW`; the session folder missing, empty, a
+file, not writable, not readable, and holding every kind of file (damaged, the wrong shape, a stored key at the top and
+deep down, a blank key, retired tool names in a call and in a result, `null`, an array, a folder named .json, a named pipe,
+a link and a dangling link), more than five unreadable; tiers (healthy, down, a Claude tier with and without its key, the
+claude CLI found and not, disabled, a name that needs cleaning, warnings, damaged, invalid, `SARINA_TIERS_FILE`, a URL
+with user information and with a bad escape); skills, MCP and policy files (good, damaged, the workspace's); Limbo (unset,
+the wrong name, a Windows separator, missing, not a socket, a stale socket, world-writable, open to others, no permission,
+no profiles, skipped profiles, more than five, an error code with and without a remedy, an error without a code, a
+hang-up); Heimdall (unset, the old variable name, not http, no host, unreachable, unhealthy, the wrong path); the ports
+free, one and both held by the case; everything failing at once in the table form. Not a case: a redirect from `/models`
+("Differences"). Run Go against Go first: every case agreed with itself.
+
+**Found by these cases, fixed in Rust (Go was right):** a URL with user information (`http://user:pass@host/v1`) was
+refused by gohttp ("user information in the URL is not supported"), where Go's client leaves it out of the Host and sends
+it as `Authorization: Basic ...` when the request has no Authorization header of its own. That was so for every gohttp
+request (chat's model transport, the tier probes, the console's backend probe), not only doctor's. Now as Go
+(`gohttp::target`), with Go's checks of the characters and escapes.
 
 ### The chat cases (2026-11-12)
 
@@ -733,10 +767,14 @@ forked from Python carries Python's pages into its own peak).
 | `gui`, resident memory idle | 23.1 MB | 5.7 MB | −75 % |
 | `gui`, a run with a read_file call (blocking `POST /api/chat`) | 2.9 ms | 2.7 ms | about the same |
 | `gui`, resident memory after 30 / 100 runs | 26.1 / 27.7 MB | 11.1 / 12.0 MB | −57 % (one agent per run, on one thread) |
-| size on disk | 12.0 MB | 6.6 MB (with the GUI, 2026-11-12 night) | −45 % (both are installed while commands still go to Go) |
+| `doctor --json` (a stand-in model, two sessions), wall time | 65.5 ms | 10.0 ms | −85 % (55 ms sooner) |
+| `doctor --json`, peak memory | 22.8 MB | 8.1 MB | −64 % |
+| size on disk | 12.0 MB | 6.7 MB (with the GUI and doctor, 2026-11-12 night) | −44 % (both are installed while commands still go to Go) |
 
 The GUI rows were measured the same way (night of 2026-11-12, 30 starts of each, interleaved; the runs 100 in a row on
-one console, after `/api/clear`).
+one console, after `/api/clear`). The doctor rows too, later that night, inside a user and network namespace of the
+measurement's own (so the ports check and the default addresses reach nothing real), the stand-in answering `/v1/models`
+and `/api/ps`; two series of 30, the same medians (64-67 ms against 10.0 ms).
 
 **Worse in Rust:** the busy service's resident memory, by 7-10 MB (the busy console is the other way round: 12 MB against
 Go's 28). It levels off (no growth from 100 to 400 sessions, so
@@ -937,9 +975,41 @@ Eighth session of 2026-11-12 (night): the GUI.
   so its differential first needs a private network namespace (`unshare -rn` around both builds) or the ports from the
   case; that comes first.
 
+Ninth session of 2026-11-12 (night): the to-do tools' reads, the MCP fixture's flake, doctor.
+
+- **Go fix, in Go and Rust, with Go tests that failed before** (`f2d80bb`): every to-do and plan tool read
+  `.port_sessions/task_runtime.json` and `plan_runtime.json` with `os.ReadFile`, so a named pipe planted under either name
+  held the session's turn for ever, and a file of any size was read whole. Now `session.ReadFile` (a regular file, 64 MiB
+  at most), as the console reads the list; `session.ReadRegular` now refuses a file past its bound by its size before
+  reading (a sparse file of gigabytes was read up to the bound first). `TestTodoToolsDoNotWaitOnNamedPipes`,
+  `TestTodoToolsDoNotReadHugeFiles` (and `tests/todo_reads.rs`, counting its allocations); a CLI differential case plants
+  both pipes (the old Go build times out on it).
+- **The MCP fixture's flake** (`parity_mcp`, `lines`): a call the client gives up on sends `notifications/cancelled` from
+  a goroutine (a thread in Rust), and the fixture closed the client right after the last call, so whether the stand-in
+  logged that cancel was a race (Go's recorded fixture had it not, CI's Rust run had it; `c1d8267`). Both fixtures now count the calls
+  given up (a timeout or a cancelled context) and wait until the stand-in's notes hold that many cancels before closing:
+  the condition ends the wait, a 20 s deadline only turns a lost cancel into a failure. The fixture's `lines` row now
+  always holds the cancel. 50 runs of each, the Rust runs beside the Go runs: all passed.
+- **Go fix, in Go and Rust, with a Go test that failed before**: doctor's session scan read each `.json` file with
+  `os.ReadFile` after a size check that a named pipe passes (size 0), so a pipe planted in the session folder hung
+  `sarina doctor` and the model's `sarina_doctor` tool. Now `session.ReadFile` (`TestSessionScanDoesNotWaitOnNamedPipes`,
+  `f28705c`).
+- **The CLI differential runs each case in a network namespace of its own** ("The CLI differential"), so the ports check
+  never meets the real service and console; the existing chat doctor case had dialled them before.
+- **doctor in Rust** (`doctor.rs`, `cli/doctorcmd.rs`; the `sarina_doctor` tool now in-process instead of the Go build),
+  proved by 73 doctor cases written first and run Go against Go ("The doctor cases"); proving, not moved: sarina-rs runs
+  it only under `SARINA_RS_TRY=doctor`. Found by them, fixed in Rust (Go was right): gohttp refused a URL with user
+  information, which Go's client sends as Basic credentials (every gohttp request, not only doctor's).
+- CLI differential **417 cases, 2,085 comparisons, no difference**; service differential 35 scenarios and GUI differential
+  59 scenarios run again on the new build: no difference, but one GUI run of "a write approved once, then for the
+  session" listed the file history in another order (6 of 6 reruns agreed): the console sorts it newest first by a
+  timestamp of whole seconds (stable), so a run whose writes straddle a second boundary orders them differently in
+  either build. A harness flake, not a port difference (next item 5).
+- Measured: `doctor --json` 65.5 → 10.0 ms (−85 %), 22.8 → 8.1 MB (−64 %); sarina-rs 6.7 MB on disk.
+
 Next, in this order:
 
-1. **Proposed, not made: moving chat, resume, skill, memory-review, service and gui to always-Rust.** All six agree with
+1. **Proposed, not made: moving chat, resume, skill, memory-review, service, gui and doctor to always-Rust.** All six agree with
    Go on every case; what is left is use on the real machine, which only the owner can give. The proposal, in steps (each
    a one-line move from `cli::proving` to `cli::ported` that **keeps the `needs_go` gate**: with an optional tool set on,
    the Go build answers, or the model would be offered fewer tools):
@@ -955,14 +1025,15 @@ Next, in this order:
       service's memory (+7-10 MB, "Why Rust: measured"); `M_ARENA_MAX`-style limits are the first thing to measure if
       it matters. The unit needs no change: `sarina-service` is sarina-rs.
    Going back at any step is removing the name from `cli::ported` (or reinstalling the previous package).
-2. **Doctor** (last of the core): its check-up, so `sarina_doctor` stops running in the Go build. Its differential needs
-   the ports check kept off the real 8899/8765 first (a network namespace of its own, see above).
-3. The to-do tools read `task_runtime.json` and the plan file with `os.ReadFile` (Go and the port alike): the same named
-   pipe hang the console had; bound them as the console's (a Go fix with a failing test first).
-4. A CI flake in `parity_mcp` (`lines`, run of `e965cf3`): the over-long answer's call times out by design, and the
-   client's `notifications/cancelled` for it was in the Rust run's recorded notes but not in Go's; the stand-in's notes
-   are read before a late cancel arrives. The fixture should settle the notes (as `bae7378` did for requests) or leave
-   the cancel out of them.
+2. **doctor's move**: with the others (it is read-only and quick; `SARINA_RS_TRY=doctor` for the owner's days of use).
+3. **Step 5, the optional tool sets**, so `needs_go` stops handing chats to Go where `sarina.env` turns one on: sysinfo
+   (`system_status`, read-only probes) first, then vault/daily/insight/route, cryptotools/stego, quantum/trachtenberg,
+   reverse, forge, council; each with fixtures and differential cases first.
+4. The service and GUI differentials do not run in a namespace of their own: their servers take ports from the kernel and
+   every address they are given is the scripted server's, so nothing reaches 8899 or 8765 today. If a scenario ever runs
+   doctor (or anything that dials a fixed port), give them the CLI differential's `run_case` wrapper first.
+5. The GUI differential's file-history step can flake (above): compare that list with entries of equal timestamps (after
+   normalising) in a fixed order, or make the scenario's writes fall in one second.
 
 Notes for whoever continues: tool calls that write files can turn a literal `\u....` escape into the character itself
 (it happened to a test's expected string here); build such strings from parts or check them with grep. The timed client

@@ -238,6 +238,27 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-12 (night, 5) — Rust port: doctor in Rust behind SARINA_RS_TRY; Go fixes for planted pipes in the to-do tools and doctor
+- **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** every to-do and plan tool read
+  `.port_sessions/task_runtime.json` and `plan_runtime.json` with `os.ReadFile`, so a named pipe planted under either name
+  held the session's turn for ever and a file of any size was read whole (`f2d80bb`: bounded regular files, as the console
+  reads the list); doctor's session scan did the same for every `.json` in the session folder, so a planted pipe hung
+  `sarina doctor` and the model's `sarina_doctor` tool (`f28705c`). `session.ReadRegular` now refuses an over-long file by
+  its size before reading.
+- The MCP fixture's flake (`parity_mcp`, `lines`) is gone: both fixtures wait until the stand-in has logged a cancel for
+  every call given up before closing the client (a condition, not a longer timeout); 50 Go and 50 Rust runs passed (`c1d8267`).
+- **The CLI differential runs every case in a user and network namespace of its own**, so nothing a case runs can reach
+  the real service (8899), console (8765) or a model on this PC; CI turns Ubuntu's AppArmor restriction off for that step.
+- `sarina doctor` is ported (`rust/sarina/src/doctor.rs`, `cli/doctorcmd.rs`; the `sarina_doctor` tool now in-process),
+  proved by 73 doctor cases written first. Found by them, fixed in Rust (Go was right): a URL with user information
+  (`http://user:pass@host/v1`) was refused by the port's HTTP client; Go sends it as Basic credentials. **CLI differential
+  417 cases, 2,085 comparisons, no difference.** Not moved: sarina-rs runs doctor only under `SARINA_RS_TRY=doctor`; the
+  always-Rust proposal now lists it with the others (the owner decides).
+- Measured: `doctor --json` 65.5 → 10.0 ms (−85 %), 22.8 → 8.1 MB (−64 %); sarina-rs 6.7 MB on disk.
+- **For Heimdall's, Limbo's and Labyrinth's boards:** nothing changes (no package, port or contract change).
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-12 (night, 4) — Rust port: the console (`sarina gui`) in Rust behind SARINA_RS_TRY; a Go fix for planted pipes
 - `sarina gui` is ported (`rust/sarina/src/gui/`, `cli/guicmd.rs`) and proved by a new differential written first,
   `rust/parity/gui-differential.py`: both builds' consoles on the same page requests, static files (redirects, conditions,
