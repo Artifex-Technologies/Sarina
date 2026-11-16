@@ -25,13 +25,11 @@ fn pem_of(label: &str, der: &[u8]) -> String {
     s + &format!("-----END {label}-----\n")
 }
 
-/// The answer as the fixture holds it; None (a URI name url.Parse refuses) only where Go's error is url.Parse's own.
-fn run(input: &str, key: &str, want: &[Value]) -> Vec<Value> {
+/// The answer as the fixture holds it.
+fn run(input: &str, key: &str) -> Vec<Value> {
     match modern::modern(input, key, (1_700_000_000, 0)) {
-        Some(Ok(o)) => vec![text(&o), json!("")],
-        Some(Err(e)) => vec![json!(""), json!(e)],
-        None if want[0].as_str().is_some_and(|s| s.contains("cannot parse URI") && s.contains(": parse \"")) => want.to_vec(),
-        None => vec![json!("Rust handed it to Go"), json!("")],
+        Ok(o) => vec![text(&o), json!("")],
+        Err(e) => vec![json!(""), json!(e)],
     }
 }
 
@@ -41,15 +39,22 @@ fn modern_x509_matches_go() {
     for c in common::cases("modernx509") {
         for r in c["out"].as_array().unwrap() {
             let r = r.as_array().unwrap();
-            let n = r.len();
             let got = match c["fn"].as_str().unwrap() {
                 "cert" => {
                     let (label, h) = (r[0].as_str().unwrap(), r[1].as_str().unwrap());
                     let der: Vec<u8> = (0..h.len()).step_by(2).map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap()).collect();
-                    [vec![r[0].clone(), r[1].clone()], run(&pem_of(label, &der), "", &r[n - 2..])].concat()
+                    [vec![r[0].clone(), r[1].clone()], run(&pem_of(label, &der), "")].concat()
                 }
-                "raw" => [vec![r[0].clone()], run(r[0].as_str().unwrap(), "", &r[n - 2..])].concat(),
-                _ => [vec![r[0].clone(), r[1].clone()], run(r[0].as_str().unwrap(), r[1].as_str().unwrap(), &r[n - 2..])].concat(),
+                "raw" => [vec![r[0].clone()], run(r[0].as_str().unwrap(), "")].concat(),
+                "uri" => {
+                    let s = r[0].as_str().unwrap();
+                    let parsed = match sarina::gourl::parse_host_or_error(s) {
+                        Ok(h) => json!({ "host": String::from_utf8_lossy(&h) }),
+                        Err(e) => json!({ "err": e }),
+                    };
+                    vec![r[0].clone(), parsed, json!(sarina::gonetip::parses_as_ip(s))]
+                }
+                _ => [vec![r[0].clone(), r[1].clone()], run(r[0].as_str().unwrap(), r[1].as_str().unwrap())].concat(),
             };
             d.eq(
                 format!("{} {}", c["fn"], &r[1].to_string()[..r[1].to_string().len().min(90)]),

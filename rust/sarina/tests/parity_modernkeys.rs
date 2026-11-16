@@ -26,9 +26,8 @@ fn pem_of(label: &str, der: &[u8]) -> String {
 
 fn run(input: &str, key: &str) -> Vec<Value> {
     match modern::modern(input, key, (1_700_000_000, 0)) {
-        Some(Ok(o)) => vec![text(&o), json!("")],
-        Some(Err(e)) => vec![json!(""), json!(e)],
-        None => vec![json!("needs crypto/x509"), json!("")],
+        Ok(o) => vec![text(&o), json!("")],
+        Err(e) => vec![json!(""), json!(e)],
     }
 }
 

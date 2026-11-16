@@ -34,9 +34,8 @@ fn modern_matches_go() {
             let (input, key, mode) = (r[0].as_str().unwrap(), r[1].as_str().unwrap(), r[2].as_str().unwrap());
             std::env::set_var("PGP_MODE", mode);
             let got = match modern::modern(input, key, (1_700_000_000, 0)) {
-                Some(Ok(o)) => json!([input, key, mode, text(&o), ""]),
-                Some(Err(e)) => json!([input, key, mode, "", e]),
-                None => json!("needs crypto/x509"),
+                Ok(o) => json!([input, key, mode, text(&o), ""]),
+                Err(e) => json!([input, key, mode, "", e]),
             };
             d.eq(format!("modern {input:.50?} key {key:?} {mode}"), &got, r);
         }

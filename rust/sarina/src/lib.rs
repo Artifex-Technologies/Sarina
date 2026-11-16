@@ -20,6 +20,7 @@ pub mod gohttp;
 pub mod gohttpd;
 pub mod gojson;
 pub mod gomath;
+pub mod gonetip;
 pub mod goos;
 pub mod gopath;
 pub mod gorand;

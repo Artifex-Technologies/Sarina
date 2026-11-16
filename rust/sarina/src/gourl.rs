@@ -305,3 +305,166 @@ impl Url {
         out
     }
 }
+
+/// Go's `unescape` with its errors (EscapeError, InvalidHostError) for the modes url.Parse checks: path, fragment and
+/// user information (only `%` is checked), host and zone.
+fn unescape_err(s: &[u8], mode: Mode, zone: bool) -> Result<Vec<u8>, String> {
+    let q = |b: &[u8]| crate::gotext::quote(&String::from_utf8_lossy(b));
+    let mut i = 0;
+    while i < s.len() {
+        match s[i] {
+            b'%' => {
+                if i + 2 >= s.len() || !s[i + 1].is_ascii_hexdigit() || !s[i + 2].is_ascii_hexdigit() {
+                    return Err(format!("invalid URL escape {}", q(&s[i..s.len().min(i + 3)])));
+                }
+                if mode == Mode::Host && !zone && unhex(s[i + 1]) < 8 && &s[i..i + 3] != b"%25" {
+                    return Err(format!("invalid URL escape {}", q(&s[i..i + 3])));
+                }
+                if zone {
+                    let v = unhex(s[i + 1]) << 4 | unhex(s[i + 2]);
+                    if &s[i..i + 3] != b"%25" && v != b' ' && should_escape(v, HOST_OK) {
+                        return Err(format!("invalid URL escape {}", q(&s[i..i + 3])));
+                    }
+                }
+                i += 3;
+            }
+            c => {
+                if mode == Mode::Host && c < 0x80 && should_escape(c, HOST_OK) {
+                    return Err(format!("invalid character {} in host name", q(&s[i..i + 1])));
+                }
+                i += 1;
+            }
+        }
+    }
+    let mut out = Vec::with_capacity(s.len());
+    let mut i = 0;
+    while i < s.len() {
+        if s[i] == b'%' {
+            out.push(unhex(s[i + 1]) << 4 | unhex(s[i + 2]));
+            i += 3;
+        } else {
+            out.push(s[i]);
+            i += 1;
+        }
+    }
+    Ok(out)
+}
+
+fn parse_host_err(scheme: &str, host: &[u8]) -> Result<Vec<u8>, String> {
+    let q = |b: &[u8]| crate::gotext::quote(&String::from_utf8_lossy(b));
+    if let Some(open) = host.iter().rposition(|&c| c == b'[') {
+        if open > 0 {
+            return Err("invalid IP-literal".into());
+        }
+        let Some(close) = host.iter().rposition(|&c| c == b']') else {
+            return Err("missing ']' in host".into());
+        };
+        let colon_port = &host[close + 1..];
+        if !valid_optional_port(colon_port) {
+            return Err(format!("invalid port {} after host", q(colon_port)));
+        }
+        let port = unescape_err(colon_port, Mode::Host, false)?;
+        let name = &host[1..close];
+        let unescaped = match name.windows(3).position(|w| w == b"%25") {
+            Some(z) => [unescape_err(&name[..z], Mode::Host, false)?, unescape_err(&name[z..], Mode::Host, true)?].concat(),
+            None => unescape_err(name, Mode::Host, false)?,
+        };
+        let text = String::from_utf8_lossy(&unescaped).into_owned();
+        let addr = crate::gonetip::parse_addr(&text).map_err(|e| format!("invalid host: {e}"))?;
+        if addr.is4 {
+            return Err("invalid IP-literal".into());
+        }
+        return Ok([b"[".as_slice(), &unescaped, b"]", &port].concat());
+    }
+    if let Some(first) = host.iter().position(|&c| c == b':') {
+        let last = host.iter().rposition(|&c| c == b':').unwrap_or(first);
+        let i = if last != first && !(scheme == "http" || scheme == "https") { last } else { first };
+        if !valid_optional_port(&host[i..]) {
+            return Err(format!("invalid port {} after host", q(&host[i..])));
+        }
+    }
+    unescape_err(host, Mode::Host, false)
+}
+
+/// Go's `url.Parse` as crypto/x509 uses it on a URI name: the host, or Go's error text ("parse \"...\": ...").
+pub fn parse_host_or_error(raw: &str) -> Result<Vec<u8>, String> {
+    let quote = crate::gotext::quote;
+    let (u, frag) = raw.split_once('#').unwrap_or((raw, ""));
+    let wrap = |s: &str, e: String| format!("parse {}: {e}", quote(s));
+    let host = (|| -> Result<Vec<u8>, String> {
+        let b = u.as_bytes();
+        if b.iter().any(|&c| c < 0x20 || c == 0x7f) {
+            return Err("net/url: invalid control character in URL".into());
+        }
+        if u == "*" {
+            return Ok(Vec::new());
+        }
+        let mut scheme = String::new();
+        let mut rest = u;
+        for (i, c) in b.iter().enumerate() {
+            if c.is_ascii_alphabetic() {
+                continue;
+            }
+            if c.is_ascii_digit() || matches!(c, b'+' | b'-' | b'.') {
+                if i == 0 {
+                    break;
+                }
+                continue;
+            }
+            if *c == b':' {
+                if i == 0 {
+                    return Err("missing protocol scheme".into());
+                }
+                scheme = u[..i].to_ascii_lowercase();
+                rest = &u[i + 1..];
+            }
+            break;
+        }
+        if rest.ends_with('?') && rest.matches('?').count() == 1 {
+            rest = &rest[..rest.len() - 1];
+        } else if let Some(i) = rest.find('?') {
+            rest = &rest[..i];
+        }
+        if !rest.starts_with('/') {
+            if !scheme.is_empty() {
+                return Ok(Vec::new());
+            }
+            if rest.split('/').next().unwrap_or("").contains(':') {
+                return Err("first path segment in URL cannot contain colon".into());
+            }
+        }
+        let mut host = Vec::new();
+        if (!scheme.is_empty() || !rest.starts_with("///")) && rest.starts_with("//") {
+            let a = &rest[2..];
+            let (authority, r) = match a.find('/') {
+                Some(i) => (&a[..i], &a[i..]),
+                None => (a, ""),
+            };
+            rest = r;
+            let at = authority.rfind('@');
+            host = parse_host_err(&scheme, at.map_or(authority, |i| &authority[i + 1..]).as_bytes())?;
+            if let Some(i) = at {
+                let info = &authority[..i];
+                if !info.bytes().all(|c| c.is_ascii_alphanumeric() || b"-._:~!$&'()*+,;=%@".contains(&c)) {
+                    return Err("net/url: invalid userinfo".into());
+                }
+                match info.split_once(':') {
+                    None => {
+                        unescape_err(info.as_bytes(), Mode::User, false)?;
+                    }
+                    Some((name, pass)) => {
+                        unescape_err(name.as_bytes(), Mode::User, false)?;
+                        unescape_err(pass.as_bytes(), Mode::User, false)?;
+                    }
+                }
+            }
+        }
+        unescape_err(rest.as_bytes(), Mode::Path, false)?;
+        Ok(host)
+    })()
+    .map_err(|e| wrap(u, e))?;
+    if !frag.is_empty() {
+        unescape_err(frag.as_bytes(), Mode::Path, false).map_err(|e| wrap(raw, e))?;
+    }
+    Ok(host)
+}

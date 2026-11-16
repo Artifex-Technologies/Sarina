@@ -29,37 +29,35 @@ fn pem_label<'a>(t: &'a str, fallback: &'a str) -> &'a str {
     PEM_RE.captures(t).and_then(|m| m.get(1)).map_or(fallback, |m| m.as_str())
 }
 
-/// Go's `Modern`; None only for a certificate (or request) in PEM with a URI name that url.Parse refuses, whose error text
-/// would need net/url's (docs/RUST_PORT.md "Differences").
-/// `now` is (Unix seconds, nanoseconds).
-pub fn modern(input: &str, key: &str, now: (i64, u32)) -> Option<Result<Vec<u8>, String>> {
+/// Go's `Modern`. `now` is (Unix seconds, nanoseconds).
+pub fn modern(input: &str, key: &str, now: (i64, u32)) -> Result<Vec<u8>, String> {
     let t = gotext::trim_space(input);
     if t.is_empty() {
-        return Some(Err("nothing to look at".into()));
+        return Err("nothing to look at".into());
     }
     if t.contains("-----BEGIN PGP") {
-        return Some(Ok(pgp_info(t)));
+        return Ok(pgp_info(t));
     }
     if t.contains("PRIVATE KEY-----") {
-        return Some(Ok(format!("This is a PRIVATE key ({}). I do not parse, print or load private keys: keep it out of the conversation, and if it was pasted somewhere it should not have been, treat it as exposed and make a new one.", pem_label(t, "PRIVATE KEY")).into_bytes()));
+        return Ok(format!("This is a PRIVATE key ({}). I do not parse, print or load private keys: keep it out of the conversation, and if it was pasted somewhere it should not have been, treat it as exposed and make a new one.", pem_label(t, "PRIVATE KEY")).into_bytes());
     }
     if t.contains("-----BEGIN") {
-        return pem_info(t, now).map(|r| r.map(String::into_bytes));
+        return pem_info(t, now).map(String::into_bytes);
     }
     if SSH_RE.is_match(t) {
-        return Some(ssh_info(t).map(String::into_bytes));
+        return ssh_info(t).map(String::into_bytes);
     }
     if JWT_RE.is_match(t) {
-        return Some(jwt_info(t, key, now).map(String::into_bytes));
+        return jwt_info(t, key, now).map(String::into_bytes);
     }
     // Go tries the base64 of a DER certificate last
     let joined: String = gotext::fields(t).concat();
     if let Ok(der) = base64_std(joined.as_bytes()) {
         if let Ok(c) = x509::parse_certificate(&der) {
-            return Some(Ok(cert_info(&c, now, 1, 1).into_bytes()));
+            return Ok(cert_info(&c, now, 1, 1).into_bytes());
         }
     }
-    Some(Err("not a certificate, public key, SSH key, JWT or PGP block that I recognise; crypto_identify says what it might be".into()))
+    Err("not a certificate, public key, SSH key, JWT or PGP block that I recognise; crypto_identify says what it might be".into())
 }
 
 /// Go's `sshInfo`.
@@ -344,8 +342,8 @@ fn cert_info(c: &x509::Cert, now: (i64, u32), n: usize, total: usize) -> String 
     b
 }
 
-/// Go's `pemInfo` (None: a certificate with a URI name url.Parse refuses, whose error text needs net/url's).
-fn pem_info(t: &str, now: (i64, u32)) -> Option<Result<String, String>> {
+/// Go's `pemInfo`.
+fn pem_info(t: &str, now: (i64, u32)) -> Result<String, String> {
     let total = t.matches("-----BEGIN").count();
     let mut rest = t.as_bytes();
     let mut b = String::new();
@@ -357,7 +355,6 @@ fn pem_info(t: &str, now: (i64, u32)) -> Option<Result<String, String>> {
         match kind.as_ref() {
             "CERTIFICATE" => match x509::parse_certificate(&block.bytes) {
                 Ok(c) => b += &cert_info(&c, now, n, total),
-                Err(e) if e == x509::NEEDS_GO => return None,
                 Err(e) => b += &format!("Certificate {n} of {total}: cannot parse it ({e}).\n"),
             },
             "PUBLIC KEY" | "RSA PUBLIC KEY" => {
@@ -383,16 +380,15 @@ fn pem_info(t: &str, now: (i64, u32)) -> Option<Result<String, String>> {
                         r.sig_alg
                     )
                 }
-                Err(e) if e == x509::NEEDS_GO => return None,
                 Err(e) => b += &format!("Certificate request: cannot parse it ({e}).\n"),
             },
             _ => b += &format!("PEM block of type {kind} ({} bytes): not something I parse.\n", block.bytes.len()),
         }
     }
     if n == 0 {
-        return Some(Err("the PEM block does not decode (missing lines or a broken base64 body)".into()));
+        return Err("the PEM block does not decode (missing lines or a broken base64 body)".into());
     }
-    Some(Ok(b))
+    Ok(b)
 }
 
 /// Go's `pgpInfo`: gpg's packet list of the block (10 s at most), or the header alone without gpg.

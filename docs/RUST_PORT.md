@@ -317,11 +317,7 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 
 ## Differences from Go, on purpose or accepted
 
-- **crypto_modern hands one case back: a certificate (or request) in PEM with a URI name that net/url refuses** (other
-  than for a control character). Go's answer quotes url.Parse's own error ("invalid URL escape", "missing protocol
-  scheme", the host errors), which `gourl.rs` does not keep; `modern` answers None there, and the wiring must hand that
-  input to Go or port those texts first (modernx509.json has one such case; its test accepts None only where Go's text
-  is url.Parse's). **encoding/asn1 prints a pointer** in one error, "tags don't match" for a field with an implicit tag
+- **encoding/asn1 prints a pointer** in one error, "tags don't match" for a field with an implicit tag
   (a certificate request's attributes: `tag:0xc000012345`): the address changes on every run, so the fixture holds
   `tag:0xADDR` and the port prints that.
 
@@ -1227,7 +1223,7 @@ gate is the set, not the tool). Where crypto stands, exactly:
 | crypto 3: crypto_decode (Looks, DecodeOne, DecodeAuto, Describe, hex.Dump) | `decode.go` | `cryptotools/decode.rs` (Go's base64/base32/ascii85/hex/url decoders and their error texts) | decode.json: 1,425; mutation 6 of 11, the rest unobservable | `1b7e70d` |
 | crypto 4: crypto_identify (Identify, crackXOR, IdentifyReport) | `identify.go`, `IdentifyReport` | `cryptotools/identify.rs` | identify.json: 79 reports; mutation 6 of 8 | `c95b3ad` |
 | crypto 5: crypto_modern without X.509 (SSH keys, JWTs with HMAC, PGP through gpg, private keys refused) | `modern.go` but `pemInfo`, `certInfo`, `keyDesc` and RS/ES/PS | `cryptotools/modern.rs` | modern.json: 47 (a stand-in gpg; the real one never runs); mutation 7 of 8 | `4f08f54` |
-| crypto 6: X.509 and the RS/PS/ES signatures (`pemInfo`, `certInfo`, `keyDesc`, the base64 DER certificate, `verifyJWT`) | `modern.go`'s rest; Go's `encoding/pem` `Decode`, crypto/x509's `ParseCertificate`, `ParseCertificateRequest`, `ParsePKIXPublicKey`, `ParsePKCS1PublicKey` with their error texts, `pkix.Name.String`, crypto/rsa's and crypto/ecdsa's verification with their refusals | `cryptotools/pem.rs`, `asn1.rs` (cryptobyte's reader and encoding/asn1's Unmarshal with its texts), `bigint.rs` (no bigint crate in the registry), `pubkey.rs` (keys, RSA PKCS#1 v1.5 and PSS, ECDSA on P-224/256/384/521), `x509.rs` | modernkeys.json: 1,820 (every truncation and three byte changes at every position of small keys; JWTs at 256/384/512 against right, wrong and unfitting keys); modernx509.json: 2,279 (every extension well formed and broken, names, times, the same truncations and changes of a certificate and a request); mutation 17 of 20, the other 3 equivalent | `8a045f2` |
+| crypto 6: X.509 and the RS/PS/ES signatures (`pemInfo`, `certInfo`, `keyDesc`, the base64 DER certificate, `verifyJWT`) | `modern.go`'s rest; Go's `encoding/pem` `Decode`, crypto/x509's `ParseCertificate`, `ParseCertificateRequest`, `ParsePKIXPublicKey`, `ParsePKCS1PublicKey` with their error texts, `pkix.Name.String`, crypto/rsa's and crypto/ecdsa's verification with their refusals | `cryptotools/pem.rs`, `asn1.rs` (cryptobyte's reader and encoding/asn1's Unmarshal with its texts), `bigint.rs` (no bigint crate in the registry), `pubkey.rs` (keys, RSA PKCS#1 v1.5 and PSS, ECDSA on P-224/256/384/521), `x509.rs` | modernkeys.json: 1,820 (every truncation and three byte changes at every position of small keys; JWTs at 256/384/512 against right, wrong and unfitting keys); modernx509.json: 2,360 (url.Parse's and netip's error texts too; every extension well formed and broken, names, times, the same truncations and changes of a certificate and a request); mutation 17 of 20, the other 3 equivalent | `8a045f2` |
 | stego 1: the text checks and file types (FindHidden, Detect, FindEmbedded) | `stego/text.go`, `magic.go`, `clipText` | `stego/text.rs`, `magic.rs`, `mod.rs` | stegotext.json: 56; mutation 8 of 9 | `4dcd138` |
 | stego 2: WAV samples and the LSB judge | `wav.go`, `judge`, `textLike` | `stego/wav.rs` | wav.json: 29; mutation 8 of 8 | `5b525d3` |
 | stego 3: the containers (ParsePNG with tEXt/zTXt/iTXt/eXIf, ParseJPEG with Exif and XMP, ParseGIF, ParseRIFF, Trailing, Strings) | `meta.go` | `stego/meta.rs` (Go's compress/zlib and compress/flate behind its 1 MiB `LimitReader` written out: what Go's reader sees, errors and checksum included) | stegometa.json: 1,915 (inflate on 300 good, damaged and hand-made streams; every truncation and a byte change at every position of a PNG and a JPEG; Exif in both byte orders with loops and deep chains); mutation 17 of 17, 3 more equivalent | `218d0eb` |
@@ -1245,9 +1241,7 @@ JPEG with a segment length of 0 or 1 (ParseJPEG sliced backwards; stego 3, TestJ
 **Not ported yet, in the order I would take them:**
 1. The wiring, last: `cryptotools.go` (`input`, `inputAllowingCerts`, the five tools' handlers and the evidence note, the
    "crypto" prefetch, `sarina crypto`) and `stego.go` (`Inspect`, the tools, the "stego" prefetch, `sarina stego`), CLI
-   differential cases written first and run Go against Go, then `needs_go` without SARINA_CRYPTO. Before that, one
-   gap of crypto 6 to close: a certificate's URI name that url.Parse refuses answers None (`modern::modern`), because
-   `gourl.rs` keeps no error texts; port net/url's texts there (or hand that case to Go).
+   differential cases written first and run Go against Go, then `needs_go` without SARINA_CRYPTO.
 
 Next, in this order:
 

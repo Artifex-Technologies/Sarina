@@ -391,6 +391,27 @@ func TestParityModernX509(t *testing.T) {
 		jwts = append(jwts, append([]any{c.tok, c.key}, modern(c.tok, c.key)...))
 	}
 	cases = append(cases, parity.Case{Fn: "jwt", Out: jwts})
+
+	// url.Parse's errors and net.ParseIP, which a certificate's URI names and constraints go through
+	var uris []any
+	for _, s := range []string{"", "*", "https://a.example/p?q#f", "x:", ":x", "a:b/c", "/a:b", "a/b:c", "//host/p", "///p", "http://[::1]:80/x",
+		"http://[::1%25eth0]/", "http://[::1%25%41]/", "http://[::1%25%00]/", "http://[::1%25]/", "http://[1.2.3.4]/", "http://x[::1]/", "http://[::1/",
+		"http://[::1]x/", "http://[::1]:8a/", "http://[zz]/", "http://[::1::2]/", "http://[1:2:3:4:5:6:7:8:9]/", "http://[12345::]/", "http://[::ffff:1.2.3.4]/",
+		"http://[1::2.3.4]/", "http://[::1.2.3]/", "http://[::01.2.3.4]/", "http://[::256.1.1.1]/", "http://[:]/", "http://[::1:]/", "http://[1:]/",
+		"http://a:b:c/", "ftp://a:b:80/", "http://a:8080/", "http://a:80x/", "http://a b/", "http://a%20b/", "http://a%41b/", "http://a%2/", "http://%zz/",
+		"http://us er@h/", "http://user:pa%zzss@h/", "http://user:pa%41ss@h/", "http://u@v@h/", "http://h/%zz", "http://h/#%zz", "http://h/#a%41",
+		"a%zz", "mailto:x@a.example", "1http://x", "+x:y", "http://h/?", "http://h/a?b?", "http://\x01/", "spiffe://trust/w", "http://a..b/", "http://.a/",
+		"1.2.3.4", "01.2.3.4", "1.2.3", "1.2.3.4.5", "256.1.1.1", "1..2.3", "::1", "::1%eth0", "fe80::1%", "%x", "abc", "1.2.3.4a", "::", ":::", "1:2:3:4:5:6:7::",
+		"1:2:3:4:5:6:7:8::", "1:2:3:4:5:6:1.2.3.4", "1:2:3:4:5:1.2.3.4", "::1.2.3.4", "1::2::3", "12345::1", "1:2", "g::1"} {
+		var parsed any
+		if u, err := url.Parse(s); err != nil {
+			parsed = map[string]any{"err": err.Error()}
+		} else {
+			parsed = map[string]any{"host": u.Host}
+		}
+		uris = append(uris, []any{s, parsed, net.ParseIP(s) != nil})
+	}
+	cases = append(cases, parity.Case{Fn: "uri", Out: uris})
 	parity.Fixture(t, "modernx509", cases)
 }
 

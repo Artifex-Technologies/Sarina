@@ -6,9 +6,6 @@ use super::asn1::{tag, unmarshal, Der, Int, Ty, Val, P};
 use super::pubkey::{self, PubKey};
 use crate::gotext;
 
-/// The text an error leaves when Go's answer needs net/url's own error texts (a URI name url.Parse refuses).
-pub(crate) const NEEDS_GO: &str = "\u{0}needs net/url";
-
 /// A time as Go's `time.Time` from DER: the instant and the fields in its own zone.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Time {
@@ -503,11 +500,6 @@ fn rfc2821_mailbox(s: &[u8]) -> bool {
     domain_name_valid(domain, false) && !domain.contains(&b'@')
 }
 
-/// Go's `net.ParseIP(s) != nil`.
-fn parses_as_ip(s: &[u8]) -> bool {
-    std::str::from_utf8(s).is_ok_and(|s| s.parse::<std::net::IpAddr>().is_ok())
-}
-
 type Sans = (Vec<String>, Vec<String>, Vec<Vec<u8>>, usize);
 
 /// x509's `parseSANExtension`: (DNS names, emails, IPs, how many URIs).
@@ -536,14 +528,8 @@ fn parse_san(der: &[u8]) -> Result<Sans, String> {
                     return Err(x("SAN uniformResourceIdentifier is malformed"));
                 }
                 let s = text();
-                if data.iter().any(|&c| c < 0x20 || c == 0x7f) {
-                    let q = gotext::quote(&s);
-                    return Err(x(&format!("cannot parse URI {q}: parse {q}: net/url: invalid control character in URL")));
-                }
-                let Some(u) = crate::gourl::parse(&s) else {
-                    return Err(NEEDS_GO.into());
-                };
-                if !u.host.is_empty() && !domain_name_valid(&u.host, false) {
+                let host = crate::gourl::parse_host_or_error(&s).map_err(|e| x(&format!("cannot parse URI {}: {e}", gotext::quote(&s))))?;
+                if !host.is_empty() && !domain_name_valid(&host, false) {
                     return Err(x(&format!("cannot parse URI {}: invalid domain", gotext::quote(&s))));
                 }
                 uris += 1;
@@ -640,7 +626,7 @@ fn check_name_constraints(value: &[u8]) -> Result<(), String> {
                 }
                 0x86 => {
                     ia5()?;
-                    if parses_as_ip(v) {
+                    if crate::gonetip::parses_as_ip(&s) {
                         return Err(x(&format!("failed to parse URI constraint {}: cannot be IP address", gotext::quote(&s))));
                     }
                     if !domain_name_valid(v, true) {
