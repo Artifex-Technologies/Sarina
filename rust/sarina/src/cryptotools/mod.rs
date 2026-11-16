@@ -4,6 +4,7 @@
 
 pub mod classic;
 pub mod english;
+pub mod hash;
 
 /// Go's `TruncateText`: the first n characters of s, and how many more there were.
 pub fn truncate_text(s: &str, n: usize) -> String {
