@@ -117,7 +117,7 @@ func FindEmbedded(b []byte, max int) []Embedded {
 			continue // only strong, offset-0 signatures
 		}
 		from := 1
-		for len(out) < max {
+		for len(out) < max && from <= len(b) {
 			i := bytes.Index(b[from:], m.bytes)
 			if i < 0 {
 				break
@@ -128,7 +128,7 @@ func FindEmbedded(b []byte, max int) []Embedded {
 	}
 	// RIFF containers carry their type at offset 8
 	from := 1
-	for len(out) < max {
+	for len(out) < max && from <= len(b) {
 		i := bytes.Index(b[from:], []byte("RIFF"))
 		if i < 0 {
 			break

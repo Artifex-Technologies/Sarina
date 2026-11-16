@@ -49,6 +49,7 @@ pub mod session;
 pub mod sessionsearch;
 pub mod shellparse;
 pub mod skills;
+pub mod stego;
 pub mod sysinfo;
 pub mod testguard;
 pub mod tiers;
