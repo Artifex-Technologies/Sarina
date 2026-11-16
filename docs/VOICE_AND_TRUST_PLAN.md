@@ -205,6 +205,28 @@ Each microphone was enrolled separately, so I re-record a minute at the new desk
 - **What drives it:** the mood of the conversation (section 4) and what Sarina is saying. Sarina answers what she hears, not copies
   it: calm when I am stressed, not stressed back.
 
+## 9. One voiceprint for the whole microphone (added 2026-11-15)
+
+Microsoft Teams has a "voice isolation" that learns my voice from a few recordings and removes everyone else in a call. I want
+that for every program, and I don't want a second enrolment for it: the private microphone (Heimdall's
+`heimdall-private-mic`, docs/LOCATION_SOUNDS.md there) uses the same enrolment as Sarina's speaker check.
+
+- **Two "Voice only" settings on the private microphone:**
+  - **Voice only:** keeps any voice and removes everything else (noise removal with DeepFilterNet or RNNoise). Needs no
+    profile; this is also what the Raspberry Pi gets.
+  - **My voice only:** keeps my voice and removes other people, a TV, announcements and music too (target-speaker extraction,
+    the "Later" item in section 2), steered by my voiceprint. On the desktop, with the graphics card or the CPU.
+- **One enrolment:** the anchor profile from section 3 is the voiceprint for both. Re-enrolling (with my approval) updates both.
+- **Every program gets it:** the private microphone is what every app records, so Teams, Zoom, Meet, Discord and recorders
+  hear only me, and so does Sarina.
+- **Sarina keeps its own check:** "my voice only" removes most other voices before Sarina hears anything, and the speaker check
+  of section 2 still runs on what is left, so a voice that slips through is still dropped.
+- **Storage:** the voiceprint (a short list of numbers, not audio) stays in Sarina's encrypted store (section 6). The
+  microphone filter gets only what it needs to steer the extraction, through a narrow interface; it never reads recordings.
+  How the filter gets it (a copy readable only by me, or asking Sarina's voice service) is decided when this is built, with my
+  approval. A "Delete my voice profile" switch removes it everywhere.
+- **Off switch:** "My voice only" is off until I turn it on, and asks once, plainly, before using the voiceprint for it.
+
 ## Candidate components
 
 Licences to be confirmed before use; MPL-2.0 needs compatible ones, and code is written, not copied.
@@ -234,6 +256,8 @@ Licences to be confirmed before use; MPL-2.0 needs compatible ones, and code is 
 | 9 | Hardware key or authenticator code at the desk | I approve with a key touch |
 | 10 | iOS app: device key, Face ID approval, audio over the tunnel | an approval from the phone releases a held script; an unenrolled phone is refused |
 | 11 | Migration to the new PC; HTPC as an enrolled device | everything works on the new PC with the old TPM gone |
+| 12 | "Voice only" on the private microphone (section 9; no profile needed, can come earlier) | any voice kept, a passing bus and its announcement removed, in Teams and Sarina alike |
+| 13 | "My voice only": target-speaker extraction steered by the anchor voiceprint (section 9); after steps 4 and 5 and the voice server's Rust port (VOICE_RUST_PORT.md) | another person talking next to me is removed in a call; Sarina's speaker check still drops what slips through |
 
 ## Personality ideas (not decided)
 
