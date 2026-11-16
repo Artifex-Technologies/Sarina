@@ -8,6 +8,7 @@ pub mod cli;
 pub mod config;
 pub mod council;
 pub mod cryptotools;
+pub mod daily;
 pub mod doctor;
 pub mod embed;
 pub mod flagx;

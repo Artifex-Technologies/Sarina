@@ -2,11 +2,12 @@ package daily
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // Day is one day's last numbers.
@@ -27,7 +28,8 @@ func ReadDays(vault string, days int) []Day {
 		if m == nil {
 			continue
 		}
-		b, err := os.ReadFile(f)
+		// a bounded regular file: a named pipe planted under a day's name is not waited on
+		b, err := session.ReadRegular(f, 1<<20)
 		if err != nil {
 			continue
 		}

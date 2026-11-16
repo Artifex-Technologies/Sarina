@@ -1665,6 +1665,12 @@ def vault_cases():
         c["routes"] = routes
         c["unordered"] = True
         cs.append(c)
+    daily = dict(vault, **{f"vault/Daily/2026-11-{d:02d}.md": f"# day\n\n## Numbers\n\n- 09:00 | disk / {50 + d}%, /home {80 + d}% | crashes {d % 3} (steam {d % 3}) | failed {d % 2} | memory {d * 3}% | load {d / 4:.1f}\n" for d in range(1, 12)})
+    daily["vault/Daily/2026-11-12.md|"] = ""
+    for name, args, env in [("trends", ["trends"], on), ("trends days", ["trends", "--days", "3"], on), ("trends path", ["trends", "--path", "{W}/vault"], None),
+                            ("trends no vault", ["trends"], None), ("trends help", ["trends", "-h"], on), ("trends bad days", ["trends", "--days", "x"], on),
+                            ("trends empty", ["trends", "--path", "{W}/empty"], None), ("trends days zero", ["trends", "--days=0"], on)]:
+        cs.append(C(f"daily command {name}", args, files=state(**daily), env=env))
     for name, calls in [("search, write, search", [[("vault_search", {"query": "proton games"})],
                                                    [("vault_write", {"path": "Entities/Proton", "content": "Now also about steam.", "mode": "append"})],
                                                    [("vault_search", {"query": "steam"})]]),

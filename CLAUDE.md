@@ -238,6 +238,26 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-16 (5) — Rust port: the vault in Rust, daily's notes and trends; needs_go names only SARINA_FORGE; three Go fixes
+- **Ported and proved part by part** (each against Go fixtures or CLI differential cases written first, mutation-checked,
+  committed and pushed): reading a vault and recall without a model, with Go's sort.Slice (`efd44d6`); writing, the vault
+  tools and vault-init, vault-lint, note and lessons (`e34444b`); recall by meaning with the index under
+  $XDG_STATE_HOME/sarina/vault-index byte for byte Go's, so both builds share it, and vault-search (`b1cd23c`); daily's
+  notes and `sarina trends` (this entry's commit). `needs_go` hands a chat to Go now only for SARINA_FORGE=on. **CLI
+  differential 1,041 cases: no difference.** Nothing moved to always-Rust.
+- **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** the vault's `Notes` read a link
+  named like a note (any file on the computer, a key file say, went into her search results) and waited for ever on a
+  named pipe there (`efd44d6`); `Write` copied a planted link's target into the vault on append, wrote its `.tmp` copy
+  through a planted link (outside the vault too) and waited on a planted pipe (`e34444b`); `ReadDays` waited on a pipe in
+  Daily/ (`sarina trends`; this entry's commit).
+- **For the owner** (`~/Desktop/finish-todo.sh` step 3): the package is now sarina-git 1.0.0-149 (built from `01a3bf8`:
+  the crypto and stego sets in Rust and their Go fixes), in place of 1.0.0-129.
+- **For every board:** nothing to change (no package, port or contract change; no test reads the real vault, notes or
+  state folder: made-up homes and a stand-in embedder).
+
+Signed: Sarina / Claude Opus 5.5
+
+
 ### 2026-11-16 (4) — Rust port: crypto and stego finished and wired; needs_go no longer names SARINA_CRYPTO; three Go fixes
 - **Ported and proved part by part** (each against a Go fixture written first, mutation-checked, committed and pushed):
   crypto_modern's X.509 and RS/PS/ES signatures (`8a045f2`, with Go's encoding/asn1, crypto/x509 parsing, RSA and ECDSA
