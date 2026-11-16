@@ -5,7 +5,7 @@
 //! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`:
 //! `doctor_tool`), the reverse-engineering set with SARINA_REVERSE=on, quantum_sim with SARINA_QUANTUM=on, the system set
 //! (`sysinfo`) with SARINA_SYSTEM=on and the Trachtenberg tool with SARINA_MATH=on. The optional tool sets that are not
-//! ported yet (vault, crypto and steganography, the forge, the council) make [`needs_go`] answer, and the command is then handed to the Go build whole. SARINA_CRYPTO=auto and
+//! ported yet (vault, crypto and steganography, the forge) make [`needs_go`] answer, and the command is then handed to the Go build whole. SARINA_CRYPTO=auto and
 //! SARINA_MATH=auto are decided from the command line before that (`sarina-rs`'s main, as Go's `cli.Main`), so an auto
 //! that comes out "off" needs no Go build.
 
@@ -44,7 +44,7 @@ pub const DRAFT_WITHDRAWN: &str = "\u{1e}draft withdrawn\u{1e}";
 
 /// Why this command line needs the Go build: an optional tool set that is not ported is switched on, so the Go build
 /// would offer the model tools the port does not have. None: the port offers exactly the Go build's tools.
-pub fn needs_go(getenv: &dyn Fn(&str) -> String, home: &str) -> Option<String> {
+pub fn needs_go(getenv: &dyn Fn(&str) -> String) -> Option<String> {
     for (k, on) in [("SARINA_CRYPTO", &["on", "auto"][..]), ("SARINA_FORGE", &["on"][..])] {
         if on.contains(&getenv(k).as_str()) {
             return Some(format!("{k}={}", getenv(k)));
@@ -52,24 +52,6 @@ pub fn needs_go(getenv: &dyn Fn(&str) -> String, home: &str) -> Option<String> {
     }
     if !getenv("SARINA_VAULT").is_empty() {
         return Some("SARINA_VAULT is set".into());
-    }
-    // the council's tool exists only with a council file; any file at all goes to the Go build, which reads it
-    let p = {
-        let v = getenv("SARINA_COUNCIL_FILE");
-        let v = gotext::trim_space(&v);
-        if !v.is_empty() {
-            v.to_owned()
-        } else {
-            let h = if home.is_empty() { getenv("HOME") } else { home.to_owned() };
-            if h.is_empty() {
-                String::new()
-            } else {
-                format!("{h}/.sarina/council.json")
-            }
-        }
-    };
-    if !p.is_empty() && std::fs::symlink_metadata(&p).is_ok() {
-        return Some(format!("a council file ({p})"));
     }
     None
 }
@@ -172,18 +154,18 @@ impl Interrupts {
 
 /// Go's `bufio.Reader` over standard input: reads of up to 4096 bytes, so a reader may take more than one line from a
 /// pipe (and another reader then sees what is left), as each of Go's `stdinConfirm`s does.
-struct StdinLines {
+pub(crate) struct StdinLines {
     buf: Vec<u8>,
     eof: bool,
 }
 
 impl StdinLines {
-    fn new() -> StdinLines {
+    pub(crate) fn new() -> StdinLines {
         StdinLines { buf: Vec::new(), eof: false }
     }
 
     /// Go's `ReadString('\n')`: a line with its newline, or what is left at the end.
-    fn read_line(&mut self) -> (Vec<u8>, bool) {
+    pub(crate) fn read_line(&mut self) -> (Vec<u8>, bool) {
         loop {
             if let Some(i) = self.buf.iter().position(|&c| c == b'\n') {
                 let line: Vec<u8> = self.buf.drain(..=i).collect();
@@ -584,7 +566,7 @@ impl Chat {
 
 /// Go's stable built-ins: the default tools and every provider's, in the Go build's order (go/cmd/sarina's
 /// TestParityToolDefs records it): the file, shell, to-do and plan tools, memory, the reverse-engineering set with
-/// SARINA_REVERSE=on and labyrinth-rea, Limbo, sarina_doctor, quantum_sim with SARINA_QUANTUM=on, and the system set with
+/// SARINA_REVERSE=on and labyrinth-rea, council_ask with a council configured, Limbo, sarina_doctor, quantum_sim with SARINA_QUANTUM=on, and the system set with
 /// SARINA_SYSTEM=on.
 pub fn builtins() -> Vec<Tool> {
     let mut files = crate::tools::files::file_tools();
@@ -603,6 +585,7 @@ pub fn builtins() -> Vec<Tool> {
     out.extend(crate::tools::plan::plan_tools());
     out.extend(crate::memory::tools());
     out.extend(crate::reverse::tools());
+    out.extend(crate::council::tools());
     out.extend(crate::limbo::tools());
     out.push(doctor_tool());
     out.extend(crate::quantum::tools());

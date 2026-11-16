@@ -1467,6 +1467,130 @@ def reverse_cases():
     return cs
 
 
+def council_file(members, **more):
+    d = {"members": members}
+    d.update(more)
+    return json.dumps(d)
+
+
+def council_cases():
+    """The council (`sarina council`, `council status`, `council_ask`): members on the stand-in's own paths (each local,
+    127.0.0.1), a Claude member, remote ones at 192.0.2.1 (nothing listens there; in the case's own network namespace it
+    is unreachable at once), configs of every shape, the operator's answers on standard input. Members are asked at the
+    same time, so the requests are compared as a set and each member answers from its own path."""
+    cs = []
+    COUNCIL = "home/.sarina/council.json"
+    norm = CHAT_NORM + [(r'"Elapsed": \d+', '"Elapsed": N')]
+
+    def member_answer(text, synth="AGREEMENT: both say so. DISAGREEMENT: none. VERIFY FIRST: nothing."):
+        def a(req):
+            return completion(synth if "<answer member=" in req["body"] else text)
+        return a
+    anth = resp({"id": "msg_1", "type": "message", "role": "assistant", "model": "made-up-claude",
+                 "content": [{"type": "text", "text": "From Claude."}], "stop_reason": "end_turn",
+                 "usage": {"input_tokens": 20, "output_tokens": 4}})
+    routes = {"/m1/v1/chat/completions": member_answer("One says yes."), "/m2/v1/chat/completions": member_answer("Two says no."),
+              "/m3/v1/chat/completions": member_answer("Three\x07 says\u2028 maybe\u2029.\t"),
+              "/long/v1/chat/completions": member_answer("é" * 8001),
+              "/bad/v1/chat/completions": resp("bad key secretkey123 refused", "500 Internal Server Error", ctype="text/plain"),
+              "/empty/v1/chat/completions": completion("   "), "/anthropic/v1/messages": anth,
+              "/m1/v1/models": resp({"data": []}), "/m2/v1/models": resp("no", "401 Unauthorized", ctype="text/plain"),
+              "/m3/v1/models": resp("down", "503 Service Unavailable", ctype="text/plain"), "/anthropic/v1/models": resp({"data": []}),
+              "/empty/v1/models": resp("no", "403 Forbidden", ctype="text/plain")}
+    m1 = {"name": "m1", "base_url": "{H}/m1/v1", "model": "small"}
+    m2 = {"name": "m2", "base_url": "{H}/m2/v1", "model": "small"}
+    m3 = {"name": "m3", "base_url": "{H}/m3/v1", "model": "small", "allow_data": ["no_secrets"]}
+    bad = {"name": "bad", "base_url": "{H}/bad/v1", "model": "small", "api_key_env": "TEST_KEY"}
+    empty = {"name": "empty", "base_url": "{H}/empty/v1", "model": "small"}
+    claude = {"name": "claude", "kind": "claude", "base_url": "{H}/anthropic", "model": "made-up-claude", "api_key_env": "TEST_CLAUDE_KEY"}
+    remote = {"name": "far", "base_url": "http://192.0.2.1:9/v1", "model": "big"}
+    remote_key = {"name": "keyed", "base_url": "https://192.0.2.2/v1", "model": "big", "api_key_env": "TEST_REMOTE_KEY", "auto": True}
+    keys = {"TEST_KEY": "secretkey123", "TEST_CLAUDE_KEY": "sk-ant-test-not-real"}
+
+    def add(name, args, members=None, raw=None, env=None, stdin=None, files=None, **k):
+        e = dict(MODEL_ENV)
+        e.update({"SARINA_RS_TRY": "council"})
+        e.update(keys)
+        e.update(env or {})
+        f = files if files is not None else state()
+        if raw is not None:
+            f = dict(f, **{COUNCIL: raw})
+        elif members is not None:
+            f = dict(f, **{COUNCIL: council_file(members)})
+        c = C(name, args, files=f, env=e, stdin=stdin, norm=norm)
+        c["model"] = True
+        c["routes"] = routes
+        c["unordered"] = True
+        c.update(k)
+        cs.append(c)
+    two = [m1, m2]
+    add("council two local", ["council", "is", "it", "so?"], two)
+    add("council json", ["council", "--json", "is it so?"], two)
+    add("council no synthesis", ["council", "--no-synthesis", "q"], two)
+    add("council members filter", ["council", "--members", " M2 ,m1", "q"], [m1, m2, m3])
+    add("council local only", ["council", "--local-only", "q"], [m1, remote])
+    add("council three, controls and redaction", ["council", "q with key sk-abcdefghijklmnopqrstuvwxyz0123"], [m1, m2, m3])
+    add("council failing member scrubbed", ["council", "q"], [m1, bad, empty])
+    add("council one answer only", ["council", "q"], [m1, empty])
+    add("council a long answer cut", ["council", "q"], [m1, {"name": "long", "base_url": "{H}/long/v1", "model": "small"}])
+    add("council nobody answered", ["council", "--json", "q"], [bad, empty])
+    add("council claude member", ["council", "q"], [m1, claude])
+    add("council claude member no key", ["council", "q"], [m1, claude], env={"TEST_CLAUDE_KEY": ""})
+    add("council remote declined", ["council", "q"], [m1, m2, remote], stdin=b"n\n")
+    add("council remote no answer on stdin", ["council", "q"], [m1, remote], stdin=b"")
+    add("council remote approved, unreachable", ["council", "q"], [m1, remote], stdin=b"yes\n")
+    add("council remote key missing", ["council", "q"], [m1, remote_key])
+    add("council remote cap", ["council", "q"], [m1, dict(remote, auto=True, name="r1"), dict(remote, auto=True, name="r2")],
+        raw=council_file([m1, dict(remote, auto=True, name="r1"), dict(remote, auto=True, name="r2")], max_remote_members=1))
+    add("council synthesizer named", ["council", "q"], raw=council_file([m1, m2, m3], synthesizer="M3"))
+    add("council synthesizer disabled", ["council", "q"], raw=council_file([dict(m1, enabled=False), m2, m3], synthesizer="m1"))
+    add("council context file", ["council", "--context-file", "notes.txt", "q"], two, files=state(**{"ws/notes.txt": "Some notes.\n"}))
+    add("council context file missing", ["council", "--context-file", "nope.txt", "q"], two)
+    add("council context file too large", ["council", "--context-file", "big.txt", "q"], two, files=state(**{"ws/big.txt": "x" * 65537}))
+    add("council no question", ["council", "  "], two)
+    add("council help", ["council", "-h"], two)
+    add("council unknown flag", ["council", "--nope", "q"], two)
+    add("council not configured", ["council", "q"])
+    add("council file from the environment", ["council", "q"], env={"SARINA_COUNCIL_FILE": " {W}/ws/c.json "},
+        files=state(**{"ws/c.json": council_file(two)}))
+    for nm, raw in [("invalid JSON", "{nope"), ("type error", '{"members": {}}'), ("member type error", '{"members": [{"name": 5}]}'),
+                    ("too many", council_file([dict(m1, name=f"n{i}") for i in range(9)])), ("negative", council_file(two, max_tokens=-1)),
+                    ("duplicate", council_file([m1, dict(m2, name="M1")])), ("no model", council_file([{"name": "x", "base_url": "{H}/x"}])),
+                    ("claude no key env", council_file([{"kind": "claude", "model": "c"}])), ("unknown kind", council_file([dict(m1, kind="gemini")])),
+                    ("ftp url", council_file([dict(m1, base_url="ftp://x/v1")])), ("no host", council_file([dict(m1, base_url="http:///v1")])),
+                    ("key pasted", council_file([dict(m1, api_key_env="sk-abcdefghijklmnopqrstuvwxyz012345")])),
+                    ("synth remote", council_file([m1, remote], synthesizer="far")), ("synth unknown", council_file(two, synthesizer="zz")),
+                    ("bad allow_data", council_file([dict(m1, allow_data=5)])), ("unnamed and kinds", council_file([{"base_url": "{H}/m1/v1", "model": "a"}, dict(m2, kind=" openai_compat ")])),
+                    ("warnings", council_file([dict(remote, allow_data="all"), dict(m1, allow_data=["no_secrets", "made_up"])])),
+                    ("localhost", council_file([dict(m1, base_url="http://LOCALHOST:1/v1"), dict(m2, base_url="http://[::1]:1/v1"), dict(m3, base_url="http://127.9.9.9/v1")])),
+                    ("all disabled", council_file([dict(m1, enabled=False)])), ("null", "null"), ("empty members", '{"members": []}')]:
+        add(f"council status {nm}", ["council", "status"], raw=raw)
+        if nm != "localhost":  # Go dials localhost's ::1 first, gohttp 127.0.0.1 (docs/RUST_PORT.md "Differences")
+            add(f"council ask {nm}", ["council", "q"], raw=raw)
+    add("council status directory", ["council", "status"], files=state(**{COUNCIL + "/": ""}))
+    add("council status none", ["council", "status"])
+    add("council status probe", ["council", "status", "--probe"], [m1, m2, m3, empty, claude, remote, remote_key, dict(m1, name="off", enabled=False)])
+    add("council status probe claude without key", ["council", "status", "--probe"], [claude], env={"TEST_CLAUDE_KEY": ""})
+    add("council status help", ["council", "status", "-h"], two)
+    add("council status unknown flag", ["council", "status", "--nope"], two)
+    # council_ask: Sarina asks the council herself; online members only after the operator's yes to the exact text
+    def ask(q):
+        return [completion(calls=[("council_ask", {"question": q})]), completion("Asked.")]
+    chat = {"SARINA_RS_TRY": "chat"}
+    add("council_ask local", ["chat", "x"], two, env=chat, http=ask("Is it so?"))
+    add("council_ask remote approved", ["chat", "x"], [m1, remote], env=chat, stdin=b"y\n", http=ask("Is it so?"))
+    add("council_ask remote declined", ["chat", "x"], [m1, m3, remote_key, dict(remote, allow_data="all")], env=chat, stdin=b"n\n",
+        http=ask("Is it so?"))
+    add("council_ask empty question", ["chat", "x"], two, env=chat, http=ask("   "))
+    add("council_ask long question", ["chat", "x"], two, env=chat, http=ask("é" * 6001))
+    add("council_ask at the limit", ["chat", "x"], two, env=chat, http=ask("é" * 6000))
+    add("council_ask all disabled", ["chat", "x"], [dict(m1, enabled=False)], env=chat, http=ask("q"))
+    add("council_ask broken file", ["chat", "x"], raw="{nope", env=chat, http=ask("q"))
+    add("council_ask with every set", ["chat", "--allow-write", "x"], two, http=[completion("ok")],
+        env=dict(chat, SARINA_QUANTUM="on", SARINA_SYSTEM="on", SARINA_MATH="on"))
+    return cs
+
+
 ROUTE_SIG = "40731a7421e6b47f"
 ROUTE_TOPICS = ["performance", "network", "disk", "crashes", "boot", "audio", "services", "gaming", "guides", "chat"]
 ROUTE_WORDS = {"performance": "slow laggy sluggish cpu fans hot memory", "network": "internet wifi websites connection online",
@@ -1714,7 +1838,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 def cases():
     return (memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
-            + doctor_cases() + system_cases() + math_cases() + quantum_cases() + reverse_cases())
+            + doctor_cases() + system_cases() + math_cases() + quantum_cases() + reverse_cases() + council_cases())
 
 
 def main():

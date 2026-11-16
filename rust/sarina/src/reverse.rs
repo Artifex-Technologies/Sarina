@@ -255,7 +255,8 @@ pub fn draft_rule(sample_sha256: &str, rule: &str, note: &str) -> Result<(String
         ("rule".to_string(), Any::String(rule.into())),
         ("sample_sha256".to_string(), Any::String(sample_sha256.into())),
     ]));
-    let body = crate::gojson::escape_html(&crate::gojson::marshal_any(&payload).map_err(|e| format!("{e:?}"))?);
+    // json.Marshal: keys sorted, <, > and & escaped
+    let body = crate::gojson::marshal_any(&payload).map_err(|e| e.to_string())?;
     let reply =
         crate::gohttp::post(&format!("{base}/v1/rules/drafts"), "application/json", body.as_bytes(), crate::heimdall::TIMEOUT, 64 * 1024)
             .map_err(|e| format!("Heimdall is not reachable: {e}"))?;

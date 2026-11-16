@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,10 +40,19 @@ func toolDefs(t *testing.T, env map[string]string) []any {
 
 func TestParityToolDefs(t *testing.T) {
 	var cases []parity.Case
+	// a council with one member, for council_ask
+	councilFile := filepath.Join(t.TempDir(), "council.json")
+	if err := os.WriteFile(councilFile, []byte(`{"members":[{"name":"m","base_url":"http://127.0.0.1:1/v1","model":"m"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for _, env := range []map[string]string{{}, {"SARINA_SYSTEM": "on"},
 		{"SARINA_CRYPTO": "on", "SARINA_MATH": "on", "SARINA_QUANTUM": "on", "SARINA_SYSTEM": "on", "SARINA_REVERSE": "on",
-			"LABYRINTH_REA": "/bin/true"}} {
-		cases = append(cases, parity.Case{Fn: "Builtins", In: env, Out: toolDefs(t, env)})
+			"LABYRINTH_REA": "/bin/true", "SARINA_COUNCIL_FILE": councilFile}} {
+		in := map[string]string{}
+		for k, v := range env {
+			in[k] = strings.ReplaceAll(v, councilFile, "{TEMP}/council.json") // the same fixture on every run
+		}
+		cases = append(cases, parity.Case{Fn: "Builtins", In: in, Out: toolDefs(t, env)})
 	}
 	parity.Fixture(t, "tooldefs", cases)
 	// the definitions themselves, for the Rust port (rust/sarina/src/tools/defs.json): every tool of the fullest set,

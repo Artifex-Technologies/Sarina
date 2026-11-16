@@ -112,6 +112,7 @@ pub fn proving(name: &str) -> Option<Command> {
         "service" => servicecmd::service,
         "gui" => guicmd::gui,
         "doctor" => doctorcmd::doctor,
+        "council" => crate::council::command,
         _ => return None,
     })
 }
