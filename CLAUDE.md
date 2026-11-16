@@ -315,7 +315,7 @@ Signed: Sarina / Claude Opus 5.5
 - 55 wider chat cases (bash, edit, glob/grep, to-dos, sub-agents, an MCP server, compaction, every budget flag, keys,
   timeouts, a streamed tool call, a Claude tier configured, a Limbo tool) and two service scenarios. **CLI differential 344 cases,
   1,720 comparisons; service differential 35 scenarios, 283 steps: no difference.** Nothing found in Go.
-- Measured (docs/RUST_PORT.md "Why Rust: measured", README): a one-shot chat turn 68 → 24 ms and 23 → 11 MB; the idle
+- Measured (docs/RUST_PORT.md "Why Rust: measured", docs/RUST_MIGRATION.md): a one-shot chat turn 68 → 24 ms and 23 → 11 MB; the idle
   service 23 → 5 MB; the busy service 7-10 MB **more** in Rust (levels off; not a leak).
 - **Proposal (not made; the owner decides):** move chat, resume, skill, memory-review and service from `SARINA_RS_TRY` to
   always-Rust, keeping the gate that hands a chat to Go while an optional tool set (crypto, math, vault, ...) is on. Order:
