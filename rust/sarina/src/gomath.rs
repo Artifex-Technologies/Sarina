@@ -362,6 +362,160 @@ pub fn sincos(x: f64) -> (f64, f64) {
     (s, c)
 }
 
+/// Go's `math.Lgamma` for x > 0 (its value; the sign is +1 there), FreeBSD's algorithm as Go writes it. stego's
+/// chi-square only asks for positive arguments.
+pub fn lgamma(x: f64) -> f64 {
+    const A: [u64; 12] = [
+        0x3FB3C467E37DB0C8,
+        0x3FD4A34CC4A60FAD,
+        0x3FB13E001A5562A7,
+        0x3F951322AC92547B,
+        0x3F7E404FB68FEFE8,
+        0x3F67ADD8CCB7926B,
+        0x3F538A94116F3F5D,
+        0x3F40B6C689B99C00,
+        0x3F2CF2ECED10E54D,
+        0x3F1C5088987DFB07,
+        0x3EFA7074428CFA52,
+        0x3F07858E90A45837,
+    ];
+    const R: [u64; 7] = [
+        0x3FF0000000000000,
+        0x3FF645A762C4AB74,
+        0x3FE71A1893D3DCDC,
+        0x3FC601EDCCFBDF27,
+        0x3F9317EA742ED475,
+        0x3F497DDACA41A95B,
+        0x3EDEBAF7A5B38140,
+    ];
+    const S: [u64; 7] = [
+        0xBFB3C467E37DB0C8,
+        0x3FCB848B36E20878,
+        0x3FD4D98F4F139F59,
+        0x3FC2BB9CBEE5F2F7,
+        0x3F9B481C7E939961,
+        0x3F5E26B67368F239,
+        0x3F00BFECDD17E945,
+    ];
+    const T: [u64; 15] = [
+        0x3FDEF72BC8EE38A2,
+        0xBFC2E4278DC6C509,
+        0x3FB08B4294D5419B,
+        0xBFA0C9A8DF35B713,
+        0x3F9266E7970AF9EC,
+        0xBF851F9FBA91EC6A,
+        0x3F78FCE0E370E344,
+        0xBF6E2EFFB3E914D7,
+        0x3F6282D32E15C915,
+        0xBF56FE8EBF2D1AF1,
+        0x3F4CDF0CEF61A8E9,
+        0xBF41A6109C73E0EC,
+        0x3F34AF6D6C0EBBF7,
+        0xBF347F24ECC38C38,
+        0x3F35FD3EE8C2D3F4,
+    ];
+    const U: [u64; 6] =
+        [0xBFB3C467E37DB0C8, 0x3FE4401E8B005DFF, 0x3FF7475CD119BD6F, 0x3FEF497644EA8450, 0x3FCD4EAEF6010924, 0x3F8B678BBF2BAB09];
+    const V: [u64; 6] =
+        [0x3FF0000000000000, 0x4003A5D7C2BD619C, 0x40010725A42B18F5, 0x3FE89DFBE45050AF, 0x3FBAAE55D6537C88, 0x3F6A5ABB57D0CF61];
+    const W: [u64; 7] = [
+        0x3FDACFE390C97D69,
+        0x3FB555555555553B,
+        0xBF66C16C16B02E5C,
+        0x3F4A019F98CF38B6,
+        0xBF4380CB8C0FE741,
+        0x3F4B67BA4CDAD5D1,
+        0xBF5AB89D0B9E43E4,
+    ];
+    let f = f64::from_bits;
+    const YMIN: f64 = 1.461632144968362245;
+    const TC: f64 = 1.46163214496836224576e+00;
+    const TF: f64 = -1.21486290535849611461e-01;
+    const TT: f64 = -3.63867699703950536541e-18;
+    if x.is_nan() || x.is_infinite() {
+        return x;
+    }
+    if x == 0.0 {
+        return f64::INFINITY;
+    }
+    debug_assert!(x > 0.0, "lgamma is ported for positive arguments");
+    if x < 1.0 / (1u128 << 70) as f64 {
+        return -log(x);
+    }
+    if x == 1.0 || x == 2.0 {
+        return 0.0;
+    }
+    if x < 2.0 {
+        let (mut lg, y, i);
+        if x <= 0.9 {
+            lg = -log(x);
+            if x >= YMIN - 1.0 + 0.27 {
+                (y, i) = (1.0 - x, 0);
+            } else if x >= YMIN - 1.0 - 0.27 {
+                (y, i) = (x - (TC - 1.0), 1);
+            } else {
+                (y, i) = (x, 2);
+            }
+        } else {
+            lg = 0.0;
+            if x >= YMIN + 0.27 {
+                (y, i) = (2.0 - x, 0);
+            } else if x >= YMIN - 0.27 {
+                (y, i) = (x - TC, 1);
+            } else {
+                (y, i) = (x - 1.0, 2);
+            }
+        }
+        match i {
+            0 => {
+                let z = y * y;
+                let p1 = f(A[0]) + z * (f(A[2]) + z * (f(A[4]) + z * (f(A[6]) + z * (f(A[8]) + z * f(A[10])))));
+                let p2 = z * (f(A[1]) + z * (f(A[3]) + z * (f(A[5]) + z * (f(A[7]) + z * (f(A[9]) + z * f(A[11]))))));
+                let p = y * p1 + p2;
+                lg += p - 0.5 * y;
+            }
+            1 => {
+                let z = y * y;
+                let w = z * y;
+                let p1 = f(T[0]) + w * (f(T[3]) + w * (f(T[6]) + w * (f(T[9]) + w * f(T[12]))));
+                let p2 = f(T[1]) + w * (f(T[4]) + w * (f(T[7]) + w * (f(T[10]) + w * f(T[13]))));
+                let p3 = f(T[2]) + w * (f(T[5]) + w * (f(T[8]) + w * (f(T[11]) + w * f(T[14]))));
+                let p = z * p1 - (TT - w * (p2 + y * p3));
+                lg += TF + p;
+            }
+            _ => {
+                let p1 = y * (f(U[0]) + y * (f(U[1]) + y * (f(U[2]) + y * (f(U[3]) + y * (f(U[4]) + y * f(U[5]))))));
+                let p2 = 1.0 + y * (f(V[1]) + y * (f(V[2]) + y * (f(V[3]) + y * (f(V[4]) + y * f(V[5])))));
+                lg += -0.5 * y + p1 / p2;
+            }
+        }
+        return lg;
+    }
+    if x < 8.0 {
+        let i = x as i64;
+        let y = x - i as f64;
+        let p = y * (f(S[0]) + y * (f(S[1]) + y * (f(S[2]) + y * (f(S[3]) + y * (f(S[4]) + y * (f(S[5]) + y * f(S[6])))))));
+        let q = 1.0 + y * (f(R[1]) + y * (f(R[2]) + y * (f(R[3]) + y * (f(R[4]) + y * (f(R[5]) + y * f(R[6]))))));
+        let mut lg = 0.5 * y + p / q;
+        let mut z = 1.0;
+        for k in (3..=i).rev() {
+            z *= y + (k - 1) as f64;
+        }
+        if i >= 3 {
+            lg += log(z);
+        }
+        return lg;
+    }
+    if x < (1u64 << 58) as f64 {
+        let t = log(x);
+        let z = 1.0 / x;
+        let y = z * z;
+        let w = f(W[0]) + z * (f(W[1]) + y * (f(W[2]) + y * (f(W[3]) + y * (f(W[4]) + y * (f(W[5]) + y * f(W[6]))))));
+        return (x - 0.5) * (t - 1.0) + w;
+    }
+    x * (log(x) - 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::exp_with;

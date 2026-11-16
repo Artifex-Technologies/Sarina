@@ -3,6 +3,8 @@
 //! what follows, and the printable strings worth reading (testdata/parity/stegometa.json).
 
 use super::clip_text;
+use super::flate::zlib_reader;
+use super::goio::{BytesReader, GoErr, GoRead};
 use crate::gotext;
 use regex::bytes::Regex as BytesRegex;
 use regex::Regex;
@@ -144,273 +146,24 @@ pub fn parse_png(b: &[u8]) -> Container {
 /// What inflate keeps (Go's `io.LimitReader(r, 1<<20)`).
 const INFLATE_LIMIT: usize = 1 << 20;
 
-/// Bits from the input as Go's flate reads them: whole bytes, only when a step needs more bits.
-struct Bits<'a> {
-    input: &'a [u8],
-    pos: usize,
-    b: u32,
-    nb: u32,
-}
-
-impl Bits<'_> {
-    /// Have at least n bits buffered, or the input ran out.
-    fn need(&mut self, n: u32) -> Result<(), ()> {
-        while self.nb < n {
-            let x = *self.input.get(self.pos).ok_or(())?;
-            self.pos += 1;
-            self.b |= u32::from(x) << self.nb;
-            self.nb += 8;
-        }
-        Ok(())
-    }
-
-    fn take(&mut self, n: u32) -> Result<u32, ()> {
-        self.need(n)?;
-        let v = self.b & ((1u32 << n) - 1);
-        self.b = if n == 32 { 0 } else { self.b >> n };
-        self.nb -= n;
-        Ok(v)
-    }
-}
-
-/// A canonical Huffman code as Go's `huffmanDecoder` accepts it.
-struct Huff {
-    /// number of codes of each length
-    count: [u16; 16],
-    /// symbols in canonical order
-    symbols: Vec<u16>,
-    /// the fewest bits Go reads before looking a symbol up
-    min: u32,
-}
-
-impl Huff {
-    /// Go's `huffmanDecoder.init`: None for an over-subscribed or incomplete code (a single code of length 1 is allowed;
-    /// an empty one is allowed and fails when used).
-    fn new(lengths: &[u8]) -> Option<Huff> {
-        let mut count = [0u16; 16];
-        let (mut min, mut max) = (0u32, 0u32);
-        for &n in lengths {
-            if n == 0 {
-                continue;
-            }
-            if min == 0 || u32::from(n) < min {
-                min = u32::from(n);
-            }
-            max = max.max(u32::from(n));
-            count[usize::from(n)] += 1;
-        }
-        if max != 0 {
-            let mut code = 0u32;
-            for i in min..=max {
-                code <<= 1;
-                code += u32::from(count[i as usize]);
-            }
-            if code != 1 << max && !(code == 1 && max == 1) {
-                return None;
-            }
-        }
-        let mut symbols = Vec::new();
-        for len in 1..16u8 {
-            for (s, &n) in lengths.iter().enumerate() {
-                if n == len {
-                    symbols.push(s as u16);
-                }
-            }
-        }
-        Some(Huff { count, symbols, min })
-    }
-
-    /// Go's `huffSym`: at least `min` bits are read first; a code not in the table is corrupt input.
-    fn decode(&self, bits: &mut Bits) -> Result<u16, ()> {
-        bits.need(self.min)?;
-        if self.min == 0 {
-            return Err(());
-        }
-        let (mut code, mut first, mut index) = (0i32, 0i32, 0i32);
-        for len in 1..16 {
-            code |= bits.take(1)? as i32;
-            let count = i32::from(self.count[len]);
-            if code - count < first {
-                return Ok(self.symbols[(index + code - first) as usize]);
-            }
-            index += count;
-            first = (first + count) << 1;
-            code <<= 1;
-        }
-        Err(())
-    }
-}
-
-/// Go's `inflate`: a zlib stream (compress/zlib, compress/flate) read through a 1 MiB limit with io.ReadAll: the
-/// first MiB when the stream gives more before any error, else only a whole stream with the right checksum.
+/// Go's `inflate`: `io.ReadAll(io.LimitReader(zlib.NewReader(bytes.NewReader(b)), 1<<20))`, None on an error. The first
+/// MiB once the stream gives that much: 1 MiB is a whole number of flate's 32 KiB windows, so Go's reader gets it before
+/// flate decodes on, and never sees an error or a checksum that follows.
 pub fn inflate(b: &[u8]) -> Option<Vec<u8>> {
-    inflate_stream(b).ok()
-}
-
-fn inflate_stream(b: &[u8]) -> Result<Vec<u8>, ()> {
-    if b.len() < 2 || b[0] & 0x0f != 8 || b[0] >> 4 > 7 || !be16(b).is_multiple_of(31) {
-        return Err(());
-    }
-    let mut pos = 2;
-    if b[1] & 0x20 != 0 {
-        // a preset dictionary: none is given, so only the empty one's checksum (1) passes
-        if b.len() < 6 || be32(&b[2..]) != 1 {
-            return Err(());
-        }
-        pos = 6;
-    }
-    let mut bits = Bits { input: b, pos, b: 0, nb: 0 };
-    let mut out: Vec<u8> = Vec::new();
-    // done as soon as the limit is out: 1 MiB is a whole number of flate's 32 KiB windows, so Go's reader gets that much
-    // before flate decodes on, and never sees an error or a checksum that follows
-    let full = |out: &Vec<u8>| out.len() >= INFLATE_LIMIT;
-    loop {
-        let header = bits.take(3)?;
-        let final_block = header & 1 == 1;
-        match header >> 1 {
-            0 => {
-                bits.b = 0;
-                bits.nb = 0;
-                let p = bits.pos;
-                if p + 4 > b.len() {
-                    return Err(());
-                }
-                let (n, nn) = (le16(&b[p..]), le16(&b[p + 2..]));
-                if n != !nn {
-                    return Err(());
-                }
-                bits.pos += 4;
-                for _ in 0..n {
-                    let x = *b.get(bits.pos).ok_or(())?;
-                    bits.pos += 1;
-                    out.push(x);
-                    if full(&out) {
-                        out.truncate(INFLATE_LIMIT);
-                        return Ok(out);
-                    }
-                }
-            }
-            t @ (1 | 2) => {
-                let (lit, dist) = if t == 1 {
-                    let mut l = [8u8; 288];
-                    l[144..256].fill(9);
-                    l[256..280].fill(7);
-                    (Huff::new(&l).ok_or(())?, None)
-                } else {
-                    let nlit = bits.take(5)? as usize + 257;
-                    if nlit > 286 {
-                        return Err(());
-                    }
-                    let ndist = bits.take(5)? as usize + 1;
-                    if ndist > 30 {
-                        return Err(());
-                    }
-                    let nclen = bits.take(4)? as usize + 4;
-                    const ORDER: [usize; 19] = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
-                    let mut cl = [0u8; 19];
-                    for &i in ORDER.iter().take(nclen) {
-                        cl[i] = bits.take(3)? as u8;
-                    }
-                    let h1 = Huff::new(&cl).ok_or(())?;
-                    let mut lens = vec![0u8; nlit + ndist];
-                    let mut i = 0;
-                    while i < lens.len() {
-                        let x = h1.decode(&mut bits)?;
-                        if x < 16 {
-                            lens[i] = x as u8;
-                            i += 1;
-                            continue;
-                        }
-                        let (rep, nb, v) = match x {
-                            16 => {
-                                if i == 0 {
-                                    return Err(());
-                                }
-                                (3, 2, lens[i - 1])
-                            }
-                            17 => (3, 3, 0),
-                            _ => (11, 7, 0),
-                        };
-                        let rep = rep + bits.take(nb)? as usize;
-                        if i + rep > lens.len() {
-                            return Err(());
-                        }
-                        lens[i..i + rep].fill(v);
-                        i += rep;
-                    }
-                    let mut lit = Huff::new(&lens[..nlit]).ok_or(())?;
-                    let dist = Huff::new(&lens[nlit..]).ok_or(())?;
-                    // Go reads at least the end-of-block code's length for a literal or length
-                    lit.min = lit.min.max(u32::from(lens[256]));
-                    (lit, Some(dist))
-                };
-                loop {
-                    let v = lit.decode(&mut bits)?;
-                    let (length, extra) = match v {
-                        0..=255 => {
-                            out.push(v as u8);
-                            if full(&out) {
-                                out.truncate(INFLATE_LIMIT);
-                                return Ok(out);
-                            }
-                            continue;
-                        }
-                        256 => break,
-                        257..=264 => (v as usize - 254, 0),
-                        265..=268 => (v as usize * 2 - (265 * 2 - 11), 1),
-                        269..=272 => (v as usize * 4 - (269 * 4 - 19), 2),
-                        273..=276 => (v as usize * 8 - (273 * 8 - 35), 3),
-                        277..=280 => (v as usize * 16 - (277 * 16 - 67), 4),
-                        281..=284 => (v as usize * 32 - (281 * 32 - 131), 5),
-                        285 => (258, 0),
-                        _ => return Err(()),
-                    };
-                    let length = length + bits.take(extra)? as usize;
-                    let d = match &dist {
-                        None => (bits.take(5)? as u8).reverse_bits() >> 3,
-                        Some(h) => h.decode(&mut bits)? as u8,
-                    };
-                    let d = match d {
-                        0..=3 => usize::from(d) + 1,
-                        4..=29 => {
-                            let nb = u32::from(d - 2) >> 1;
-                            let extra = (u32::from(d) & 1) << nb | bits.take(nb)?;
-                            (1usize << (nb + 1)) + 1 + extra as usize
-                        }
-                        _ => return Err(()),
-                    };
-                    if d > out.len().min(32768) {
-                        return Err(());
-                    }
-                    for _ in 0..length {
-                        out.push(out[out.len() - d]);
-                        if full(&out) {
-                            out.truncate(INFLATE_LIMIT);
-                            return Ok(out);
-                        }
-                    }
-                }
-            }
-            _ => return Err(()),
-        }
-        if final_block {
-            break;
+    let mut z = zlib_reader(BytesReader::new(b)).ok()?;
+    let mut out = vec![0u8; INFLATE_LIMIT];
+    let mut have = 0;
+    while have < INFLATE_LIMIT {
+        let (n, err) = z.read(&mut out[have..]);
+        have += n;
+        match err {
+            None => {}
+            Some(GoErr::Eof) => break,
+            Some(_) => return None,
         }
     }
-    // the Adler-32 after the last byte the deflate data touched
-    let p = bits.pos;
-    if p + 4 > b.len() {
-        return Err(());
-    }
-    let (mut a, mut s) = (1u32, 0u32);
-    for &x in &out {
-        a = (a + u32::from(x)) % 65521;
-        s = (s + a) % 65521;
-    }
-    if be32(&b[p..]) != (s << 16 | a) {
-        return Err(());
-    }
-    Ok(out)
+    out.truncate(have);
+    Some(out)
 }
 
 fn jpeg_app(m: u8) -> Option<&'static str> {
