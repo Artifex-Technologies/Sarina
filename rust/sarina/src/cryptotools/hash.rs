@@ -47,7 +47,7 @@ fn block_size(a: Algo) -> usize {
     }
 }
 
-fn sum(a: Algo, data: &[u8]) -> Vec<u8> {
+pub(crate) fn sum(a: Algo, data: &[u8]) -> Vec<u8> {
     match a {
         Algo::Md5 => md5::Md5::digest(data).to_vec(),
         Algo::Sha1 => sha1::Sha1::digest(data).to_vec(),

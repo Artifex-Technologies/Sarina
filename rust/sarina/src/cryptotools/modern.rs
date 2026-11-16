@@ -1,12 +1,15 @@
-//! Go: `cryptotools/modern.go`, the part without X.509: crypto_modern on SSH public keys (type, size, fingerprint), JWTs
-//! (header, claims, expiry; an HMAC signature verified with the secret given), PGP blocks (gpg's packet list, never
-//! decrypting or importing), and private keys refused. Certificates, public keys in PEM and RS/ES/PS signatures need
-//! Go's crypto/x509 and come in the next part: [`modern_without_x509`] answers None for them
-//! (testdata/parity/modern.json).
+//! Go: `cryptotools/modern.go`: crypto_modern on certificates, certificate requests and public keys in PEM (crypto/x509's
+//! parsers ported, [`super::x509`] and [`super::pubkey`]), SSH public keys (type, size, fingerprint), JWTs (header,
+//! claims, expiry; an HMAC, RSA, RSA-PSS or ECDSA signature verified with the key given), PGP blocks (gpg's packet list,
+//! never decrypting or importing), and private keys refused (testdata/parity/modern.json, modernkeys.json,
+//! modernx509.json).
 
 use super::decode::{base64_raw, base64_std};
-use super::hash::{hmac, Algo};
+use super::hash::{hmac, sum, Algo};
+use super::pem;
+use super::pubkey::{self, PubKey};
 use super::to_upper;
+use super::x509;
 use crate::goany::Any;
 use crate::gotext::{self, quote};
 use regex::Regex;
@@ -26,11 +29,10 @@ fn pem_label<'a>(t: &'a str, fallback: &'a str) -> &'a str {
     PEM_RE.captures(t).and_then(|m| m.get(1)).map_or(fallback, |m| m.as_str())
 }
 
-/// Go's `Modern` but for what needs crypto/x509: None for a PEM block that is not a private key or PGP, for anything that
-/// is not an SSH key, JWT or PGP block but decodes as base64 (Go then tries it as a DER certificate), and for a JWT
-/// checked with RS/ES/PS.
+/// Go's `Modern`; None only for a certificate (or request) in PEM with a URI name that url.Parse refuses, whose error text
+/// would need net/url's (docs/RUST_PORT.md "Differences").
 /// `now` is (Unix seconds, nanoseconds).
-pub fn modern_without_x509(input: &str, key: &str, now: (i64, u32)) -> Option<Result<Vec<u8>, String>> {
+pub fn modern(input: &str, key: &str, now: (i64, u32)) -> Option<Result<Vec<u8>, String>> {
     let t = gotext::trim_space(input);
     if t.is_empty() {
         return Some(Err("nothing to look at".into()));
@@ -42,18 +44,20 @@ pub fn modern_without_x509(input: &str, key: &str, now: (i64, u32)) -> Option<Re
         return Some(Ok(format!("This is a PRIVATE key ({}). I do not parse, print or load private keys: keep it out of the conversation, and if it was pasted somewhere it should not have been, treat it as exposed and make a new one.", pem_label(t, "PRIVATE KEY")).into_bytes()));
     }
     if t.contains("-----BEGIN") {
-        return None;
+        return pem_info(t, now).map(|r| r.map(String::into_bytes));
     }
     if SSH_RE.is_match(t) {
         return Some(ssh_info(t).map(String::into_bytes));
     }
     if JWT_RE.is_match(t) {
-        return jwt_info(t, key, now).map(|r| r.map(String::into_bytes));
+        return Some(jwt_info(t, key, now).map(String::into_bytes));
     }
-    // Go tries the base64 of a DER certificate last: only what decodes needs crypto/x509 to tell
+    // Go tries the base64 of a DER certificate last
     let joined: String = gotext::fields(t).concat();
-    if base64_std(joined.as_bytes()).is_ok() {
-        return None;
+    if let Ok(der) = base64_std(joined.as_bytes()) {
+        if let Ok(c) = x509::parse_certificate(&der) {
+            return Some(Ok(cert_info(&c, now, 1, 1).into_bytes()));
+        }
     }
     Some(Err("not a certificate, public key, SSH key, JWT or PGP block that I recognise; crypto_identify says what it might be".into()))
 }
@@ -170,19 +174,19 @@ fn rfc3339(secs: i64) -> String {
     format!("{year}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", rem / 3600, rem % 3600 / 60, rem % 60)
 }
 
-/// Go's `jwtInfo` (None: an RS/ES/PS signature to check, which needs crypto/x509).
-fn jwt_info(t: &str, key: &str, now: (i64, u32)) -> Option<Result<String, String>> {
+/// Go's `jwtInfo`.
+fn jwt_info(t: &str, key: &str, now: (i64, u32)) -> Result<String, String> {
     let parts: Vec<&str> = t.split('.').collect();
     let dec = |s: &str| base64_raw(s.trim_end_matches('=').as_bytes(), URL64);
     let hdr = match dec(parts[0]) {
         Ok(h) => h,
-        Err(e) => return Some(Err(format!("the header is not base64url: {e}"))),
+        Err(e) => return Err(format!("the header is not base64url: {e}")),
     };
     let body = match dec(parts[1]) {
         Ok(b) => b,
-        Err(e) => return Some(Err(format!("the payload is not base64url: {e}"))),
+        Err(e) => return Err(format!("the payload is not base64url: {e}")),
     };
-    let Some(h) = json_map(&hdr) else { return Some(Err("the header is not JSON".into())) };
+    let Some(h) = json_map(&hdr) else { return Err("the header is not JSON".into()) };
     let mut b = String::from("JWT (JSON Web Token)\n");
     b += &format!("  Header: {}\n", compact_json(&hdr));
     match json_map(&body) {
@@ -215,20 +219,20 @@ fn jwt_info(t: &str, key: &str, now: (i64, u32)) -> Option<Result<String, String
         let what = if alg.starts_with("HS") { "shared secret" } else { "issuer's public key" };
         b += &format!("  Signature: present (alg {alg}) but NOT VERIFIED: that needs the {what}. Decoding a JWT proves nothing about who issued it; treat the claims as unverified.\n");
     } else {
-        let (ok, how) = verify_jwt(&parts, &alg, key)?;
+        let (ok, how) = verify_jwt(&parts, &alg, key);
         b += &format!("  Signature: {} ({how}).\n", if ok { "VERIFIED with the key given" } else { "does NOT verify with the key given" });
     }
-    Some(Ok(b))
+    Ok(b)
 }
 
-/// Go's `verifyJWT` for HMAC (None: RS/ES/PS, which need crypto/x509).
-fn verify_jwt(parts: &[&str], alg: &str, key: &str) -> Option<(bool, String)> {
-    let not_mine = || Some((false, format!("algorithm {alg} is not one I verify")));
+/// Go's `verifyJWT`.
+fn verify_jwt(parts: &[&str], alg: &str, key: &str) -> (bool, String) {
+    let not_mine = || (false, format!("algorithm {alg} is not one I verify"));
     if alg.len() < 2 {
         return not_mine();
     }
     let Ok(sig) = base64_raw(parts[2].trim_end_matches('=').as_bytes(), URL64) else {
-        return Some((false, "the signature is not base64url".into()));
+        return (false, "the signature is not base64url".into());
     };
     // Go slices the bytes: a family or size cut inside a character never matches
     let size = alg.get(2..).map(to_upper);
@@ -242,11 +246,153 @@ fn verify_jwt(parts: &[&str], alg: &str, key: &str) -> Option<(bool, String)> {
         Some("HS") => {
             let signed = format!("{}.{}", parts[0], parts[1]);
             let mac = hmac(algo, key.as_bytes(), signed.as_bytes());
-            Some((mac == sig, "HMAC with the shared secret".into()))
+            (mac == sig, "HMAC with the shared secret".into())
         }
-        Some("RS" | "ES" | "PS") => None,
+        Some(fam @ ("RS" | "ES" | "PS")) => {
+            let (Some(block), _) = pem::decode(key.as_bytes()) else {
+                return (false, "the key is not a PEM public key".into());
+            };
+            let pub_key = match pubkey::parse_pkix(&block.bytes) {
+                Ok(k) => Some(k),
+                Err(_) => match x509::parse_certificate(&block.bytes) {
+                    Ok(c) => c.key,
+                    Err(_) => return (false, "the PEM is not a public key or certificate".into()),
+                },
+            };
+            let signed = format!("{}.{}", parts[0], parts[1]);
+            let digest = sum(algo, signed.as_bytes());
+            match pub_key {
+                Some(PubKey::Rsa { n, e }) if fam == "PS" => {
+                    (pubkey::rsa_pss(&n.mag, e, algo, &digest, &sig), "RSA-PSS with the public key".into())
+                }
+                Some(PubKey::Rsa { n, e }) => (pubkey::rsa_pkcs1v15(&n.mag, e, algo, &digest, &sig), "RSA with the public key".into()),
+                Some(PubKey::Ecdsa { curve, x, y }) => {
+                    let n = curve.bits.div_ceil(8);
+                    if sig.len() != 2 * n {
+                        return (false, "ECDSA signature has the wrong length".into());
+                    }
+                    (pubkey::ecdsa_verify(curve, &x, &y, &digest, &sig[..n], &sig[n..]), "ECDSA with the public key".into())
+                }
+                Some(_) | None => (false, format!("the key type does not fit {alg}")),
+            }
+        }
         _ => not_mine(),
     }
+}
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+/// Go's `keyDesc` of a certificate's key (`%T` of nil for an algorithm Go leaves unparsed).
+fn desc(k: &Option<PubKey>) -> String {
+    k.as_ref().map_or_else(|| "<nil>".into(), pubkey::key_desc)
+}
+
+/// Go's `durationWords(now.Sub(t))` or `t.Sub(now)` (`later` - `earlier`), with time.Duration's saturation.
+fn duration_words(later: (i64, u32), earlier: (i64, u32)) -> String {
+    let ns = (i128::from(later.0) - i128::from(earlier.0)) * 1_000_000_000 + i128::from(later.1) - i128::from(earlier.1);
+    let d = ns.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64;
+    const HOUR: i64 = 3_600_000_000_000;
+    let hours = (d / HOUR) as f64 + (d % HOUR) as f64 / 3.6e12;
+    let days = (hours / 24.0) as i64;
+    if days >= 365 {
+        format!("{} years", days / 365)
+    } else if days >= 1 {
+        format!("{days} days")
+    } else {
+        format!("{} hours", hours as i64)
+    }
+}
+
+/// Go's `certInfo`.
+fn cert_info(c: &x509::Cert, now: (i64, u32), n: usize, total: usize) -> String {
+    let (subject, issuer) = (c.subject.string(), c.issuer.string());
+    let mut b = format!("Certificate {n} of {total}\n");
+    b += &format!(
+        "  Subject: {subject}\n  Issuer: {issuer}{}\n",
+        if subject == issuer { " (self-signed: subject and issuer are the same)" } else { "" }
+    );
+    if c.dns.len() + c.ips.len() + c.emails.len() > 0 {
+        let sans: Vec<String> =
+            c.dns.iter().cloned().chain(c.ips.iter().map(|ip| x509::ip_string(ip))).chain(c.emails.iter().cloned()).collect();
+        b += &format!("  Names (SANs): {}\n", sans.join(", "));
+    }
+    let (nb, na) = ((c.not_before.unix, 0), (c.not_after.unix, 0));
+    let state = if now < nb {
+        "NOT YET valid".to_owned()
+    } else if now > na {
+        format!("EXPIRED {} ago", duration_words(now, na))
+    } else {
+        format!("valid now, expires in {}", duration_words(na, now))
+    };
+    b += &format!("  Valid: {} to {} ({state})\n", c.not_before.utc_date(), c.not_after.utc_date());
+    let weak = matches!(c.sig_alg, "SHA1-RSA" | "MD5-RSA" | "ECDSA-SHA1");
+    b += &format!(
+        "  Key: {}; signature: {}{}\n",
+        desc(&c.key),
+        c.sig_alg,
+        if weak { " (SHA-1 or MD5 signatures are no longer trusted by browsers)" } else { "" }
+    );
+    b += &format!("  Serial: {}; CA: {}; SHA-256 fingerprint: {}\n", c.serial.decimal(), c.is_ca, hex(&sum(Algo::Sha256, &c.raw)));
+    if !c.eku.is_empty() {
+        let usages: Vec<&str> =
+            c.eku.iter().map(|u| ["", "server", "client", "code signing", "email"].get(usize::from(*u)).copied().unwrap_or("")).collect();
+        b += &format!("  For: {}\n", usages.join(", "));
+    }
+    b += "  Trust: not checked against any root store here; this is what the certificate says about itself.\n";
+    b
+}
+
+/// Go's `pemInfo` (None: a certificate with a URI name url.Parse refuses, whose error text needs net/url's).
+fn pem_info(t: &str, now: (i64, u32)) -> Option<Result<String, String>> {
+    let total = t.matches("-----BEGIN").count();
+    let mut rest = t.as_bytes();
+    let mut b = String::new();
+    let mut n = 0;
+    while let (Some(block), r) = pem::decode(rest) {
+        rest = r;
+        n += 1;
+        let kind = String::from_utf8_lossy(&block.kind);
+        match kind.as_ref() {
+            "CERTIFICATE" => match x509::parse_certificate(&block.bytes) {
+                Ok(c) => b += &cert_info(&c, now, n, total),
+                Err(e) if e == x509::NEEDS_GO => return None,
+                Err(e) => b += &format!("Certificate {n} of {total}: cannot parse it ({e}).\n"),
+            },
+            "PUBLIC KEY" | "RSA PUBLIC KEY" => {
+                let parsed = if kind == "RSA PUBLIC KEY" { pubkey::parse_pkcs1(&block.bytes) } else { pubkey::parse_pkix(&block.bytes) };
+                match parsed {
+                    Ok(k) => {
+                        b += &format!(
+                            "Public key: {}. SHA-256 of its DER: {}.\n",
+                            pubkey::key_desc(&k),
+                            hex(&sum(Algo::Sha256, &block.bytes))
+                        )
+                    }
+                    Err(e) => b += &format!("Public key: cannot parse it ({e}).\n"),
+                }
+            }
+            "CERTIFICATE REQUEST" => match x509::parse_request(&block.bytes) {
+                Ok(r) => {
+                    b += &format!(
+                        "Certificate signing request for {} (SANs: {}), key {}, signature {}.\n",
+                        r.subject.string(),
+                        r.dns.join(", "),
+                        desc(&r.key),
+                        r.sig_alg
+                    )
+                }
+                Err(e) if e == x509::NEEDS_GO => return None,
+                Err(e) => b += &format!("Certificate request: cannot parse it ({e}).\n"),
+            },
+            _ => b += &format!("PEM block of type {kind} ({} bytes): not something I parse.\n", block.bytes.len()),
+        }
+    }
+    if n == 0 {
+        return Some(Err("the PEM block does not decode (missing lines or a broken base64 body)".into()));
+    }
+    Some(Ok(b))
 }
 
 /// Go's `pgpInfo`: gpg's packet list of the block (10 s at most), or the header alone without gpg.

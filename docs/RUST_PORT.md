@@ -16,7 +16,7 @@ equal.
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
-| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego **in progress** (2026-11-16: the classical ciphers, hashing, decoding, identify, crypto_modern without X.509, stego's text, file-type and WAV checks proved, not wired: "Resume here"), vault (with daily and insight), forge open |
+| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego **in progress** (2026-11-16: the classical ciphers, hashing, decoding, identify, crypto_modern with X.509 and the RS/PS/ES signatures, stego's text, file-type and WAV checks proved, not wired: "Resume here"), vault (with daily and insight), forge open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
@@ -316,6 +316,14 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   PrivateReference too; a secret file name stays one in any folder and in any case.
 
 ## Differences from Go, on purpose or accepted
+
+- **crypto_modern hands one case back: a certificate (or request) in PEM with a URI name that net/url refuses** (other
+  than for a control character). Go's answer quotes url.Parse's own error ("invalid URL escape", "missing protocol
+  scheme", the host errors), which `gourl.rs` does not keep; `modern` answers None there, and the wiring must hand that
+  input to Go or port those texts first (modernx509.json has one such case; its test accepts None only where Go's text
+  is url.Parse's). **encoding/asn1 prints a pointer** in one error, "tags don't match" for a field with an implicit tag
+  (a certificate request's attributes: `tag:0xc000012345`): the address changes on every run, so the fixture holds
+  `tag:0xADDR` and the port prints that.
 
 - **"localhost" is dialled 127.0.0.1 first by gohttp, ::1 first by Go** (found 2026-11-16 by a council case with a member
   at `http://LOCALHOST:1/v1` and nothing listening): when neither answers, the error names the address tried first, so
@@ -1218,7 +1226,8 @@ gate is the set, not the tool). Where crypto stands, exactly:
 | crypto 2: crypto_hash (digests, HMACs, the comparison, HashReport) | `hash.go`, `HashReport` | `cryptotools/hash.rs` (md-5 and sha1 crates added; SHA-3, CRC-32, HMAC written out) | cryptohash.json: 1,239; mutation 7 of 7 | `efb0362` |
 | crypto 3: crypto_decode (Looks, DecodeOne, DecodeAuto, Describe, hex.Dump) | `decode.go` | `cryptotools/decode.rs` (Go's base64/base32/ascii85/hex/url decoders and their error texts) | decode.json: 1,425; mutation 6 of 11, the rest unobservable | `1b7e70d` |
 | crypto 4: crypto_identify (Identify, crackXOR, IdentifyReport) | `identify.go`, `IdentifyReport` | `cryptotools/identify.rs` | identify.json: 79 reports; mutation 6 of 8 | `c95b3ad` |
-| crypto 5: crypto_modern without X.509 (SSH keys, JWTs with HMAC, PGP through gpg, private keys refused) | `modern.go` but `pemInfo`, `certInfo`, `keyDesc` and RS/ES/PS | `cryptotools/modern.rs` (`modern_without_x509` answers None for what needs crypto/x509) | modern.json: 47 (a stand-in gpg; the real one never runs); mutation 7 of 8 | `4f08f54` |
+| crypto 5: crypto_modern without X.509 (SSH keys, JWTs with HMAC, PGP through gpg, private keys refused) | `modern.go` but `pemInfo`, `certInfo`, `keyDesc` and RS/ES/PS | `cryptotools/modern.rs` | modern.json: 47 (a stand-in gpg; the real one never runs); mutation 7 of 8 | `4f08f54` |
+| crypto 6: X.509 and the RS/PS/ES signatures (`pemInfo`, `certInfo`, `keyDesc`, the base64 DER certificate, `verifyJWT`) | `modern.go`'s rest; Go's `encoding/pem` `Decode`, crypto/x509's `ParseCertificate`, `ParseCertificateRequest`, `ParsePKIXPublicKey`, `ParsePKCS1PublicKey` with their error texts, `pkix.Name.String`, crypto/rsa's and crypto/ecdsa's verification with their refusals | `cryptotools/pem.rs`, `asn1.rs` (cryptobyte's reader and encoding/asn1's Unmarshal with its texts), `bigint.rs` (no bigint crate in the registry), `pubkey.rs` (keys, RSA PKCS#1 v1.5 and PSS, ECDSA on P-224/256/384/521), `x509.rs` | modernkeys.json: 1,820 (every truncation and three byte changes at every position of small keys; JWTs at 256/384/512 against right, wrong and unfitting keys); modernx509.json: 2,279 (every extension well formed and broken, names, times, the same truncations and changes of a certificate and a request); mutation 17 of 20, the other 3 equivalent | this part |
 | stego 1: the text checks and file types (FindHidden, Detect, FindEmbedded) | `stego/text.go`, `magic.go`, `clipText` | `stego/text.rs`, `magic.rs`, `mod.rs` | stegotext.json: 56; mutation 8 of 9 | `4dcd138` |
 | stego 2: WAV samples and the LSB judge | `wav.go`, `judge`, `textLike` | `stego/wav.rs` | wav.json: 29; mutation 8 of 8 | `5b525d3` |
 
@@ -1228,18 +1237,14 @@ is missing or one character long when a key is given (`4f08f54`, TestModernDoesN
 panicked on an empty file (FindEmbedded searched from offset 1 of nothing; `4dcd138`, TestEmptyFileIsInspected).
 
 **Not ported yet, in the order I would take them:**
-1. crypto 6, X.509: `pemInfo` (Go's `pem.Decode`), `x509.ParseCertificate`, `ParsePKIXPublicKey`, `ParsePKCS1PublicKey`,
-   `ParseCertificateRequest` with Go's own error texts, `pkix.Name.String`, the SANs, `certInfo`, `keyDesc` (RSA, ECDSA
-   curves, Ed25519, and `%T` for the rest), the DER certificate in base64 that `Modern` tries last, and RS/ES/PS JWT
-   signatures (RSA PKCS#1 v1.5 and PSS, ECDSA P-256/384/521). The biggest piece left; ring verifies all but P-521.
-2. stego 3, the containers: `meta.go` (PNG chunks with zTXt/iTXt through zlib, JPEG segments, GIF blocks, RIFF chunks,
+1. stego 3, the containers: `meta.go` (PNG chunks with zTXt/iTXt through zlib, JPEG segments, GIF blocks, RIFF chunks,
    `Trailing`). Needs an inflater with Go's limits (`inflate`).
-3. stego 4, the pictures: `lsb.go` (`DecodeImage` through Go's image/png, image/jpeg and image/gif decoders, to RGBA as
+2. stego 4, the pictures: `lsb.go` (`DecodeImage` through Go's image/png, image/jpeg and image/gif decoders, to RGBA as
    Go's `draw` makes it; `Analyse` with its chi-square CDF and lgamma; `ExtractBits`, `SearchLSB`, `Embed`), `diff.go`.
    Decoding a JPEG exactly as Go does is its own project: compare Go's pixels on a corpus first.
-4. stego 5, `watermark.go` (variation selectors, look-alike letters, trailing bits, `CleanText`, `CleanImage`): needs Go's
+3. stego 5, `watermark.go` (variation selectors, look-alike letters, trailing bits, `CleanText`, `CleanImage`): needs Go's
    Unicode script tables (Latin, Cyrillic, Greek, Armenian) and the So/Sm categories, written from Go as gotext's are.
-5. The wiring, last: `cryptotools.go` (`input`, `inputAllowingCerts`, the five tools' handlers and the evidence note, the
+4. The wiring, last: `cryptotools.go` (`input`, `inputAllowingCerts`, the five tools' handlers and the evidence note, the
    "crypto" prefetch, `sarina crypto`) and `stego.go` (`Inspect`, the tools, the "stego" prefetch, `sarina stego`), CLI
    differential cases written first and run Go against Go, then `needs_go` without SARINA_CRYPTO.
 

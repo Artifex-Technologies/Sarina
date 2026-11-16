@@ -2,12 +2,17 @@
 //! against Go's own answers (testdata/parity/classic.json, ...); the tools are offered by the Go build until the whole
 //! set (with `stego`) is ported, so `needs_go` still hands SARINA_CRYPTO=on to Go (docs/RUST_PORT.md "Resume here").
 
+pub(crate) mod asn1;
+pub(crate) mod bigint;
 pub mod classic;
 pub mod decode;
 pub mod english;
 pub mod hash;
 pub mod identify;
 pub mod modern;
+pub(crate) mod pem;
+pub(crate) mod pubkey;
+pub(crate) mod x509;
 
 /// Go's `TruncateText`: the first n characters of s, and how many more there were.
 pub fn truncate_text(s: &str, n: usize) -> String {
