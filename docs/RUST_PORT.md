@@ -1202,7 +1202,7 @@ Eleventh session (2026-11-16): step 5, the quantum and reverse-engineering sets;
   runs in Rust under `SARINA_RS_TRY=council` (it calls models, so it waits with chat for the owner's days of use), and
   `needs_go` no longer looks for a council file. Mutation run: 8 of 8 caught after an 8,001-character answer, U+2029 and a 403 probe were added. No Go fault found; one port difference (localhost's
   address order, "Differences"). CLI differential **761 cases, 3,805 comparisons, no difference**.
-- **The owner's to-do** (`~/Desktop/finish-todo.sh`, not in this repository): step 3 installs the newer sarina-git 1.0.0-126 (built
+- **The owner's to-do** (`~/Desktop/finish-todo.sh`, not in this repository): step 3 installs the newer sarina-git 1.0.0-129 (built
   without root from Labyrinth's `sarina-rs-switch` recipe and this repository's HEAD, in `~/.cache/labyrinth-switch`),
   step 4 adds `SARINA_RS_TRY=chat,resume,skill,memory-review,gui,doctor` to the owner's ~/.bashrc in a marked block (new
   terminals only; the step undoes it on `u`), step 5 asks whether to merge Labyrinth's `voiced-rust-switch` (the owner has run

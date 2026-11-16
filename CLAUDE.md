@@ -264,7 +264,7 @@ Signed: Sarina / Claude Opus 5.5
   brackets or commas panicked the parser (`sarina quantum 2 "]"` ended in a Go trace; `2cc170a`); reverse_engineer held
   the analysis's whole output (128 MiB took 1,664 MiB) and waited six minutes for a child holding it (`932a63d`: the first
   16 MiB, 64 KiB of errors, a child waited for 2 s).
-- **For the owner** (`~/Desktop/finish-todo.sh` steps 3-5): the newer sarina-git (1.0.0-126, built from `932a63d`), SARINA_RS_TRY for typed commands
+- **For the owner** (`~/Desktop/finish-todo.sh` steps 3-5): the newer sarina-git (1.0.0-129, built from `afb8eaa`), SARINA_RS_TRY for typed commands
   in new terminals, and a question on merging Labyrinth's `voiced-rust-switch`; each says how to go back. Nothing moved to
   always-Rust; spoken questions stay in Go until vault and forge are ported (the voice's sarina.env sets both).
 - **For Heimdall's board (nothing to change):** `draft_yara_rule`'s request to `/v1/rules/drafts` is byte for byte Go's in
