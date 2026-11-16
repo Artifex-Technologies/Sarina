@@ -133,6 +133,7 @@ pub fn ported(name: &str) -> Option<Command> {
         "limbo-profiles" => limbocmd::profiles,
         "limbo-validate" => limbocmd::validate,
         "tiers" => tiercmd::tiers,
+        "quantum" => crate::quantum::command,
         _ => return None,
     })
 }

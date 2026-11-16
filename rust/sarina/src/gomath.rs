@@ -142,6 +142,204 @@ pub fn log(x: f64) -> f64 {
     k * LN2HI - ((hfsq - a) - f)
 }
 
+// ---- Go's math.Sin, Cos and Sincos (math/sin.go, sincos.go, trig_reduce.go: Cephes' method, pure Go on amd64) ------------
+
+const SIN: [f64; 6] = [
+    1.58962301576546568060e-10,
+    -2.50507477628578072866e-8,
+    2.75573136213857245213e-6,
+    -1.98412698295895385996e-4,
+    8.33333333332211858878e-3,
+    -1.66666666666666307295e-1,
+];
+const COS: [f64; 6] = [
+    -1.13585365213876817300e-11,
+    2.08757008419747316778e-9,
+    -2.75573141792967388112e-7,
+    2.48015872888517045348e-5,
+    -1.38888888888730564116e-3,
+    4.16666666666665929218e-2,
+];
+// Pi/4 split into three parts
+const PI4A: f64 = 7.85398125648498535156e-1;
+const PI4B: f64 = 3.77489470793079817668e-8;
+const PI4C: f64 = 2.69515142907905952645e-15;
+const REDUCE_THRESHOLD: f64 = (1u64 << 29) as f64;
+// 4/Pi as Go's constant arithmetic rounds it
+const FOUR_OVER_PI: f64 = 1.273_239_544_735_162_686_151_070_106_980_114_896_275_677_165_923_651_589_981_338_752_471_174_381_073_8;
+const M_PI4: [u64; 20] = [
+    0x0000000000000001,
+    0x45f306dc9c882a53,
+    0xf84eafa3ea69bb81,
+    0xb6c52b3278872083,
+    0xfca2c757bd778ac3,
+    0x6e48dc74849ba5c0,
+    0x0c925dd413a32439,
+    0xfc3bd63962534e7d,
+    0xd1046bea5d768909,
+    0xd338e04d68befc82,
+    0x7323ac7306a673e9,
+    0x3908bf177bf25076,
+    0x3ff12fffbc0b301f,
+    0xde5e2316b414da3e,
+    0xda6cfd9e4f96136e,
+    0x9e8c7ecd3cbfd45a,
+    0xea4f758fd7cbe2f6,
+    0x7a0e73ef14a525d4,
+    0xd7f6bf623f1aba10,
+    0xac06608df8f6d757,
+];
+
+/// Go's shifts: by 64 or more gives 0.
+fn shl(x: u64, n: u32) -> u64 {
+    x.checked_shl(n).unwrap_or(0)
+}
+fn shr(x: u64, n: u32) -> u64 {
+    x.checked_shr(n).unwrap_or(0)
+}
+
+/// Go's `trigReduce` (Payne and Hanek): x (at least 2^29) modulo Pi/4, its octant and the remainder.
+fn trig_reduce(x: f64) -> (u64, f64) {
+    const PI4: f64 = std::f64::consts::FRAC_PI_4;
+    if x < PI4 {
+        return (0, x);
+    }
+    let mut ix = x.to_bits();
+    let exp = ((ix >> 52) & 0x7ff) as i64 - 1023 - 52;
+    ix &= !(0x7ffu64 << 52);
+    ix |= 1 << 52;
+    let (digit, bitshift) = (((exp + 61) as u64 / 64) as usize, ((exp + 61) as u64 % 64) as u32);
+    let z0 = shl(M_PI4[digit], bitshift) | shr(M_PI4[digit + 1], 64 - bitshift);
+    let z1 = shl(M_PI4[digit + 1], bitshift) | shr(M_PI4[digit + 2], 64 - bitshift);
+    let z2 = shl(M_PI4[digit + 2], bitshift) | shr(M_PI4[digit + 3], 64 - bitshift);
+    let z2hi = ((z2 as u128 * ix as u128) >> 64) as u64;
+    let z1p = z1 as u128 * ix as u128;
+    let (z1hi, z1lo) = ((z1p >> 64) as u64, z1p as u64);
+    let z0lo = z0.wrapping_mul(ix);
+    let (lo, c) = z1lo.overflowing_add(z2hi);
+    let mut hi = z0lo.wrapping_add(z1hi).wrapping_add(c as u64);
+    let mut j = hi >> 61;
+    hi = hi << 3 | lo >> 61;
+    let lz = hi.leading_zeros();
+    let e = 1023 - (lz as u64 + 1);
+    hi = shl(hi, lz + 1) | shr(lo, 64 - (lz + 1));
+    hi >>= 64 - 52;
+    hi |= e << 52;
+    let mut z = f64::from_bits(hi);
+    if j & 1 == 1 {
+        j += 1;
+        j &= 7;
+        z -= 1.0;
+    }
+    (j, z * PI4)
+}
+
+/// The octant and the remainder, as sin, cos and Sincos all reduce.
+fn reduce(x: f64) -> (u64, f64) {
+    if x >= REDUCE_THRESHOLD {
+        return trig_reduce(x);
+    }
+    let mut j = (x * FOUR_OVER_PI) as u64;
+    let mut y = j as f64;
+    if j & 1 == 1 {
+        j += 1;
+        y += 1.0;
+    }
+    j &= 7;
+    (j, ((x - y * PI4A) - y * PI4B) - y * PI4C)
+}
+
+fn sin_poly(z: f64, zz: f64) -> f64 {
+    z + z * zz * (((((SIN[0] * zz + SIN[1]) * zz + SIN[2]) * zz + SIN[3]) * zz + SIN[4]) * zz + SIN[5])
+}
+fn cos_poly(zz: f64) -> f64 {
+    1.0 - 0.5 * zz + zz * zz * (((((COS[0] * zz + COS[1]) * zz + COS[2]) * zz + COS[3]) * zz + COS[4]) * zz + COS[5])
+}
+
+/// Go's `math.Sin`.
+pub fn sin(x: f64) -> f64 {
+    if x == 0.0 || x.is_nan() {
+        return x;
+    }
+    if x.is_infinite() {
+        return f64::NAN;
+    }
+    let (mut sign, x) = if x < 0.0 { (true, -x) } else { (false, x) };
+    let (mut j, z) = reduce(x);
+    if j > 3 {
+        sign = !sign;
+        j -= 4;
+    }
+    let zz = z * z;
+    let y = if j == 1 || j == 2 { cos_poly(zz) } else { sin_poly(z, zz) };
+    if sign {
+        -y
+    } else {
+        y
+    }
+}
+
+/// Go's `math.Cos`.
+pub fn cos(x: f64) -> f64 {
+    if x.is_nan() || x.is_infinite() {
+        return f64::NAN;
+    }
+    let mut sign = false;
+    let (mut j, z) = reduce(x.abs());
+    if j > 3 {
+        j -= 4;
+        sign = !sign;
+    }
+    if j > 1 {
+        sign = !sign;
+    }
+    let zz = z * z;
+    let y = if j == 1 || j == 2 { sin_poly(z, zz) } else { cos_poly(zz) };
+    if sign {
+        -y
+    } else {
+        y
+    }
+}
+
+/// Go's `math.Sincos`.
+pub fn sincos(x: f64) -> (f64, f64) {
+    if x == 0.0 {
+        return (x, 1.0);
+    }
+    if x.is_nan() || x.is_infinite() {
+        return (f64::NAN, f64::NAN);
+    }
+    let (mut sin_sign, mut cos_sign) = (false, false);
+    let x = if x < 0.0 {
+        sin_sign = true;
+        -x
+    } else {
+        x
+    };
+    let (mut j, z) = reduce(x);
+    if j > 3 {
+        j -= 4;
+        sin_sign = !sin_sign;
+        cos_sign = !cos_sign;
+    }
+    if j > 1 {
+        cos_sign = !cos_sign;
+    }
+    let zz = z * z;
+    let (mut c, mut s) = (cos_poly(zz), sin_poly(z, zz));
+    if j == 1 || j == 2 {
+        std::mem::swap(&mut s, &mut c);
+    }
+    if cos_sign {
+        c = -c;
+    }
+    if sin_sign {
+        s = -s;
+    }
+    (s, c)
+}
+
 #[cfg(test)]
 mod tests {
     use super::exp_with;

@@ -254,6 +254,90 @@ pub fn quote(s: &str) -> String {
     out
 }
 
+/// Go's `strconv.Quote` (`%q`) of bytes that may not be UTF-8: each bad byte as `\xHH`.
+pub fn quote_bytes(b: &[u8]) -> String {
+    let mut out = String::with_capacity(b.len() + 2);
+    out.push('"');
+    let mut rest = b;
+    while !rest.is_empty() {
+        let (c, n) = decode_rune(rest);
+        match c {
+            Some(c) => {
+                let mut tmp = [0u8; 4];
+                let q = quote(c.encode_utf8(&mut tmp));
+                out.push_str(&q[1..q.len() - 1]);
+            }
+            None => out.push_str(&format!("\\x{:02x}", rest[0])),
+        }
+        rest = &rest[n..];
+    }
+    out.push('"');
+    out
+}
+
+/// Go's `strings.Fields` of bytes that may not be UTF-8: split at Unicode spaces; a bad byte is not a space.
+pub fn fields_bytes(b: &[u8]) -> Vec<&[u8]> {
+    let mut out = Vec::new();
+    let (mut i, mut start) = (0, None);
+    while i < b.len() {
+        let (c, n) = decode_rune(&b[i..]);
+        if c.is_some_and(is_space) {
+            if let Some(s) = start.take() {
+                out.push(&b[s..i]);
+            }
+        } else if start.is_none() {
+            start = Some(i);
+        }
+        i += n;
+    }
+    if let Some(s) = start {
+        out.push(&b[s..]);
+    }
+    out
+}
+
+/// Go's `fmt.Sscan(s, &n)` into an int: spaces skipped, a sign, a base prefix (0b, 0o, 0x, or 0 for octal) and the digits
+/// that may follow it (underscores too) read as one token, then `strconv.ParseInt(token, 0, 64)`; what follows the token is
+/// left unread. None where Go returns an error.
+pub fn sscan_int(s: &str) -> Option<i64> {
+    let b = s.trim_start_matches(is_space).as_bytes();
+    let mut i = 0;
+    if i < b.len() && (b[i] == b'+' || b[i] == b'-') {
+        i += 1;
+    }
+    let digits: &[u8];
+    let mut have = false;
+    if i < b.len() && b[i] == b'0' {
+        i += 1;
+        have = true;
+        digits = match b.get(i) {
+            Some(b'b' | b'B') => {
+                i += 1;
+                b"01_"
+            }
+            Some(b'o' | b'O') => {
+                i += 1;
+                b"01234567_"
+            }
+            Some(b'x' | b'X') => {
+                i += 1;
+                b"0123456789aAbBcCdDeEfF_"
+            }
+            _ => b"01234567_",
+        };
+    } else {
+        digits = b"0123456789_";
+    }
+    let start_digits = i;
+    while i < b.len() && digits.contains(&b[i]) {
+        i += 1;
+    }
+    if !have && i == start_digits {
+        return None; // "expected integer" (or the end of the input)
+    }
+    crate::goflag::parse_int(std::str::from_utf8(&b[..i]).ok()?).ok()
+}
+
 /// Go's `strings.ToLower`: each character by its simple lowercase mapping. Rust's `str::to_lowercase` differs in two places:
 /// it writes the dotted capital I (U+0130) as two characters where Go writes `i`, and it writes a word-final capital sigma as
 /// final sigma where Go writes σ.

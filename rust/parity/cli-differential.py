@@ -1282,6 +1282,56 @@ def math_cases():
     return cs
 
 
+# shots are drawn from a clock-seeded generator in both builds: the counts are left out, their total is checked by
+# testdata/parity/quantum.json's fixed seeds (here only the line's shape and the number of shots)
+SHOTS_NORM = [(r"(?: \|[01]+(?:>|\\u003e):\d+)+", " COUNTS")]
+
+
+def quantum_cases():
+    """quantum_sim (SARINA_QUANTUM=on) and `sarina quantum`: every gate, angles, Qiskit spellings, errors, shots, the qubit
+    count as Go's fmt.Sscan reads it, the circuit from standard input (bytes that are not UTF-8 too), the flags."""
+    cs = []
+    on = {"SARINA_QUANTUM": "on"}
+
+    def add(name, args, http=(), env=None, files=None, **k):
+        e = dict(MODEL_ENV)
+        e.update(env or {})
+        c = C(name, args, files=files, env=e, http=http, norm=CHAT_NORM + SHOTS_NORM)
+        c["model"] = True
+        c.update(k)
+        cs.append(c)
+
+    def qs(args):
+        return [completion(calls=[("quantum_sim", args)]), completion("Simulated.")]
+    for args in [{"qubits": 2, "circuit": "h 0; cx 0 1"}, {"qubits": 1, "circuit": "h 0; t 0; h 0"},
+                 {"qubits": 3, "circuit": "x 0; x 1; ccx 0 1 2\nswap 0 2"}, {"qubits": 2, "circuit": "h 0; cx 0 1", "shots": 1000},
+                 {"qubits": 2, "circuit": "h 0", "shots": 0}, {"qubits": 2, "circuit": "h 0", "shots": -3},
+                 {"qubits": 2, "circuit": "h 0", "shots": 1e300}, {"qubits": 2, "circuit": "h 0", "shots": 9223372036854775808},
+                 {"qubits": 2, "circuit": "h 0", "shots": 500000}, {"qubits": 1e300, "circuit": "h 0"}, {"qubits": 2.7, "circuit": "h 0"},
+                 {"qubits": "2", "circuit": "h 0"}, {"qubits": 13, "circuit": "h 0"}, {"qubits": 0, "circuit": ""}, {"qubits": 2},
+                 {"qubits": 2, "circuit": "frob 0"}, {"qubits": 2, "circuit": "rz(pi/0) 0"}, {"qubits": 2, "circuit": "h 0; ]"},
+                 {"qubits": 2, "circuit": "rx(1e300) 0; ry(pi/7) 1; cp(-3*pi/2) 0 1"}, {"qubits": 1, "circuit": "h 0; rz(inf) 0"},
+                 {"qubits": 4, "circuit": "h 0; h 1; h 2; h 3; cz 0 3; ch 1 2; cy 2 0; cswap 3 1 2", "shots": 64},
+                 {"qubits": 12, "circuit": "; ".join(f"h {i}" for i in range(12))}, {"qubits": 1, "circuit": "x 0;" * 501}]:
+        add(f"quantum_sim {json.dumps(args)[:60]}", ["chat", "simulate"], env=on, http=qs(args))
+    add("quantum_sim off", ["chat", "x"], env={"SARINA_QUANTUM": "off"}, http=qs({"qubits": 1, "circuit": "h 0"}))
+    add("quantum_sim with the system and math sets", ["chat", "x"],
+        env={"SARINA_QUANTUM": "on", "SARINA_SYSTEM": "on", "SARINA_MATH": "on"}, http=[completion("ok")])
+    for args, stdin in [(["2", "h 0; cx 0 1"], None), (["--shots", "100", "2", "h 0; cx 0 1"], None), (["--shots=7", "1", "h 0"], None),
+                        (["1"], b"h 0\nt 0\n"), (["1"], b"x \xff"), (["1"], b"\xffx 0"), (["2"], b""), (["1", ""], b"x 0"),
+                        (["2", "h", "0;", "cx", "0", "1"], None), (["2", "h 0", "x 1"], None), (["1", "--shots", "5"], None),
+                        ([], None), (["-h"], None), (["--help"], None), (["--shots", "x", "1", "h 0"], None), (["--nope", "1"], None),
+                        (["abc", "h 0"], None), (["13", "h 0"], None), (["0", "h 0"], None), (["0x2", "h 1"], None),
+                        (["2abc", "h 1"], None), (["+2", "x 1"], None), (["1_0", "h 0"], None), (["99999999999999999999", "h 0"], None),
+                        (["2", "]"], None), (["1", "rz(banana) 0"], None), (["1", "h 0; rx(1e400) 0"], None),
+                        (["3", "h 0\ncx 0 1\ncx 1 2\nmeasure all"], None), (["--shots", "200000", "1", "h 0"], None),
+                        (["--shots", "-1", "1", "h 0"], None), (["1", "x 0;" * 500], None), (["2", "x 0"], b"x 1")]:
+        cs.append(C(f"quantum command {args!r:.70} stdin {stdin!r:.20}", ["quantum"] + args, stdin=stdin, norm=SHOTS_NORM))
+    big = b"x 0;" * 20000  # past the 64 KiB read (and past 500 gates)
+    cs.append(C("quantum command circuit past 64 KiB on stdin", ["quantum", "1"], stdin=big, norm=SHOTS_NORM))
+    return cs
+
+
 ROUTE_SIG = "40731a7421e6b47f"
 ROUTE_TOPICS = ["performance", "network", "disk", "crashes", "boot", "audio", "services", "gaming", "guides", "chat"]
 ROUTE_WORDS = {"performance": "slow laggy sluggish cpu fans hot memory", "network": "internet wifi websites connection online",
@@ -1529,7 +1579,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 def cases():
     return (memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
-            + doctor_cases() + system_cases() + math_cases())
+            + doctor_cases() + system_cases() + math_cases() + quantum_cases())
 
 
 def main():

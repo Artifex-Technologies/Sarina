@@ -99,3 +99,24 @@ func TestBadInputIsExplained(t *testing.T) {
 		t.Errorf("angle %v", a)
 	}
 }
+
+// A line of only brackets or commas ("]", ",", "q[]") holds no gate: it is skipped as an empty line is. It panicked
+// (index out of range on its empty field list), which ended `sarina quantum` with a Go trace and failed the model's call.
+func TestLineOfOnlyPunctuationIsSkipped(t *testing.T) {
+	want, err := Simulate(1, "h 0", 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []string{"h 0; ]", "h 0; ,", "q[]; h 0", "h 0\n[ ]", "h 0; , ,"} {
+		func() {
+			defer func() {
+				if p := recover(); p != nil {
+					t.Errorf("%q panicked: %v", c, p)
+				}
+			}()
+			if got, err := Simulate(1, c, 0, 1); err != nil || got != want {
+				t.Errorf("%q: %v\n%s", c, err, got)
+			}
+		}()
+	}
+}

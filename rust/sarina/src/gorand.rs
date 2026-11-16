@@ -73,6 +73,16 @@ impl Rand {
     }
 
     /// Go's `Int63n` (panics for n <= 0, as Go's does).
+    /// Go's `Rand.Float64`: [0, 1), drawn again in the rare case the division rounds to 1.
+    pub fn float64(&mut self) -> f64 {
+        loop {
+            let f = self.int63() as f64 / (1u64 << 63) as f64;
+            if f != 1.0 {
+                return f;
+            }
+        }
+    }
+
     pub fn int63n(&mut self, n: i64) -> i64 {
         assert!(n > 0, "invalid argument to Int63n");
         if n & (n - 1) == 0 {

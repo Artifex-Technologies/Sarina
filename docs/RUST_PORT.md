@@ -674,6 +674,25 @@ out, in a skill run and in resume, and what the variables then are in a shell co
 1844674407370955161600000000000000000009` came out as "12 × 9 ... 108", and the exactness check passed because it
 multiplied the same 12 × 9.
 
+### The quantum cases (2026-11-16)
+
+The quantum set (58 cases): `quantum_sim` (SARINA_QUANTUM=on) on a Bell pair, every gate (x y z h s sdg t tdg rx ry rz p
+cx cy cz ch cp swap ccx cswap), shots (0, negative, past the 100,000 cap, 1e300 and 2^63, which Go's float-to-int
+conversion makes the smallest int64 and so no shots at all), qubit counts out of range, as a float, as a string, missing
+circuits, unknown gates, bad angles (a zero divisor, `inf`, 1e300), 12 qubits (4,096 states, the list cut at 64) and
+501 gates; the set off; with the system and math sets (the tools' order in the request). `sarina quantum`: the circuit as
+one argument, as several (joined), on standard input (bytes that are not UTF-8 too, and more than the 64 KiB read), the
+qubit count as Go's `fmt.Sscan` reads it (`0x2`, `+2`, `2abc`, `1_0`, 20 digits), `--shots` in both spellings and after
+the qubit count (then part of the circuit), `-h`, unknown flags. The shots come from a generator seeded by the clock in
+both builds, so the differential leaves the counts out (SHOTS_NORM); testdata/parity/quantum.json checks them with fixed
+seeds, with Go's `math.Sin`, `Cos`, `Sincos` and `cmplx.Exp` bit for bit on 453 numbers (huge ones through Go's
+Payne-Hanek reduction), the report's number format, `fmt.Sscan` on 40 strings and the final states bit for bit.
+
+**Found by these cases, fixed in Go and Rust both, with a Go test that failed before**: a line of only brackets or commas
+(`]`, `,`, `q[]`) panicked Go's parser (index out of range on an empty field list): `sarina quantum 2 "]"` ended with a Go
+trace, and the model's call failed as "tool quantum_sim failed internally". Such a line is skipped now, as an empty one is
+(`TestLineOfOnlyPunctuationIsSkipped`).
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them

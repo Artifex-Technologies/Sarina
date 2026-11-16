@@ -116,6 +116,9 @@ func Parse(text string, n int) ([]Step, error) {
 			continue
 		}
 		f := strings.Fields(strings.NewReplacer(",", " ", "q[", "", "[", " ", "]", "").Replace(line))
+		if len(f) == 0 {
+			continue // only brackets or commas: no gate
+		}
 		name := strings.ToLower(f[0])
 		st := Step{}
 		if i := strings.Index(name, "("); i >= 0 {
