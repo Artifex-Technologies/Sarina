@@ -3,6 +3,7 @@
 //! set (with `stego`) is ported, so `needs_go` still hands SARINA_CRYPTO=on to Go (docs/RUST_PORT.md "Resume here").
 
 pub mod classic;
+pub mod decode;
 pub mod english;
 pub mod hash;
 

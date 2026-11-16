@@ -88,7 +88,12 @@ pub fn printable(s: &str) -> f64 {
 
 /// Go's `LooksLikeText`.
 pub fn looks_like_text(s: &str) -> bool {
-    if s.len() < 2 || printable(s) < 0.95 {
+    s.len() >= 2 && looks_like_text_after_len(s)
+}
+
+/// `LooksLikeText` past its length check (for bytes that are not UTF-8, whose length is their own).
+pub fn looks_like_text_after_len(s: &str) -> bool {
+    if printable(s) < 0.95 {
         return false;
     }
     if word_ratio(s) >= 0.25 {
