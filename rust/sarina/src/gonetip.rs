@@ -125,7 +125,7 @@ fn ipv6(input: &str) -> Result<Addr, String> {
             if ellipsis >= 0 {
                 return Err(err(input, "multiple :: in address", s));
             }
-            ellipsis = i as i32;
+            ellipsis = i;
             s = &s[1..];
             if s.is_empty() {
                 break;
