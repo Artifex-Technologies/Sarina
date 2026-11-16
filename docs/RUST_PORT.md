@@ -1234,6 +1234,13 @@ gate is the set, not the tool). Where crypto stands, exactly:
 | wiring 1: `sarina crypto` and `sarina stego` (commands without a model; moved to `cli::ported`) | `cryptotools.go`'s `command`; `stego.go`'s `Inspect` with `helpersReport` (exiftool and binwalk run), `ExtractReport` (os.MkdirTemp), `DiffReport`, `Clean`, `cleanPath`, `command` | `cryptotools/tool.rs`, `stego/tool.rs`; `goos::mkdir_temp`; `run_group`'s `Combined` (a program's output and errors one pipe, as Go's when `Stdout` and `Stderr` are the same writer) | CLI differential: 88 new cases (every subcommand with its usage and errors; PNG with an LSB payload, metadata, a zip after IEND, a lying extension; JPEG, GIF, WAV with a payload, text, folders; stand-in exiftool, binwalk and zsteg on the case's PATH; clean's copies, an existing one and a planted link; lsb into TMPDIR and a missing TMPDIR), Go against Go first, then no difference (the whole differential 849 cases); mutation 11 of 12, the survivor (decode's depth of 3) caught by a three-layer case added after | `dc96e08` |
 | wiring 2: the model's crypto and stego tools and the skills' "crypto" and "stego" prefetches; `needs_go` without SARINA_CRYPTO | `cryptotools.go`'s `input`, `inputAllowingCerts`, `Tools`, `Prefetch` (`lookedAt`, `lettersMostly`, `looksLikeDataNotPath`); `stego.go`'s `readFile`, `folderIn`, `Tools`, `cleanTool`, `Prefetch` | `cryptotools/tool.rs`, `stego/tool.rs`; `cli::chat::per_prompt` (crypto, stego, then trachtenberg, Go's order), `skills::recall`'s contexts | CLI differential: 114 new cases written first and run Go against Go (every tool with text and files: the workspace's guards, files that look like data, links out of the workspace, certificates under a key-like name, bytes that are not UTF-8; every stego action and its errors; stego_clean's copies, without write permission and through a planted link; the sets together and SARINA_CRYPTO=auto; 21 prefetch tasks), then no difference: 963 cases, 4,815 comparisons; mutation 13 of 13 | this part |
 
+Then (2026-11-16, the coordinator's next order): **vault with daily and insight, then the forge**, in the same finished
+pieces; `needs_go` loses SARINA_VAULT when vault, daily and insight are all wired, and SARINA_FORGE with the forge.
+
+| Part | Go | Rust | Proof | Commit |
+| --- | --- | --- | --- | --- |
+| vault 1: reading a vault and recall without a model | `vault.go` (`Open`, `ParseNote`, `Notes`, `Resolve`, `SafePath`), `search.go` (`Search` with its BM25, link and recency ranks, `Backlinks`, `Suggest`), `Lessons`, `Digest`, `Lint`; Go's `sort.Slice` (pdqsort) | `vault/mod.rs`, `vault/search.rs`; `gosort::slice` | vault.json: 182 (18 note texts; a made-up tree with hidden folders, a big file, links in and out, a named pipe, equal times; 20 link targets, 20 note names, 32 searches, backlinks, suggestions, lessons, lint; sort.Slice on 36 key lists with ties up to 1,000 long); mutation 18 of 19, the other equivalent (the size check before the bounded read) | this part |
+
 **Go fixes found by these parts, in Go and Rust both, each with a Go test that failed before:** crypto_modern panicked
 on "PRIVATE KEY-----" without a whole PEM header, on "-----BEGIN PGP" without its closing dashes, and on a JWT whose alg
 is missing or one character long when a key is given (`4f08f54`, TestModernDoesNotPanicOnBrokenHeaders); stego_inspect
@@ -1243,7 +1250,10 @@ the wiring: stego_clean and `sarina stego clean` wrote the cleaned copy through 
 file that did not exist yet passed the "already exists" check and created that file wherever it pointed, outside the
 workspace too; now created with O_EXCL; wiring 1, TestCleanDoesNotWriteThroughALink); Inspect kept exiftool's and
 binwalk's whole output and waited for a child of theirs holding it open past the 20 s limit (now the first MiB and
-`WaitDelay` 2 s; wiring 1, TestHelpersReportIsBounded).
+`WaitDelay` 2 s; wiring 1, TestHelpersReportIsBounded). Found by vault 1: `Notes` read every `.md` with `os.ReadFile`, so a named
+pipe under a note's name held every search, recall and lint for ever, and a link named like a note put the file it named,
+anywhere on the computer, into her search results; now a link counts only when it leads to a note inside the vault, and
+notes are read as bounded regular files (TestNotesSkipsPlantedPipesAndLinksOut).
 
 **Not ported yet, in the order I would take them:**
 Nothing: crypto and stego are ported and wired. `needs_go` hands a chat to Go now only for SARINA_FORGE=on or

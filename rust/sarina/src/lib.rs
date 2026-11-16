@@ -58,5 +58,6 @@ pub mod tools;
 pub mod trachtenberg;
 pub mod trust;
 pub mod tz;
+pub mod vault;
 pub mod vecindex;
 pub mod version;

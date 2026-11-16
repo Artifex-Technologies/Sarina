@@ -10,12 +10,15 @@ package vault
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // Folders a new vault starts with, and what each is for (also written into Home.md).
@@ -135,7 +138,18 @@ func (v *Vault) Notes() ([]Note, error) {
 		if err != nil || info.Size() > 512*1024 {
 			return nil // unreadable or not a note (an export, a dump)
 		}
-		b, err := os.ReadFile(p)
+		// a link is read only when it leads to a note inside the vault (one named like a note could put any file on the
+		// computer into her search results); a named pipe or device under a note's name is not waited on
+		if d.Type()&fs.ModeSymlink != 0 {
+			target, err := filepath.EvalSymlinks(p)
+			if err != nil {
+				return nil
+			}
+			if rel, err := filepath.Rel(v.Root, target); err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+				return nil
+			}
+		}
+		b, err := session.ReadRegular(p, 512*1024)
 		if err != nil {
 			return nil
 		}
