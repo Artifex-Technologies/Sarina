@@ -16,7 +16,7 @@ equal.
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
-| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego, vault (with daily and insight), forge open |
+| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego **in progress** (2026-11-16: the classical ciphers, hashing, decoding, identify, crypto_modern without X.509, stego's text, file-type and WAV checks proved, not wired: "Resume here"), vault (with daily and insight), forge open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
@@ -1208,6 +1208,41 @@ Eleventh session (2026-11-16): step 5, the quantum and reverse-engineering sets;
   terminals only; the step undoes it on `u`), step 5 asks whether to merge Labyrinth's `voiced-rust-switch` (the owner has run
   the Rust voice server through his own drop-in since 2026-11-12). Each step says how to go back.
 
+Later the same day: **crypto and stego, in finished pieces** (the coordinator's order: each part ported and proved
+completely, committed and pushed; `needs_go` keeps SARINA_CRYPTO=on in Go until the whole set is done, since the tools'
+gate is the set, not the tool). Where crypto stands, exactly:
+
+| Part | Go | Rust | Proof | Commit |
+| --- | --- | --- | --- | --- |
+| crypto 1: the classical ciphers, their crackers, crypto_classic's answer | `cryptotools/english.go`, `classic.go`, `howitfell.go`, `Classic`, `TruncateText` | `cryptotools/english.rs`, `classic.rs`, `mod.rs`; Go's `sort.SliceStable` as `gosort.rs`; `math.Frexp`/`Log2` in `gomath.rs` | classic.json: 142 comparisons; mutation 15 of 16 | `4b660b2` |
+| crypto 2: crypto_hash (digests, HMACs, the comparison, HashReport) | `hash.go`, `HashReport` | `cryptotools/hash.rs` (md-5 and sha1 crates added; SHA-3, CRC-32, HMAC written out) | cryptohash.json: 1,239; mutation 7 of 7 | `efb0362` |
+| crypto 3: crypto_decode (Looks, DecodeOne, DecodeAuto, Describe, hex.Dump) | `decode.go` | `cryptotools/decode.rs` (Go's base64/base32/ascii85/hex/url decoders and their error texts) | decode.json: 1,425; mutation 6 of 11, the rest unobservable | `1b7e70d` |
+| crypto 4: crypto_identify (Identify, crackXOR, IdentifyReport) | `identify.go`, `IdentifyReport` | `cryptotools/identify.rs` | identify.json: 79 reports; mutation 6 of 8 | `c95b3ad` |
+| crypto 5: crypto_modern without X.509 (SSH keys, JWTs with HMAC, PGP through gpg, private keys refused) | `modern.go` but `pemInfo`, `certInfo`, `keyDesc` and RS/ES/PS | `cryptotools/modern.rs` (`modern_without_x509` answers None for what needs crypto/x509) | modern.json: 47 (a stand-in gpg; the real one never runs); mutation 7 of 8 | `4f08f54` |
+| stego 1: the text checks and file types (FindHidden, Detect, FindEmbedded) | `stego/text.go`, `magic.go`, `clipText` | `stego/text.rs`, `magic.rs`, `mod.rs` | stegotext.json: 56; mutation 8 of 9 | `4dcd138` |
+| stego 2: WAV samples and the LSB judge | `wav.go`, `judge`, `textLike` | `stego/wav.rs` | wav.json: 29; mutation 8 of 8 | `5b525d3` |
+
+**Go fixes found by these parts, in Go and Rust both, each with a Go test that failed before:** crypto_modern panicked
+on "PRIVATE KEY-----" without a whole PEM header, on "-----BEGIN PGP" without its closing dashes, and on a JWT whose alg
+is missing or one character long when a key is given (`4f08f54`, TestModernDoesNotPanicOnBrokenHeaders); stego_inspect
+panicked on an empty file (FindEmbedded searched from offset 1 of nothing; `4dcd138`, TestEmptyFileIsInspected).
+
+**Not ported yet, in the order I would take them:**
+1. crypto 6, X.509: `pemInfo` (Go's `pem.Decode`), `x509.ParseCertificate`, `ParsePKIXPublicKey`, `ParsePKCS1PublicKey`,
+   `ParseCertificateRequest` with Go's own error texts, `pkix.Name.String`, the SANs, `certInfo`, `keyDesc` (RSA, ECDSA
+   curves, Ed25519, and `%T` for the rest), the DER certificate in base64 that `Modern` tries last, and RS/ES/PS JWT
+   signatures (RSA PKCS#1 v1.5 and PSS, ECDSA P-256/384/521). The biggest piece left; ring verifies all but P-521.
+2. stego 3, the containers: `meta.go` (PNG chunks with zTXt/iTXt through zlib, JPEG segments, GIF blocks, RIFF chunks,
+   `Trailing`). Needs an inflater with Go's limits (`inflate`).
+3. stego 4, the pictures: `lsb.go` (`DecodeImage` through Go's image/png, image/jpeg and image/gif decoders, to RGBA as
+   Go's `draw` makes it; `Analyse` with its chi-square CDF and lgamma; `ExtractBits`, `SearchLSB`, `Embed`), `diff.go`.
+   Decoding a JPEG exactly as Go does is its own project: compare Go's pixels on a corpus first.
+4. stego 5, `watermark.go` (variation selectors, look-alike letters, trailing bits, `CleanText`, `CleanImage`): needs Go's
+   Unicode script tables (Latin, Cyrillic, Greek, Armenian) and the So/Sm categories, written from Go as gotext's are.
+5. The wiring, last: `cryptotools.go` (`input`, `inputAllowingCerts`, the five tools' handlers and the evidence note, the
+   "crypto" prefetch, `sarina crypto`) and `stego.go` (`Inspect`, the tools, the "stego" prefetch, `sarina stego`), CLI
+   differential cases written first and run Go against Go, then `needs_go` without SARINA_CRYPTO.
+
 Next, in this order:
 
 1. **Proposed, not made: moving chat, resume, skill, memory-review, service, gui and doctor to always-Rust.** All six agree with
@@ -1228,9 +1263,8 @@ Next, in this order:
    Going back at any step is removing the name from `cli::ported` (or reinstalling the previous package).
 2. **doctor's move**: with the others (it is read-only and quick; `SARINA_RS_TRY=doctor` for the owner's days of use).
 3. **Step 5, the optional tool sets left** (sysinfo and trachtenberg done 2026-11-13, quantum and reverse 2026-11-16), in
-   the owner's order: cryptotools and stego (about 5,100 lines of Go with the "crypto" and "stego" prefetches: x509, JWT
-   signatures, PNG and WAV readers; SARINA_CRYPTO=auto is decided already; too large for the 2026-11-16 session's budget,
-   so the two small sets went first), then vault with daily and insight (a temporary vault only, never
+   the owner's order: cryptotools and stego (begun 2026-11-16 in finished parts: the table above says exactly what is
+   done and what is left), then vault with daily and insight (a temporary vault only, never
    ~/Documents/Obsidian), forge (council done 2026-11-16). Spoken questions stay in Go until vault and forge are ported (the voice's
    sarina.env sets both). Each with differential cases first, run Go against Go.
 4. The service and GUI differentials do not run in a namespace of their own: their servers take ports from the kernel and

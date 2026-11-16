@@ -238,6 +238,22 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-16 (3) — Rust port: crypto and stego in finished parts (seven proved, not wired); two Go panics fixed
+- **Ported and proved part by part** (each against a Go fixture written first, mutation-checked, committed and pushed):
+  the classical ciphers and their crackers (`4b660b2`), crypto_hash (`efb0362`; md-5 and sha1 crates added, SHA-3, CRC-32
+  and HMAC written out), crypto_decode (`1b7e70d`), crypto_identify (`c95b3ad`), crypto_modern without X.509 (`4f08f54`),
+  stego's text and file-type checks (`4dcd138`) and its WAV reader with the LSB judge (`5b525d3`): 3,019 fixture
+  comparisons in all. **Not wired:** `needs_go` still hands SARINA_CRYPTO=on to Go until X.509, the image readers,
+  watermarks and the tools' wiring are done (docs/RUST_PORT.md "Resume here" has the table and the order).
+- **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** crypto_modern panicked on
+  "PRIVATE KEY-----" without a whole PEM header, on "-----BEGIN PGP" without its closing dashes, and on a JWT with no alg
+  (or a one-character one) checked with a key (`4f08f54`); stego_inspect panicked on an empty file (`4dcd138`). Each
+  answered "failed internally" to the model and ended `sarina crypto modern` / `sarina stego inspect` with a Go trace.
+- **For every board:** nothing changes (no package, port or contract change; the tests never run the real gpg, exiftool
+  or binwalk).
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-16 (2) — Rust port step 5: the council in Rust; needs_go no longer looks for a council file
 - **Ported, proved first by new CLI differential cases run Go against Go:** the council (`rust/sarina/src/council.rs`:
   `sarina council` and `council status [--probe]`, the `council_ask` tool) on 83 cases: members on the stand-in's own
