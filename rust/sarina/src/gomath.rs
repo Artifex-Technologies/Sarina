@@ -142,6 +142,28 @@ pub fn log(x: f64) -> f64 {
     k * LN2HI - ((hfsq - a) - f)
 }
 
+/// Go's `math.Frexp`: a fraction in [0.5, 1) and a power of two.
+pub fn frexp(f: f64) -> (f64, i64) {
+    if f == 0.0 || f.is_infinite() || f.is_nan() {
+        return (f, 0);
+    }
+    let (f, mut exp) = if f.abs() < f64::MIN_POSITIVE { (f * (1u64 << 52) as f64, -52) } else { (f, 0) };
+    let mut x = f.to_bits();
+    exp += ((x >> 52) & 0x7ff) as i64 - 1023 + 1;
+    x &= !(0x7ffu64 << 52);
+    x |= 1022u64 << 52;
+    (f64::from_bits(x), exp)
+}
+
+/// Go's `math.Log2` (pure Go on amd64, on its assembly `Log`): exact for powers of two.
+pub fn log2(x: f64) -> f64 {
+    let (frac, exp) = frexp(x);
+    if frac == 0.5 {
+        return (exp - 1) as f64;
+    }
+    log(frac) * std::f64::consts::LOG2_E + exp as f64
+}
+
 // ---- Go's math.Sin, Cos and Sincos (math/sin.go, sincos.go, trig_reduce.go: Cephes' method, pure Go on amd64) ------------
 
 const SIN: [f64; 6] = [
