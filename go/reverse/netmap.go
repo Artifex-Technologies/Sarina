@@ -86,8 +86,8 @@ func origins(ctx context.Context, ips []string) map[string]string {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	b, _ := exec.CommandContext(ctx, bin, append([]string{"origin"}, plain...)...).Output()
-	for _, line := range strings.Split(string(b), "\n") {
+	b, _, _ := runBounded(ctx, bin, append([]string{"origin"}, plain...), 1<<20)
+	for _, line := range strings.Split(b, "\n") {
 		if ip, o, ok := strings.Cut(line, "  "); ok {
 			out[ip] = strings.TrimSpace(o)
 		}

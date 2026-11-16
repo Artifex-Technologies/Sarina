@@ -38,6 +38,7 @@ pub mod memory;
 pub mod policy;
 pub mod pyfmt;
 pub mod quantum;
+pub mod reverse;
 pub mod route;
 pub mod runkit;
 pub mod service;

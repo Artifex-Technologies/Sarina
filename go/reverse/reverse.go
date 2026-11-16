@@ -157,25 +157,22 @@ func Tools() []tools.Tool {
 			}
 			ctx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, bin, args...)
-			var out, errb bytes.Buffer
-			cmd.Stdout, cmd.Stderr = &out, &errb
-			runErr := cmd.Run()
-			text := strings.TrimSpace(out.String())
+			out, errb, runErr := runBounded(ctx, bin, args, maxOutput)
+			text := strings.TrimSpace(out)
 			if str("command") == "network-map" && (runErr == nil || text != "") {
 				text = FindAddresses(text).Report(ctx, filepath.Base(str("path")))
 			}
-			if r := []rune(text); len(r) > 14000 {
-				text = string(r[:14000]) + "\n[cut]"
+			if cut, ok := cutRunes(text, 14000); ok {
+				text = cut + "\n[cut]"
 			}
 			if runErr != nil && text == "" {
-				return "", nil, fmt.Errorf("the analysis did not run: %v: %s", runErr, strings.TrimSpace(errb.String()))
+				return "", nil, fmt.Errorf("the analysis did not run: %v: %s", runErr, strings.TrimSpace(errb))
 			}
 			if str("command") == "analyze" && runErr == nil {
 				text = condenseOverview(text)
 				if fargs, err := Args("functions", str("path"), "", 0); err == nil {
-					nm, _ := exec.CommandContext(ctx, bin, fargs...).Output()
-					text += "\n\n" + ownFunctions(string(nm))
+					nm, _, _ := runBounded(ctx, bin, fargs, maxOutput)
+					text += "\n\n" + ownFunctions(nm)
 				}
 			}
 			if str("command") == "decompile" {
@@ -187,6 +184,52 @@ func Tools() []tools.Tool {
 			return text, map[string]any{"action": "reverse_engineer", "command": str("command"), "path": str("path")}, nil
 		},
 	}}
+}
+
+// maxOutput is the most of an analysis's output that is read (a large program's strings, for network-map, run to many
+// megabytes; the answer shows at most 14,000 characters of the rest); maxErrOutput the most of its error output.
+const (
+	maxOutput    = 16 << 20
+	maxErrOutput = 64 << 10
+)
+
+// headBuffer keeps the first max bytes written to it and drops the rest (the program is not stopped by a write error).
+type headBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (h *headBuffer) Write(p []byte) (int, error) {
+	if room := h.max - h.buf.Len(); room > 0 {
+		h.buf.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
+}
+
+// runBounded runs bin with args: the first max bytes of its output and the first 64 KiB of its error output; a child
+// left holding them open is not waited for longer than 2 s.
+func runBounded(ctx context.Context, bin string, args []string, max int) (string, string, error) {
+	cmd := exec.CommandContext(ctx, bin, args...)
+	out, errb := &headBuffer{max: max}, &headBuffer{max: maxErrOutput}
+	cmd.Stdout, cmd.Stderr = out, errb
+	cmd.WaitDelay = 2 * time.Second
+	err := cmd.Run()
+	return out.buf.String(), errb.buf.String(), err
+}
+
+// cutRunes is string([]rune(s)[:n]) when s has more than n characters (a byte that is not UTF-8 is one, written as
+// U+FFFD), without making the whole []rune.
+func cutRunes(s string, n int) (string, bool) {
+	var b strings.Builder
+	count := 0
+	for _, r := range s {
+		if count == n {
+			return b.String(), true
+		}
+		b.WriteRune(r)
+		count++
+	}
+	return "", false
 }
 
 // ruleTool sends a YARA rule draft for a sample Heimdall holds (owner's yes, 2026-11-05: sarina-rule-tool). A draft does

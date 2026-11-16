@@ -3,9 +3,9 @@
 //! `sarina chat`, `sarina resume`, `sarina skill list|run` and `sarina memory-review`, on `agent::run`.
 //!
 //! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`:
-//! `doctor_tool`), quantum_sim with SARINA_QUANTUM=on, the system set (`sysinfo`) with SARINA_SYSTEM=on and the Trachtenberg
-//! tool with SARINA_MATH=on. The optional tool sets that are not ported yet (vault, crypto and steganography, reverse
-//! engineering, the forge, the council) make [`needs_go`] answer, and the command is then handed to the Go build whole. SARINA_CRYPTO=auto and
+//! `doctor_tool`), the reverse-engineering set with SARINA_REVERSE=on, quantum_sim with SARINA_QUANTUM=on, the system set
+//! (`sysinfo`) with SARINA_SYSTEM=on and the Trachtenberg tool with SARINA_MATH=on. The optional tool sets that are not
+//! ported yet (vault, crypto and steganography, the forge, the council) make [`needs_go`] answer, and the command is then handed to the Go build whole. SARINA_CRYPTO=auto and
 //! SARINA_MATH=auto are decided from the command line before that (`sarina-rs`'s main, as Go's `cli.Main`), so an auto
 //! that comes out "off" needs no Go build.
 
@@ -45,7 +45,7 @@ pub const DRAFT_WITHDRAWN: &str = "\u{1e}draft withdrawn\u{1e}";
 /// Why this command line needs the Go build: an optional tool set that is not ported is switched on, so the Go build
 /// would offer the model tools the port does not have. None: the port offers exactly the Go build's tools.
 pub fn needs_go(getenv: &dyn Fn(&str) -> String, home: &str) -> Option<String> {
-    for (k, on) in [("SARINA_CRYPTO", &["on", "auto"][..]), ("SARINA_REVERSE", &["on"][..]), ("SARINA_FORGE", &["on"][..])] {
+    for (k, on) in [("SARINA_CRYPTO", &["on", "auto"][..]), ("SARINA_FORGE", &["on"][..])] {
         if on.contains(&getenv(k).as_str()) {
             return Some(format!("{k}={}", getenv(k)));
         }
@@ -583,8 +583,9 @@ impl Chat {
 }
 
 /// Go's stable built-ins: the default tools and every provider's, in the Go build's order (go/cmd/sarina's
-/// TestParityToolDefs records it): the file, shell, to-do and plan tools, memory, Limbo, sarina_doctor, quantum_sim with
-/// SARINA_QUANTUM=on, and the system set with SARINA_SYSTEM=on.
+/// TestParityToolDefs records it): the file, shell, to-do and plan tools, memory, the reverse-engineering set with
+/// SARINA_REVERSE=on and labyrinth-rea, Limbo, sarina_doctor, quantum_sim with SARINA_QUANTUM=on, and the system set with
+/// SARINA_SYSTEM=on.
 pub fn builtins() -> Vec<Tool> {
     let mut files = crate::tools::files::file_tools();
     let take = |v: &mut Vec<Tool>, n: &str| {
@@ -601,6 +602,7 @@ pub fn builtins() -> Vec<Tool> {
     out.extend(crate::tools::todo::todo_tools());
     out.extend(crate::tools::plan::plan_tools());
     out.extend(crate::memory::tools());
+    out.extend(crate::reverse::tools());
     out.extend(crate::limbo::tools());
     out.push(doctor_tool());
     out.extend(crate::quantum::tools());

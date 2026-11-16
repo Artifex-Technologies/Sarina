@@ -1332,6 +1332,141 @@ def quantum_cases():
     return cs
 
 
+REA_OVERVIEW = """## evidence_id
+
+ev_1
+
+## subject.name
+
+demo.bin
+
+## analysis_profile.provider
+
+| id | ghidra |
+
+## normalized_result.segments
+
+| .text | 0x1000 |
+
+## normalized_result.procedure_count
+
+9
+
+## limitations
+
+long text
+"""
+REA_NM = """0000000000001000 T _init
+0000000000001070 t deregister_tm_clones
+0000000000001130 t frame_dummy
+0000000000001139 T main
+0000000000001150 t check_key
+0000000000001160 T Grüße
+0000000000002000 R _IO_stdin_used
+"""
+REA_DECOMPILE = """int main(int param_1,long param_2){ if (1 < param_1) { iVar1 = check_code(*(char **)(param_2 + 8)); if (iVar1 != 0) {
+puts("access granted"); verify_key(); __stack_chk_fail(); _helper(); LOUD_MACRO(); main(); check_code(); a(); abc(); } } return 0; }
+"""
+REA_STRINGS = """connecting to https://update.example-c2.ru/gate.php?id=1
+fallback 203.0.113.50:8443 and 2001:db8::7, also [2001:db8::8]:443 and fe80::1 and ::1 and ::
+tcp://198.51.100.7:9000/x udp://[2001:db8::9]:53 wss://chat.example.org/ws FTP://files.example.net
+libc.so.6 main.go setup.py version 1.2.3 GCC: (GNU) 14.2.1 1.2.3.4.5 256.1.1.1 01.2.3.4 999.0.0.1
+http://www.w3.org/2000/svg https://www.gnu.org/licenses/ beacon.badhost.top abcdefghijklmnop.onion ABCDEFGHIJKLMNOP.onion
+0.0.0.0 127.0.0.1 127.0.0.1:80 192.0.2.1. (198.51.100.9), 203.0.113.60; host.EXAMPLE.Com mail.example.io:25
+"""
+
+
+def reverse_cases():
+    """reverse_engineer, stage_binary and draft_yara_rule (SARINA_REVERSE=on with labyrinth-rea): a stand-in labyrinth-rea
+    and heimdalld on the case's PATH, the files in a made-up analysis folder (~/Documents/Samples of the made-up home, or
+    LABYRINTH_REA_SAMPLES) and quarantine, and the stand-in Heimdall for the YARA drafts (never the real one)."""
+    cs = []
+    samples = "home/Documents/Samples/"
+    on = {"SARINA_REVERSE": "on", "HEIMDALL_REVIEW_URL": "{H}/v1/review"}
+
+    def add(name, args, http=(), env=None, files=None, **k):
+        e = dict(MODEL_ENV)
+        e.update(on)
+        e.update(env or {})
+        c = C(name, args, files=files, env=e, http=http, norm=CHAT_NORM)
+        c["model"] = True
+        c.update(k)
+        cs.append(c)
+
+    def call(tool, args, then="Read."):
+        return [completion(calls=[(tool, args)]), completion(then)]
+    rea = ('case "$1" in\n'
+           ' --exec) case "$2" in nm) ' + heredoc(REA_NM) + ';; sh) ' + heredoc(REA_STRINGS) + ';; esac;;\n'
+           ' analyze) ' + heredoc(REA_OVERVIEW) + ';;\n'
+           ' decompile) ' + heredoc(REA_DECOMPILE) + ';;\n'
+           ' search) echo "found $3";;\n'
+           ' inspect-signature) echo "partial output"; echo "it broke" >&2; exit 3;;\n'
+           ' inspect-pe-resources) echo "it broke" >&2; exit 4;;\n'
+           ' inspect-firmware-regions) exit 0;;\n'
+           ' inspect-go-binary) i=0; while [ $i -lt 400 ]; do echo "Größe $i: a long line of build information that goes on"; i=$((i+1)); done;;\n'
+           ' *) echo "rea $*";;\n'
+           'esac\n')
+    heim = 'case "$1" in origin) for ip in "$@"; do case "$ip" in 203.0.113.50) echo "203.0.113.50  Example Net (documentation)";; 2001:db8::7) echo "2001:db8::7  docs v6";; esac; done;; esac\n'
+    base = state(**bins(labyrinth_rea=rea, heimdalld=heim), **{samples + "demo.bin": "\x7fELF made up", samples + "sub/inner.bin": "x",
+                                                              "home/.local/share/labyrinth/quarantine/held.bin": "q",
+                                                              "ws/outside.bin": "y", "ws/link.bin@": "{W}/" + samples + "demo.bin"})
+    demo = "{W}/" + samples + "demo.bin"
+    for cmd, target in [("analyze", None), ("functions", None), ("decompile", "main"), ("decompile", None), ("network-map", None),
+                        ("search", "access granted"), ("inspect-signature", None), ("inspect-pe-resources", None),
+                        ("inspect-firmware-regions", None), ("inspect-go-binary", None), ("xrefs", "0x1139"), ("frobnicate", None),
+                        ("search", "-rf"), ("search", "a;b"), ("search", "x" * 201), ("search", "ok: $name@1/2 +x"), ("search", "")]:
+        a = {"command": cmd, "path": demo}
+        if target is not None:
+            a["target"] = target
+        add(f"reverse_engineer {cmd} {target!r:.30}", ["chat", "read it"], files=base, http=call("reverse_engineer", a))
+    for path in ["{W}/" + samples + "sub/inner.bin", "{W}/home/.local/share/labyrinth/quarantine/held.bin", "{W}/ws/outside.bin",
+                 "{W}/ws/link.bin", "outside.bin", "../home/Documents/Samples/demo.bin", "{W}/" + samples + "../escape.bin",
+                 "{W}/" + samples + "missing.bin", "/etc/passwd", ""]:
+        add(f"reverse_engineer path {path!r:.50}", ["chat", "read it"], files=base,
+            http=call("reverse_engineer", {"command": "search", "path": path, "target": "x"}))
+    add("reverse_engineer samples folder from the environment", ["chat", "x"], files=base,
+        env={"LABYRINTH_REA_SAMPLES": "{W}/ws"}, http=call("reverse_engineer", {"command": "functions", "path": "{W}/ws/outside.bin"}))
+    add("reverse_engineer network-map without heimdalld", ["chat", "x"], files={k: v for k, v in base.items() if k != "bin/heimdalld*"},
+        http=call("reverse_engineer", {"command": "network-map", "path": demo}))
+    empty = dict(base, **bins(labyrinth_rea='case "$1" in --exec) echo "nothing here";; *) exit 2;; esac\n'))
+    add("reverse_engineer network-map nothing found", ["chat", "x"], files=empty, http=call("reverse_engineer", {"command": "network-map", "path": demo}))
+    add("reverse_engineer analyze fails, functions not asked", ["chat", "x"], files=empty, http=call("reverse_engineer", {"command": "analyze", "path": demo}))
+    add("reverse_engineer LABYRINTH_REA named", ["chat", "x"], files=dict({k: v for k, v in base.items() if k != "bin/labyrinth-rea*"}, **{"tools/rea*": sh(rea)}),
+        env={"LABYRINTH_REA": "{W}/tools/rea"}, http=call("reverse_engineer", {"command": "analyze", "path": demo}))
+    add("reverse_engineer not installed", ["chat", "x"], files={k: v for k, v in base.items() if k != "bin/labyrinth-rea*"},
+        http=call("reverse_engineer", {"command": "analyze", "path": demo}))
+    add("reverse_engineer off", ["chat", "x"], files=base, env={"SARINA_REVERSE": "off"},
+        http=call("reverse_engineer", {"command": "analyze", "path": demo}))
+    add("reverse tools offered with the others", ["chat", "--allow-write", "x"], files=base,
+        env={"SARINA_QUANTUM": "on", "SARINA_SYSTEM": "on", "SARINA_MATH": "on"}, http=[completion("ok")])
+    add("reverse_engineer wrong types", ["chat", "x"], files=base, http=call("reverse_engineer", {"command": 5, "path": demo}))
+    # stage_binary: copies an installed program (here under the made-up home's own program folders) into the analysis folder
+    prog = state(**bins(labyrinth_rea=rea), **{"home/.local/bin/tool*": "#!/bin/sh\necho tool\n", "home/.local/bin/dir/": "",
+                                               "home/.local/bin/out@": "{W}/ws/outside.bin", "ws/outside.bin": "y",
+                                               "home/.local/share/labyrinth/apps/app.bin": "app",
+                                               "home/.local/bin/in@": "{W}/home/.local/share/labyrinth/apps/app.bin"})
+    for path in ["{W}/home/.local/bin/tool", "{W}/home/.local/share/labyrinth/apps/app.bin", "{W}/home/.local/bin/in",
+                 "{W}/home/.local/bin/out", "{W}/home/.local/bin/dir", "{W}/home/.local/bin/missing", "{W}/ws/outside.bin",
+                 "{W}/home/.local/bin/../../.bashrc", ""]:
+        add(f"stage_binary {path!r:.50}", ["chat", "--allow-write", "copy it"], files=prog, http=call("stage_binary", {"path": path}))
+    add("stage_binary twice", ["chat", "--allow-write", "copy it"], files=prog,
+        http=[completion(calls=[("stage_binary", {"path": "{W}/home/.local/bin/tool"})]),
+              completion(calls=[("stage_binary", {"path": "{W}/home/.local/bin/tool"})], first_id=1), completion("Twice.")])
+    add("stage_binary without write permission", ["chat", "copy it"], files=prog, http=call("stage_binary", {"path": "{W}/home/.local/bin/tool"}))
+    # draft_yara_rule: a draft for Heimdall (the stand-in), never active until the owner approves it
+    draft = {"sample_sha256": " ABCDEF0123 ", "rule": " rule x { strings: $a = \"<b>\" condition: $a } ", "note": " a note & more \u2028 "}
+    ok = resp({"id": "draft-1", "next": "sudo heimdalld immunity rule test draft-1"})
+    for name, answer in [("accepted", ok), ("refused", resp("no such sample\n", "404 Not Found", ctype="text/plain")),
+                         ("not JSON", resp("<html>")), ("no id", resp({"next": "x"})), ("server error", resp("", "500 Internal Server Error"))]:
+        add(f"draft_yara_rule {name}", ["chat", "draft it"], files=base, routes={"/v1/rules/drafts": answer},
+            http=call("draft_yara_rule", draft))
+    add("draft_yara_rule base from HEIMDALL_REVIEW_URL", ["chat", "draft it"], files=base, env={"HEIMDALL_REVIEW_URL": "{H}/some/path?q=1"},
+        routes={"/v1/rules/drafts": ok}, http=call("draft_yara_rule", draft))
+    add("draft_yara_rule Heimdall unreachable", ["chat", "draft it"], files=base, env={"HEIMDALL_REVIEW_URL": "http://127.0.0.1:1/v1/review"},
+        http=call("draft_yara_rule", draft))
+    return cs
+
+
 ROUTE_SIG = "40731a7421e6b47f"
 ROUTE_TOPICS = ["performance", "network", "disk", "crashes", "boot", "audio", "services", "gaming", "guides", "chat"]
 ROUTE_WORDS = {"performance": "slow laggy sluggish cpu fans hot memory", "network": "internet wifi websites connection online",
@@ -1579,7 +1714,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 def cases():
     return (memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
-            + doctor_cases() + system_cases() + math_cases() + quantum_cases())
+            + doctor_cases() + system_cases() + math_cases() + quantum_cases() + reverse_cases())
 
 
 def main():
