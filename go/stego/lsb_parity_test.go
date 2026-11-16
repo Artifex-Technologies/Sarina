@@ -25,31 +25,8 @@ import (
 // JPEG is the next part.
 func TestParityStegoLSB(t *testing.T) {
 	rng := rand.New(rand.NewSource(11))
-	sum := func(b []byte) string {
-		if b == nil {
-			return ""
-		}
-		h := sha256.Sum256(b)
-		return hex.EncodeToString(h[:8])
-	}
-	describe := func(b []byte) any {
-		p, err := DecodeImage(b)
-		if err != nil {
-			return map[string]any{"err": err.Error()}
-		}
-		var found []any
-		for _, f := range SearchLSB(p, 4096) {
-			found = append(found, []any{f.Order, f.Bits, f.MSBFirst, f.Length, f.Why, hex.EncodeToString(f.Data)})
-		}
-		var ex []any
-		for _, o := range append([]Order{{"palette index", []int{-1}}}, Orders...) {
-			for _, bits := range []int{1, 2, 4, 9} {
-				ex = append(ex, hex.EncodeToString(ExtractBits(p, o, bits, bits%2 == 0, 40)))
-			}
-		}
-		return map[string]any{"w": p.W, "h": p.H, "format": p.Format, "alpha": p.Alpha, "rgba": sum(p.RGBA), "indices": sum(p.Indices),
-			"describe": Analyse(p).Describe(), "found": found, "extract": ex}
-	}
+	sum := shortSum
+	describe := lsbDescribe
 
 	// PNGs from Go's encoder, one per image type
 	rect := image.Rect(0, 0, 13, 7)
@@ -465,4 +442,34 @@ func absInt(x int) int {
 		return -x
 	}
 	return x
+}
+
+// lsbDescribe is what the LSB fixtures record of a file: DecodeImage's error, or the pixels' size, format and hashes,
+// Analyse's description, SearchLSB's finds and ExtractBits in every order.
+func lsbDescribe(b []byte) any {
+	p, err := DecodeImage(b)
+	if err != nil {
+		return map[string]any{"err": err.Error()}
+	}
+	var found []any
+	for _, f := range SearchLSB(p, 4096) {
+		found = append(found, []any{f.Order, f.Bits, f.MSBFirst, f.Length, f.Why, hex.EncodeToString(f.Data)})
+	}
+	var ex []any
+	for _, o := range append([]Order{{"palette index", []int{-1}}}, Orders...) {
+		for _, bits := range []int{1, 2, 4, 9} {
+			ex = append(ex, hex.EncodeToString(ExtractBits(p, o, bits, bits%2 == 0, 40)))
+		}
+	}
+	return map[string]any{"w": p.W, "h": p.H, "format": p.Format, "alpha": p.Alpha, "rgba": shortSum(p.RGBA), "indices": shortSum(p.Indices),
+		"describe": Analyse(p).Describe(), "found": found, "extract": ex}
+}
+
+// shortSum is the first 8 bytes of SHA-256, in hex ("" for nil).
+func shortSum(b []byte) string {
+	if b == nil {
+		return ""
+	}
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:8])
 }

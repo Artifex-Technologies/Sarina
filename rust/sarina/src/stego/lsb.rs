@@ -1,9 +1,9 @@
 //! Go: `stego/lsb.go` and `diff.go`: an image decoded to samples ([`decode_image`], through [`super::images`]), the
 //! least-significant-bit statistics with the pairs-of-values chi-square ([`analyse`]), extraction in every order
 //! ([`extract_bits`]), the search for a payload ([`search_lsb`]) and the comparison of two pictures ([`diff`])
-//! (testdata/parity/stegolsb.json). JPEG decoding is the next part: [`decode_image`] answers None for a JPEG.
+//! (testdata/parity/stegolsb.json, stegojpeg.json).
 
-use super::images::{self, Decoded, Kind};
+use super::images::{self, Kind};
 use super::wav::{judge, Found, MAX_PIXELS};
 use crate::cryptotools::fmt_f;
 use crate::gomath;
@@ -18,21 +18,13 @@ pub struct Pixels {
     pub alpha: bool,
 }
 
-/// Go's `DecodeImage`; None for a JPEG (its decoder is not ported yet).
-pub fn decode_image(b: &[u8]) -> Option<Result<Pixels, String>> {
-    let (w, h, _) = match images::decode_config(b) {
-        Ok(Some(c)) => c,
-        Ok(None) => return None,
-        Err(e) => return Some(Err(format!("not an image I can decode: {e}"))),
-    };
+/// Go's `DecodeImage`.
+pub fn decode_image(b: &[u8]) -> Result<Pixels, String> {
+    let (w, h) = images::decode_config(b).map_err(|e| format!("not an image I can decode: {e}"))?;
     if w * h > MAX_PIXELS {
-        return Some(Err(format!("the image is {w}x{h}, more than {MAX_PIXELS} pixels: too big for me to look at bit by bit")));
+        return Err(format!("the image is {w}x{h}, more than {MAX_PIXELS} pixels: too big for me to look at bit by bit"));
     }
-    let (img, format) = match images::decode(b) {
-        Ok(Decoded::Image(m, f)) => (m, f),
-        Ok(Decoded::Jpeg) => return None,
-        Err(e) => return Some(Err(format!("cannot decode the image: {e}"))),
-    };
+    let (img, format) = images::decode(b).map_err(|e| format!("cannot decode the image: {e}"))?;
     let mut p = Pixels { w: img.w, h: img.h, rgba: Vec::with_capacity(4 * img.w * img.h), indices: None, format, alpha: false };
     if img.kind == Kind::Paletted {
         p.indices = Some(img.pix.clone());
@@ -49,7 +41,7 @@ pub fn decode_image(b: &[u8]) -> Option<Result<Pixels, String>> {
             p.rgba.extend_from_slice(&c);
         }
     }
-    Some(Ok(p))
+    Ok(p)
 }
 
 /// Go's `ChannelStats`.

@@ -453,3 +453,37 @@ impl TestCa {
         std::sync::Arc::new(cfg)
     }
 }
+
+/// The first 8 bytes of SHA-256, in hex (the LSB fixtures' hash).
+pub fn short_sum(b: &[u8]) -> String {
+    use sha2::Digest;
+    sha2::Sha256::digest(b)[..8].iter().map(|x| format!("{x:02x}")).collect()
+}
+
+fn hexs(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+/// What the LSB fixtures record of a file (go/stego/lsb_parity_test.go `lsbDescribe`).
+pub fn lsb_describe(b: &[u8]) -> Value {
+    let p = match sarina::stego::lsb::decode_image(b) {
+        Err(e) => return json!({ "err": e }),
+        Ok(p) => p,
+    };
+    let found: Vec<Value> = sarina::stego::lsb::search_lsb(&p, 4096)
+        .iter()
+        .map(|f| json!([f.order, f.bits, f.msb_first, f.length, f.why, hexs(&f.data)]))
+        .collect();
+    let mut ex = Vec::new();
+    let palette: (&str, &[i32]) = ("palette index", &[-1]);
+    for (_, chans) in std::iter::once(palette).chain(sarina::stego::lsb::ORDERS) {
+        for bits in [1, 2, 4, 9] {
+            ex.push(json!(hexs(&sarina::stego::lsb::extract_bits(&p, chans, bits, bits % 2 == 0, 40))));
+        }
+    }
+    json!({
+        "w": p.w, "h": p.h, "format": p.format, "alpha": p.alpha, "rgba": short_sum(&p.rgba),
+        "indices": p.indices.as_ref().map_or(String::new(), |i| short_sum(i)),
+        "describe": sarina::stego::lsb::describe(&sarina::stego::lsb::analyse(&p)), "found": if found.is_empty() { Value::Null } else { Value::Array(found) }, "extract": ex,
+    })
+}

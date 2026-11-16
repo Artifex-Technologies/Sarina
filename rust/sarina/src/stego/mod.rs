@@ -6,6 +6,7 @@ pub mod flate;
 pub mod gif;
 pub mod goio;
 pub mod images;
+pub mod jpeg;
 pub mod lsb;
 pub mod magic;
 pub mod meta;

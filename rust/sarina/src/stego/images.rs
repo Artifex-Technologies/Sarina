@@ -124,12 +124,6 @@ fn peek_matches(r: &mut Bufio<BytesReader>, magic: &[u8]) -> bool {
 /// The registered formats in Go's order.
 const FORMATS: [(&str, &[u8]); 3] = [("gif", b"GIF8?a"), ("jpeg", b"\xff\xd8"), ("png", b"\x89PNG\r\n\x1a\n")];
 
-/// A decoded image, or None for a JPEG (decoded in Go until its decoder is ported).
-pub enum Decoded {
-    Image(Img, &'static str),
-    Jpeg,
-}
-
 fn sniff(r: &mut Bufio<BytesReader>) -> Option<&'static str> {
     FORMATS.iter().find(|(_, m)| peek_matches(r, m)).map(|(n, _)| *n)
 }
@@ -137,23 +131,23 @@ fn sniff(r: &mut Bufio<BytesReader>) -> Option<&'static str> {
 const UNKNOWN: &str = "image: unknown format";
 
 /// Go's `image.DecodeConfig`: (width, height, format).
-pub fn decode_config(b: &[u8]) -> Result<Option<(usize, usize, &'static str)>, GoErr> {
+pub fn decode_config(b: &[u8]) -> Result<(usize, usize), GoErr> {
     let mut r = Bufio::new(BytesReader::new(b));
     match sniff(&mut r) {
-        Some("png") => super::png::Decoder::new(r).decode_config().map(|(w, h)| Some((w, h, "png"))),
-        Some("gif") => super::gif::decode_config(r).map(|(w, h)| Some((w, h, "gif"))),
-        Some(_) => Ok(None),
+        Some("png") => super::png::Decoder::new(r).decode_config(),
+        Some("gif") => super::gif::decode_config(r),
+        Some(_) => super::jpeg::Decoder::new(b).decode_config(),
         None => Err(GoErr::Msg(UNKNOWN.into())),
     }
 }
 
-/// Go's `image.Decode`.
-pub fn decode(b: &[u8]) -> Result<Decoded, GoErr> {
+/// Go's `image.Decode`: the picture and its format's name.
+pub fn decode(b: &[u8]) -> Result<(Img, &'static str), GoErr> {
     let mut r = Bufio::new(BytesReader::new(b));
     match sniff(&mut r) {
-        Some("png") => super::png::Decoder::new(r).decode().map(|m| Decoded::Image(m, "png")),
-        Some("gif") => super::gif::decode(r).map(|m| Decoded::Image(m, "gif")),
-        Some(_) => Ok(Decoded::Jpeg),
+        Some("png") => super::png::Decoder::new(r).decode().map(|m| (m, "png")),
+        Some("gif") => super::gif::decode(r).map(|m| (m, "gif")),
+        Some(_) => super::jpeg::Decoder::new(b).decode().map(|m| (m, "jpeg")),
         None => Err(GoErr::Msg(UNKNOWN.into())),
     }
 }
