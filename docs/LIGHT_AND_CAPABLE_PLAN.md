@@ -165,7 +165,7 @@ taken; only the behaviour, described in our own words. Surveyed 2026-11-04.
 - **A small router model:** `sarina route` does this.
 - **Multiple users and logins:** single owner; phone approval is planned in VOICE_AND_TRUST_PLAN.
 - **Subscription logins to online assistants:** data leaves the machine, and their terms are a risk.
-- **A YouTube handler:** Huginn covers it.
+- **A YouTube handler:** Ratatoskr (called Huginn until 2026-11-15) covers it.
 
 ## Order of work
 
