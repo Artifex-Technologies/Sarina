@@ -115,6 +115,11 @@ fn decode_map(alphabet: &[u8]) -> [u8; 256] {
     m
 }
 
+/// Go's `base64.StdEncoding.DecodeString` (padded).
+pub(crate) fn base64_std(src: &[u8]) -> Result<Vec<u8>, String> {
+    base64_decode(src, STD64, true)
+}
+
 /// Go's `base64.Raw...Encoding.DecodeString` with an alphabet (no padding).
 pub(crate) fn base64_raw(src: &[u8], alphabet: &[u8]) -> Result<Vec<u8>, String> {
     base64_decode(src, alphabet, false)

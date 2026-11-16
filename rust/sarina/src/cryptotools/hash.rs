@@ -9,7 +9,7 @@ use sha2::Digest as _;
 pub const ALGORITHMS: [&str; 9] = ["md5", "sha1", "sha224", "sha256", "sha384", "sha512", "sha3-256", "sha3-512", "crc32"];
 
 #[derive(Clone, Copy, PartialEq)]
-enum Algo {
+pub(crate) enum Algo {
     Md5,
     Sha1,
     Sha224,
@@ -62,7 +62,7 @@ fn sum(a: Algo, data: &[u8]) -> Vec<u8> {
 }
 
 /// HMAC (RFC 2104) over `a`, as Go's crypto/hmac: a key longer than the block is hashed first.
-fn hmac(a: Algo, key: &[u8], data: &[u8]) -> Vec<u8> {
+pub(crate) fn hmac(a: Algo, key: &[u8], data: &[u8]) -> Vec<u8> {
     let bs = block_size(a);
     let mut k = if key.len() > bs { sum(a, key) } else { key.to_vec() };
     k.resize(bs, 0);

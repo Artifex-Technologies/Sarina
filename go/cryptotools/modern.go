@@ -34,7 +34,7 @@ func Modern(ctx context.Context, input, key string, now time.Time) (string, erro
 	case strings.Contains(t, "-----BEGIN PGP"):
 		return pgpInfo(ctx, t), nil
 	case strings.Contains(t, "PRIVATE KEY-----"):
-		return "This is a PRIVATE key (" + pemRE.FindStringSubmatch(t)[1] + "). I do not parse, print or load private keys: keep it out of the conversation, and if it was pasted somewhere it should not have been, treat it as exposed and make a new one.", nil
+		return "This is a PRIVATE key (" + pemLabel(t, "PRIVATE KEY") + "). I do not parse, print or load private keys: keep it out of the conversation, and if it was pasted somewhere it should not have been, treat it as exposed and make a new one.", nil
 	case strings.Contains(t, "-----BEGIN"):
 		return pemInfo(t, now)
 	case sshRE.MatchString(t):
@@ -48,6 +48,15 @@ func Modern(ctx context.Context, input, key string, now time.Time) (string, erro
 		}
 	}
 	return "", fmt.Errorf("not a certificate, public key, SSH key, JWT or PGP block that I recognise; crypto_identify says what it might be")
+}
+
+// pemLabel is the label of the first whole "-----BEGIN LABEL-----" header, or fallback when there is none (the text only
+// mentions "PRIVATE KEY-----" or starts "-----BEGIN PGP" without closing the header).
+func pemLabel(t, fallback string) string {
+	if m := pemRE.FindStringSubmatch(t); m != nil {
+		return m[1]
+	}
+	return fallback
 }
 
 func pemInfo(t string, now time.Time) (string, error) {
@@ -270,6 +279,9 @@ func compactJSON(b []byte) string {
 }
 
 func verifyJWT(parts []string, alg, key string) (bool, string) {
+	if len(alg) < 2 { // no alg, or one too short to name a family and a size
+		return false, "algorithm " + alg + " is not one I verify"
+	}
 	signed := []byte(parts[0] + "." + parts[1])
 	sig, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[2], "="))
 	if err != nil {
@@ -328,7 +340,7 @@ func verifyJWT(parts []string, alg, key string) (bool, string) {
 
 // pgpInfo describes an armored PGP block with gpg --list-packets (nothing is decrypted or imported), or by its header alone without gpg.
 func pgpInfo(ctx context.Context, t string) string {
-	kind := pemRE.FindStringSubmatch(t)[1]
+	kind := pemLabel(t, "PGP")
 	if _, err := exec.LookPath("gpg"); err != nil {
 		return "PGP armored block: " + kind + ". gpg is not installed, so I cannot list its packets (key ids, algorithms); the header is all I can say."
 	}
