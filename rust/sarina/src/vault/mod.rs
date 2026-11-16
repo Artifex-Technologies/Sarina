@@ -5,6 +5,8 @@
 //! byte, as the model is shown them by Go too.
 
 pub mod search;
+pub mod tools;
+pub mod write;
 
 use crate::gopath;
 use crate::gotext::{self, lossy};

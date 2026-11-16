@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/guard"
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // Owner-only notes (and folders, written with a trailing /): she can read them (and does, at the start of a spoken question) but never changes them, so a note she was tricked into
@@ -70,8 +71,19 @@ func (v *Vault) Write(gate Scanner, name, content string, mode Mode) (WriteResul
 			return WriteResult{}, fmt.Errorf("not saved: %s", r.Reason)
 		}
 	}
-	old, readErr := os.ReadFile(abs)
-	exists := readErr == nil
+	// what is there now: only a regular file is read or replaced (a link under the note's name is not followed, a named
+	// pipe or device not waited on)
+	var old []byte
+	exists := false
+	if st, err := os.Lstat(abs); err == nil {
+		if !st.Mode().IsRegular() {
+			return WriteResult{}, fmt.Errorf("%s is not a regular file: not written", rel)
+		}
+		if old, err = session.ReadRegular(abs, 4<<20); err != nil {
+			return WriteResult{}, err
+		}
+		exists = true
+	}
 	today := now().Format("2006-01-02")
 	var out string
 	switch mode {
@@ -101,8 +113,19 @@ func (v *Vault) Write(gate Scanner, name, content string, mode Mode) (WriteResul
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return WriteResult{}, err
 	}
+	// the copy is made anew: whatever was left under its name (a link too) is removed, not written through
 	tmp := abs + ".tmp"
-	if err := os.WriteFile(tmp, []byte(out), 0o644); err != nil {
+	_ = os.Remove(tmp)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return WriteResult{}, err
+	}
+	_, err = f.Write([]byte(out))
+	if err1 := f.Close(); err == nil {
+		err = err1
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
 		return WriteResult{}, err
 	}
 	if err := os.Rename(tmp, abs); err != nil {

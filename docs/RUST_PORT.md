@@ -748,7 +748,7 @@ Mutation run: 8 of 8 caught (after the boundary cases were added).
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them
 (the differential sets `chat,resume,skill,memory-review`) and `cli::chat::needs_go` finds none of the optional tool sets
-the port lacks switched on (`SARINA_FORGE` on or `SARINA_VAULT` set; the system and math sets are ported since
+the port lacks switched on (`SARINA_FORGE` on, or `SARINA_VAULT` set with `SARINA_SEMANTIC=on`; the system and math sets are ported since
 2026-11-13, the quantum, reverse-engineering, council, crypto and stego sets since 2026-11-16): with one of them the Go build would offer the model tools the
 port does not have, so the Go build answers. For these cases the loopback server is the model: the chat completions take
 the scripted answers (plain JSON, or a stream of `data:` lines), the context-window discovery's probes (`/api/ps`,
@@ -1239,7 +1239,8 @@ pieces; `needs_go` loses SARINA_VAULT when vault, daily and insight are all wire
 
 | Part | Go | Rust | Proof | Commit |
 | --- | --- | --- | --- | --- |
-| vault 1: reading a vault and recall without a model | `vault.go` (`Open`, `ParseNote`, `Notes`, `Resolve`, `SafePath`), `search.go` (`Search` with its BM25, link and recency ranks, `Backlinks`, `Suggest`), `Lessons`, `Digest`, `Lint`; Go's `sort.Slice` (pdqsort) | `vault/mod.rs`, `vault/search.rs`; `gosort::slice` | vault.json: 182 (18 note texts; a made-up tree with hidden folders, a big file, links in and out, a named pipe, equal times; 20 link targets, 20 note names, 32 searches, backlinks, suggestions, lessons, lint; sort.Slice on 36 key lists with ties up to 1,000 long); mutation 18 of 19, the other equivalent (the size check before the bounded read) | this part |
+| vault 1: reading a vault and recall without a model | `vault.go` (`Open`, `ParseNote`, `Notes`, `Resolve`, `SafePath`), `search.go` (`Search` with its BM25, link and recency ranks, `Backlinks`, `Suggest`), `Lessons`, `Digest`, `Lint`; Go's `sort.Slice` (pdqsort) | `vault/mod.rs`, `vault/search.rs`; `gosort::slice` | vault.json: 182 (18 note texts; a made-up tree with hidden folders, a big file, links in and out, a named pipe, equal times; 20 link targets, 20 note names, 32 searches, backlinks, suggestions, lessons, lint; sort.Slice on 36 key lists with ties up to 1,000 long); mutation 18 of 19, the other equivalent (the size check before the bounded read) | `efd44d6` |
+| vault 2: writing, the commands, the tools; `needs_go` keeps SARINA_VAULT only with SARINA_SEMANTIC=on | `write.go` (`Write`, `withFront`, `touchUpdated`, `Init`, `Commit`), `tools.go` (vault_search, vault_read, vault_write, `relink`, `nearNames`), `command.go` and `lessons.go`'s commands but vault-search | `vault/write.rs` (a note's old bytes kept as they are), `vault/tools.rs`; vault-init, vault-lint, note and lessons in `cli::ported`; the vault tools in `cli::chat::builtins` (Go's order: after quantum_sim) | CLI differential: 59 new cases written first and run Go against Go (the commands with and without a vault, git as a stand-in; every tool on a made-up vault: protected notes, the gate, links fixed to near names, links and a named pipe planted in the vault; 1,022 cases, 5,110 comparisons in all, no difference); tooldefs.json with the vault tools; mutation 12 of 13, the other unreachable (max_results is held to 20 by the schema check first) | this part |
 
 **Go fixes found by these parts, in Go and Rust both, each with a Go test that failed before:** crypto_modern panicked
 on "PRIVATE KEY-----" without a whole PEM header, on "-----BEGIN PGP" without its closing dashes, and on a JWT whose alg
@@ -1253,7 +1254,10 @@ binwalk's whole output and waited for a child of theirs holding it open past the
 `WaitDelay` 2 s; wiring 1, TestHelpersReportIsBounded). Found by vault 1: `Notes` read every `.md` with `os.ReadFile`, so a named
 pipe under a note's name held every search, recall and lint for ever, and a link named like a note put the file it named,
 anywhere on the computer, into her search results; now a link counts only when it leads to a note inside the vault, and
-notes are read as bounded regular files (TestNotesSkipsPlantedPipesAndLinksOut).
+notes are read as bounded regular files (TestNotesSkipsPlantedPipesAndLinksOut). Found by vault 2: `Write` read the note through a link planted under its
+name (an append copied the link's target, a key file say, into the vault), wrote its `.tmp` copy through a link planted
+under that name (the note landed wherever it pointed, outside the vault too), and waited for ever on a named pipe under
+the note's name; now only a regular file is read or replaced and the copy is made anew (TestWriteRefusesPlantedLinksAndPipes).
 
 **Not ported yet, in the order I would take them:**
 Nothing: crypto and stego are ported and wired. `needs_go` hands a chat to Go now only for SARINA_FORGE=on or

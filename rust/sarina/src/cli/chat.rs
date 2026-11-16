@@ -5,7 +5,8 @@
 //! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`:
 //! `doctor_tool`), the reverse-engineering set with SARINA_REVERSE=on, quantum_sim with SARINA_QUANTUM=on, the system set
 //! (`sysinfo`) with SARINA_SYSTEM=on, the crypto and stego tools with SARINA_CRYPTO=on and the Trachtenberg tool with
-//! SARINA_MATH=on. The optional tool sets that are not ported yet (vault, the forge) make [`needs_go`] answer, and the
+//! SARINA_MATH=on, the vault tools with SARINA_VAULT set. What is not ported yet (the forge, the vault's recall by
+//! meaning with SARINA_SEMANTIC=on) makes [`needs_go`] answer, and the
 //! command is then handed to the Go build whole. SARINA_CRYPTO=auto and SARINA_MATH=auto are decided from the command
 //! line before that (`sarina-rs`'s main, as Go's `cli.Main`).
 
@@ -48,8 +49,9 @@ pub fn needs_go(getenv: &dyn Fn(&str) -> String) -> Option<String> {
     if getenv("SARINA_FORGE") == "on" {
         return Some("SARINA_FORGE=on".into());
     }
-    if !getenv("SARINA_VAULT").is_empty() {
-        return Some("SARINA_VAULT is set".into());
+    // the vault's recall by meaning is not ported yet
+    if !getenv("SARINA_VAULT").is_empty() && getenv("SARINA_SEMANTIC") == "on" {
+        return Some("SARINA_VAULT with SARINA_SEMANTIC=on".into());
     }
     None
 }
@@ -564,8 +566,8 @@ impl Chat {
 
 /// Go's stable built-ins: the default tools and every provider's, in the Go build's order (go/cmd/sarina's
 /// TestParityToolDefs records it): the file, shell, to-do and plan tools, memory, the reverse-engineering set with
-/// SARINA_REVERSE=on and labyrinth-rea, council_ask with a council configured, Limbo, sarina_doctor, quantum_sim with SARINA_QUANTUM=on, and the system set with
-/// SARINA_SYSTEM=on.
+/// SARINA_REVERSE=on and labyrinth-rea, council_ask with a council configured, Limbo, sarina_doctor, quantum_sim with SARINA_QUANTUM=on, the vault tools with
+/// SARINA_VAULT set, and the system set with SARINA_SYSTEM=on.
 pub fn builtins() -> Vec<Tool> {
     let mut files = crate::tools::files::file_tools();
     let take = |v: &mut Vec<Tool>, n: &str| {
@@ -587,6 +589,7 @@ pub fn builtins() -> Vec<Tool> {
     out.extend(crate::limbo::tools());
     out.push(doctor_tool());
     out.extend(crate::quantum::tools());
+    out.extend(crate::vault::tools::tools());
     out.extend(crate::sysinfo::tools());
     out
 }
