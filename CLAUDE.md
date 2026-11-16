@@ -238,6 +238,20 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-16 (2) — Rust port step 5: the council in Rust; needs_go no longer looks for a council file
+- **Ported, proved first by new CLI differential cases run Go against Go:** the council (`rust/sarina/src/council.rs`:
+  `sarina council` and `council status [--probe]`, the `council_ask` tool) on 83 cases: members on the stand-in's own
+  paths, a Claude member, remote members at 192.0.2.1 (unreachable in the case's own network namespace), the operator's
+  answers on standard input, 21 config files. `sarina council` runs in Rust under `SARINA_RS_TRY=council` (it calls
+  models, so it waits with chat); `needs_go` now hands a chat to Go only for SARINA_CRYPTO=on (or auto asking for
+  crypto), SARINA_FORGE or SARINA_VAULT. **CLI differential 761 cases, 3,805 comparisons: no difference.**
+- No Go fault found. One port difference, written down: the port's HTTP client dials "localhost" at 127.0.0.1 first, Go
+  at ::1 first (only the error text differs when neither answers).
+- **For every board:** the council's online members still need the operator's yes on every call, in both builds; the
+  requests are Go's byte for byte. Nothing to change elsewhere.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-16 — Rust port step 5: the quantum and reverse-engineering sets in Rust; two Go fixes; the owner's switch steps
 - **Ported, proved first by new CLI differential cases run Go against Go:** the quantum set (`rust/sarina/src/quantum.rs`:
   `quantum_sim` and `sarina quantum`, which moved to sarina-rs as a command without a model) on 58 cases and

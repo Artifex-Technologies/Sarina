@@ -16,7 +16,7 @@ equal.
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
-| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`) and the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM or SARINA_REVERSE; crypto and stego, vault (with daily and insight), forge, council open |
+| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego, vault (with daily and insight), forge open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
@@ -317,6 +317,10 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 
 ## Differences from Go, on purpose or accepted
 
+- **"localhost" is dialled 127.0.0.1 first by gohttp, ::1 first by Go** (found 2026-11-16 by a council case with a member
+  at `http://LOCALHOST:1/v1` and nothing listening): when neither answers, the error names the address tried first, so
+  Go says `dial tcp [::1]:1` and the port `dial tcp 127.0.0.1:1`. With a server on either address both reach it; the
+  council's differential no longer dials such a member (its status case still reads it as local).
 - **Go 1.27's JSON is not v1's.** Go 1.27 builds with `GOEXPERIMENT=jsonv2` on, so `encoding/json` runs on the v2
   engine: a bad escape reads "invalid escape sequence `\x` in string" (v1 and Limbo's and Heimdall's ports: "invalid
   character 'x' in string escape code"), a number cut short "in numeric literal" without the place, the depth limit
@@ -716,6 +720,25 @@ left holding them kept the answer for the six minutes the call may run. Now the 
 program's strings, for network-map), the first 64 KiB of errors, nm's and heimdalld's output bounded too, a child
 waited for 2 s (`runBounded`), and the cut counts characters without the []rune (`TestAnalysisOutputIsBounded`,
 `TestAnalysisDoesNotWaitForAChildHoldingTheOutput`).
+
+### The council cases (2026-11-16)
+
+The council (83 cases): `sarina council` with two and three local members on the stand-in's own paths (each answers from
+its path, the comparison from the same path when the request holds `<answer member=`), `--json` (the time each took left
+out), `--no-synthesis`, `--local-only`, `--members` (spaces, capitals), answers with control characters and line
+separators cleaned, a local member with `no_secrets` (one secret removed and said so), a failing member whose error echoes
+a key (scrubbed), an empty answer, one answer only, nobody answering, a Claude member (with and without its key), remote
+members at 192.0.2.1 (declined, no answer on standard input, approved and unreachable, a missing key, the
+`max_remote_members` cap), a named and a disabled synthesizer, `--context-file` (missing, past 64 KiB), no question, `-h`,
+an unknown flag, no council, SARINA_COUNCIL_FILE with spaces. 21 config files (invalid JSON, type errors, nine members,
+negatives, duplicate names in other case, missing fields, unknown kinds, ftp and hostless URLs, a pasted key, remote or
+unknown synthesizers, bad and unknown allow_data, defaults and warnings, localhost and loopback spellings, all disabled,
+`null`, no members) each through `council status` and a question; a folder at the config's place; `status --probe`
+(reachable, 401, 503, unreachable, a Claude member, keys missing, a disabled member skipped). `council_ask` in a chat:
+local only, remote approved and declined on standard input, an empty question, 6,000 and 6,001 characters, all members
+disabled (no tool), a broken file, its place among every other set. The members are asked at once, so the requests are
+compared as a set (`unordered`). No Go fault found; one port difference ("Differences": localhost's address order).
+Mutation run: 8 of 8 caught (after the boundary cases were added).
 
 ### The chat cases (2026-11-12)
 
@@ -1169,11 +1192,16 @@ Eleventh session (2026-11-16): step 5, the quantum and reverse-engineering sets;
   written first and run Go against Go ("The reverse cases") and reverse.json (101 comparisons); the tools' definitions are
   now recorded by TestParityToolDefs (the fullest set has SARINA_REVERSE=on and LABYRINTH_REA). **Go fix**: the analysis's
   output was held whole and a child holding it kept the call six minutes.
-- `needs_go` now hands a chat to Go only for SARINA_CRYPTO=on (or auto asking for crypto), SARINA_FORGE, SARINA_VAULT and a
-  council file. The voice's sarina.env sets SARINA_VAULT and SARINA_FORGE, so spoken questions stay in Go until those
+- `needs_go` now hands a chat to Go only for SARINA_CRYPTO=on (or auto asking for crypto), SARINA_FORGE and SARINA_VAULT. The voice's sarina.env sets SARINA_VAULT and SARINA_FORGE, so spoken questions stay in Go until those
   two are ported.
 - CLI differential **678 cases, 3,390 comparisons, no difference** (quantum `2cc170a`, reverse `932a63d`); `sarina quantum`
   6.4 → 0.7 ms ("Why Rust: measured").
+- Later the same session: **the council in Rust** (`council.rs`: the config, `Ask` with the members asked at once on
+  threads and local ones `local_concurrency` at a time, the comparison, the report and its JSON, `status --probe`,
+  `council_ask`), proved by 83 CLI cases written first and run Go against Go ("The council cases"); `sarina council`
+  runs in Rust under `SARINA_RS_TRY=council` (it calls models, so it waits with chat for the owner's days of use), and
+  `needs_go` no longer looks for a council file. Mutation run: 8 of 8 caught after an 8,001-character answer, U+2029 and a 403 probe were added. No Go fault found; one port difference (localhost's
+  address order, "Differences"). CLI differential **761 cases, 3,805 comparisons, no difference**.
 - **The owner's to-do** (`~/Desktop/finish-todo.sh`, not in this repository): step 3 installs the newer sarina-git 1.0.0-126 (built
   without root from Labyrinth's `sarina-rs-switch` recipe and this repository's HEAD, in `~/.cache/labyrinth-switch`),
   step 4 adds `SARINA_RS_TRY=chat,resume,skill,memory-review,gui,doctor` to the owner's ~/.bashrc in a marked block (new
@@ -1203,7 +1231,7 @@ Next, in this order:
    the owner's order: cryptotools and stego (about 5,100 lines of Go with the "crypto" and "stego" prefetches: x509, JWT
    signatures, PNG and WAV readers; SARINA_CRYPTO=auto is decided already; too large for the 2026-11-16 session's budget,
    so the two small sets went first), then vault with daily and insight (a temporary vault only, never
-   ~/Documents/Obsidian), council, forge. Spoken questions stay in Go until vault and forge are ported (the voice's
+   ~/Documents/Obsidian), forge (council done 2026-11-16). Spoken questions stay in Go until vault and forge are ported (the voice's
    sarina.env sets both). Each with differential cases first, run Go against Go.
 4. The service and GUI differentials do not run in a namespace of their own: their servers take ports from the kernel and
    every address they are given is the scripted server's, so nothing reaches 8899 or 8765 today. If a scenario ever runs
