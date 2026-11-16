@@ -5,8 +5,8 @@
 //! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`:
 //! `doctor_tool`), the reverse-engineering set with SARINA_REVERSE=on, quantum_sim with SARINA_QUANTUM=on, the system set
 //! (`sysinfo`) with SARINA_SYSTEM=on, the crypto and stego tools with SARINA_CRYPTO=on and the Trachtenberg tool with
-//! SARINA_MATH=on, the vault tools with SARINA_VAULT set. What is not ported yet (the forge, the vault's recall by
-//! meaning with SARINA_SEMANTIC=on) makes [`needs_go`] answer, and the
+//! SARINA_MATH=on, the vault tools with SARINA_VAULT set. What is not ported yet (the forge) makes [`needs_go`] answer,
+//! and the
 //! command is then handed to the Go build whole. SARINA_CRYPTO=auto and SARINA_MATH=auto are decided from the command
 //! line before that (`sarina-rs`'s main, as Go's `cli.Main`).
 
@@ -48,10 +48,6 @@ pub const DRAFT_WITHDRAWN: &str = "\u{1e}draft withdrawn\u{1e}";
 pub fn needs_go(getenv: &dyn Fn(&str) -> String) -> Option<String> {
     if getenv("SARINA_FORGE") == "on" {
         return Some("SARINA_FORGE=on".into());
-    }
-    // the vault's recall by meaning is not ported yet
-    if !getenv("SARINA_VAULT").is_empty() && getenv("SARINA_SEMANTIC") == "on" {
-        return Some("SARINA_VAULT with SARINA_SEMANTIC=on".into());
     }
     None
 }

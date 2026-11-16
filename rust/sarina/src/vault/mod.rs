@@ -5,6 +5,7 @@
 //! byte, as the model is shown them by Go too.
 
 pub mod search;
+pub mod semantic;
 pub mod tools;
 pub mod write;
 

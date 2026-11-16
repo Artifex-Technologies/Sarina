@@ -1,9 +1,9 @@
 //! Go: `vault/tools.go` and `vault/command.go`: vault_search, vault_read and vault_write (offered when SARINA_VAULT is
-//! set), and the commands vault-init, vault-lint, note and lessons. Recall by meaning (SARINA_SEMANTIC=on) is not ported
-//! yet: with it on, a chat goes to the Go build (`cli::chat::needs_go`) and `sarina vault-search` stays there.
+//! set), and the commands vault-init, vault-lint, vault-search, note and lessons.
 
+use super::semantic::recall;
 use super::write::{local_now, FOLDERS, MAX_NOTE_CHARS};
-use super::{backlinks, digest, lint, resolve, search, suggest, Note, Vault};
+use super::{backlinks, digest, lint, resolve, suggest, Note, Vault};
 use crate::goany::Any;
 use crate::goflag::{FlagSet, HELP};
 use crate::gotext::{self, quote};
@@ -65,7 +65,7 @@ fn search_tool(a: &BTreeMap<String, Any>, tc: &Context) -> Output {
         Some(Any::Number(f)) if *f >= 1.0 => crate::config::go_int(*f).max(0) as usize,
         _ => 8,
     };
-    let hits = search(&notes, &arg_str(a, "query"), n);
+    let hits = recall(&v, &notes, &arg_str(a, "query"), n);
     if hits.is_empty() {
         return ok("No notes matched.".into(), md(vec![("action", Any::String("vault_search".into())), ("hits", Any::Int(0))]));
     }
@@ -295,6 +295,23 @@ pub fn lint_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
     }
     env.println(&format!("{} notes, {} things to look at", notes.len(), problems.len()));
     i32::from(!problems.is_empty())
+}
+
+/// `sarina vault-search [--path DIR] WORDS...`.
+pub fn search_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    let (v, rest) = match open(env, "vault-search", args) {
+        Ok(x) => x,
+        Err(rc) => return rc,
+    };
+    let notes = v.notes();
+    let hits = recall(&v, &notes, &rest.join(" "), 10);
+    for h in &hits {
+        env.println(&format!("{}  [{}]\n  {}", h.path, h.why.join(", "), h.snippet));
+    }
+    if hits.is_empty() {
+        env.println("no notes matched");
+    }
+    0
 }
 
 /// `sarina note [--path DIR] TEXT...` (or the text on standard input): a line with the time in today's Inbox note.

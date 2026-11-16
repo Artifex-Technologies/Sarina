@@ -1593,6 +1593,8 @@ def vault_cases():
         "vault/Entities/Caps.md": "---\nUpdated: 2026-01-01\n---\n# Caps\n",
     }
     vault.update({f"vault/Gen/Filler {i}.md": f"# Filler {i}\nfiller words number {i}\n" for i in range(10)})
+    vault["vault/Mix.md"] = "# Mix\nwifi steam sound disk\n"
+    vault["vault/Lists.md"] = "# Lists\n" + "".join(f"- item filler {i}\n" for i in range(61))
     on = {"SARINA_VAULT": "{W}/vault"}
     files = state(**vault)
     git = bins(git="exit 0\n")
@@ -1648,6 +1650,32 @@ def vault_cases():
     add("write with a git repository", [("vault_write", {"path": "Lessons/Git", "content": "committed"})], f=state(**vault, **git, **{"vault/.git/": ""}))
     add("vault folder missing", [("vault_search", {"query": "x"})], env={"SARINA_VAULT": "{W}/nowhere"})
     add("tools offered", [], env={"SARINA_SYSTEM": "on", "SARINA_QUANTUM": "on", "SARINA_CRYPTO": "on"})
+    # recall by meaning (SARINA_SEMANTIC=on) against the stand-in embedder; the index kept in the case's own state folder
+    sem = dict(on, SARINA_SEMANTIC="on", OLLAMA_HOST="{H}", XDG_STATE_HOME="{W}/state")
+    embed = {"/api/embed": embed_answer}
+    for name, args, env, routes in [("search", ["vault-search", "proton", "games"], sem, embed), ("search plain", ["vault-search", "proton"], on, embed),
+                                    ("search nothing", ["vault-search"], sem, embed), ("search other model", ["vault-search", "wine"],
+                                                                                         dict(sem, SARINA_EMBED_MODEL="made-up-embed"), embed),
+                                    ("search embed broken", ["vault-search", "proton"], sem, {"/api/embed": resp({"error": "no model"})}),
+                                    ("search state not writable", ["vault-search", "proton"], dict(sem, XDG_STATE_HOME="{W}/statefile"), embed),
+                                    ("search filler", ["vault-search", "filler", "words"], sem, embed),
+                                    ("search below the bar", ["vault-search", "wifi", "internet", "websites", "connection"], sem, embed),
+                                    ("search many chunks", ["vault-search", "item"], sem, embed)]:
+        c = C(f"vault command {name}", args, files=state(**vault, **{"statefile": "a file"}), env=env, norm=VAULT_NORM)
+        c["routes"] = routes
+        c["unordered"] = True
+        cs.append(c)
+    for name, calls in [("search, write, search", [[("vault_search", {"query": "proton games"})],
+                                                   [("vault_write", {"path": "Entities/Proton", "content": "Now also about steam.", "mode": "append"})],
+                                                   [("vault_search", {"query": "steam"})]]),
+                        ("search one", [[("vault_search", {"query": "lesson", "max_results": 1})]])]:
+        e = dict(MODEL_ENV, **sem)
+        c = C(f"vault tool semantic {name}", ["chat", "--allow-write", "notes"], files=files, env=e,
+              http=[completion(calls=k, first_id=i) for i, k in enumerate(calls)] + [completion("Done.")], norm=CHAT_NORM + VAULT_NORM)
+        c["model"] = True
+        c["routes"] = embed
+        c["unordered"] = True
+        cs.append(c)
     return cs
 
 

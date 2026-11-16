@@ -317,6 +317,13 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
 
 ## Differences from Go, on purpose or accepted
 
+- **The vault, where Go's own order is random** (vault 3): Go removes the notes that left the vault from the index in its
+  map's random order (the index moves its last vector into each freed place, so the saved notes.vec differs between two
+  Go runs when two or more notes left) and merges keyword and meaning hits of exactly equal rank in a random order; the
+  port takes the notes' order for both. A note's bytes that are not UTF-8 are read as U+FFFD (one per byte, as the
+  model is shown them by Go too), so `sarina vault-search` prints U+FFFD where Go prints the raw byte; a note's old bytes
+  are kept as they are when Sarina appends to it.
+
 - **encoding/asn1 prints a pointer** in one error, "tags don't match" for a field with an implicit tag
   (a certificate request's attributes: `tag:0xc000012345`): the address changes on every run, so the fixture holds
   `tag:0xADDR` and the port prints that.
@@ -748,8 +755,8 @@ Mutation run: 8 of 8 caught (after the boundary cases were added).
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them
 (the differential sets `chat,resume,skill,memory-review`) and `cli::chat::needs_go` finds none of the optional tool sets
-the port lacks switched on (`SARINA_FORGE` on, or `SARINA_VAULT` set with `SARINA_SEMANTIC=on`; the system and math sets are ported since
-2026-11-13, the quantum, reverse-engineering, council, crypto and stego sets since 2026-11-16): with one of them the Go build would offer the model tools the
+the port lacks switched on (`SARINA_FORGE` on; the system and math sets are ported since
+2026-11-13, the quantum, reverse-engineering, council, crypto, stego and vault sets since 2026-11-16): with one of them the Go build would offer the model tools the
 port does not have, so the Go build answers. For these cases the loopback server is the model: the chat completions take
 the scripted answers (plain JSON, or a stream of `data:` lines), the context-window discovery's probes (`/api/ps`,
 `/api/show`, `/props`, `/v1/models`) get 404. Compared as everywhere: output, exit status, every request (whole bodies:
@@ -1240,7 +1247,8 @@ pieces; `needs_go` loses SARINA_VAULT when vault, daily and insight are all wire
 | Part | Go | Rust | Proof | Commit |
 | --- | --- | --- | --- | --- |
 | vault 1: reading a vault and recall without a model | `vault.go` (`Open`, `ParseNote`, `Notes`, `Resolve`, `SafePath`), `search.go` (`Search` with its BM25, link and recency ranks, `Backlinks`, `Suggest`), `Lessons`, `Digest`, `Lint`; Go's `sort.Slice` (pdqsort) | `vault/mod.rs`, `vault/search.rs`; `gosort::slice` | vault.json: 182 (18 note texts; a made-up tree with hidden folders, a big file, links in and out, a named pipe, equal times; 20 link targets, 20 note names, 32 searches, backlinks, suggestions, lessons, lint; sort.Slice on 36 key lists with ties up to 1,000 long); mutation 18 of 19, the other equivalent (the size check before the bounded read) | `efd44d6` |
-| vault 2: writing, the commands, the tools; `needs_go` keeps SARINA_VAULT only with SARINA_SEMANTIC=on | `write.go` (`Write`, `withFront`, `touchUpdated`, `Init`, `Commit`), `tools.go` (vault_search, vault_read, vault_write, `relink`, `nearNames`), `command.go` and `lessons.go`'s commands but vault-search | `vault/write.rs` (a note's old bytes kept as they are), `vault/tools.rs`; vault-init, vault-lint, note and lessons in `cli::ported`; the vault tools in `cli::chat::builtins` (Go's order: after quantum_sim) | CLI differential: 59 new cases written first and run Go against Go (the commands with and without a vault, git as a stand-in; every tool on a made-up vault: protected notes, the gate, links fixed to near names, links and a named pipe planted in the vault; 1,022 cases, 5,110 comparisons in all, no difference); tooldefs.json with the vault tools; mutation 12 of 13, the other unreachable (max_results is held to 20 by the schema check first) | this part |
+| vault 2: writing, the commands, the tools; `needs_go` keeps SARINA_VAULT only with SARINA_SEMANTIC=on | `write.go` (`Write`, `withFront`, `touchUpdated`, `Init`, `Commit`), `tools.go` (vault_search, vault_read, vault_write, `relink`, `nearNames`), `command.go` and `lessons.go`'s commands but vault-search | `vault/write.rs` (a note's old bytes kept as they are), `vault/tools.rs`; vault-init, vault-lint, note and lessons in `cli::ported`; the vault tools in `cli::chat::builtins` (Go's order: after quantum_sim) | CLI differential: 59 new cases written first and run Go against Go (the commands with and without a vault, git as a stand-in; every tool on a made-up vault: protected notes, the gate, links fixed to near names, links and a named pipe planted in the vault; 1,022 cases, 5,110 comparisons in all, no difference); tooldefs.json with the vault tools; mutation 12 of 13, the other unreachable (max_results is held to 20 by the schema check first) | `e34444b` |
+| vault 3: recall by meaning; `needs_go` no longer names SARINA_VAULT | `semantic.go` (`chunks`, the index kept under $XDG_STATE_HOME/sarina/vault-index and brought up to date note by note, `SemanticHits`, `Merge`, `Recall`); `vault-search` | `vault/semantic.rs` (meta.json and notes.vec byte for byte Go's, so both builds share the index); `gostruct` reads uint64; vault-search in `cli::ported` | CLI differential: 11 new cases written first and run Go against Go, against the stand-in embedder (a fresh index, a best score under the bar, a note of 61 list items, another model's, the embedder failing, a state folder that cannot be written, a note changed between two searches in one chat); 1,033 cases, 5,165 comparisons in all, no difference; mutation 9 of 10, the other not reached (the search depth of six times the limit: one note fills the first places)
 
 **Go fixes found by these parts, in Go and Rust both, each with a Go test that failed before:** crypto_modern panicked
 on "PRIVATE KEY-----" without a whole PEM header, on "-----BEGIN PGP" without its closing dashes, and on a JWT whose alg

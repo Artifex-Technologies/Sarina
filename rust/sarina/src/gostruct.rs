@@ -15,6 +15,8 @@ pub enum Ty {
     Bool,
     /// int / int64
     Int,
+    /// uint64
+    Uint,
     Float,
     /// float32: a number read straight to the nearest float32 (Go's ParseFloat(s, 32))
     Float32,
@@ -39,6 +41,7 @@ pub enum Val {
     Str(String),
     Bool(bool),
     Int(i64),
+    Uint(u64),
     Float(f64),
     Float32(f32),
     Time(Time),
@@ -56,6 +59,7 @@ pub fn zero(t: &Ty) -> Val {
         Ty::Str => Val::Str(String::new()),
         Ty::Bool => Val::Bool(false),
         Ty::Int => Val::Int(0),
+        Ty::Uint => Val::Uint(0),
         Ty::Float => Val::Float(0.0),
         Ty::Float32 => Val::Float32(0.0),
         Ty::Time => Val::Time(Time::default()),
@@ -72,6 +76,7 @@ fn type_name(t: &Ty) -> String {
         Ty::Str => "string".into(),
         Ty::Bool => "bool".into(),
         Ty::Int => "int".into(),
+        Ty::Uint => "uint64".into(),
         Ty::Float => "float64".into(),
         Ty::Float32 => "float32".into(),
         Ty::Time => "time.Time".into(),
@@ -124,7 +129,7 @@ struct Ctx {
 fn mismatch(v: &Value, t: &Ty, field: &str, top: &str) -> Error {
     let what = match v {
         // Go names the number only when it failed to read into a number type ("number 0.5" into int; "number" into string)
-        Value::Number(n) if matches!(t, Ty::Int | Ty::Float | Ty::Float32) => format!("number {n}"),
+        Value::Number(n) if matches!(t, Ty::Int | Ty::Uint | Ty::Float | Ty::Float32) => format!("number {n}"),
         other => kind(other).to_string(),
     };
     let ty = type_name(t);
@@ -170,6 +175,10 @@ fn read(t: &Ty, v: &Value, into: &mut Val, field: &str, cx: &mut Ctx) {
         (Ty::Bool, Value::Bool(b)) => *into = Val::Bool(*b),
         (Ty::Int, Value::Number(n)) => match n.parse::<i64>() {
             Ok(x) => *into = Val::Int(x),
+            Err(_) => fail!(mismatch(v, t, field, top)),
+        },
+        (Ty::Uint, Value::Number(n)) => match n.parse::<u64>() {
+            Ok(x) => *into = Val::Uint(x),
             Err(_) => fail!(mismatch(v, t, field, top)),
         },
         (Ty::Float, Value::Number(n)) => match crate::gotext::parse_float(n) {

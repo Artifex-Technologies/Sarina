@@ -139,6 +139,7 @@ pub fn ported(name: &str) -> Option<Command> {
         "stego" => crate::stego::tool::command,
         "vault-init" => crate::vault::tools::init_command,
         "vault-lint" => crate::vault::tools::lint_command,
+        "vault-search" => crate::vault::tools::search_command,
         "note" => crate::vault::tools::note_command,
         "lessons" => crate::vault::tools::lessons_command,
         _ => return None,
