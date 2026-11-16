@@ -238,6 +238,26 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-16 — Rust port step 5: the quantum and reverse-engineering sets in Rust; two Go fixes; the owner's switch steps
+- **Ported, proved first by new CLI differential cases run Go against Go:** the quantum set (`rust/sarina/src/quantum.rs`:
+  `quantum_sim` and `sarina quantum`, which moved to sarina-rs as a command without a model) on 58 cases and
+  testdata/parity/quantum.json (Go's math.Sin/Cos/Sincos and cmplx.Exp bit for bit, the final states bit for bit; 3,637
+  comparisons); the reverse-engineering set (`reverse.rs`: `reverse_engineer`, `stage_binary`, `draft_yara_rule`) on 54
+  cases against a stand-in labyrinth-rea and heimdalld and the stand-in Heimdall (never the real one on 8930) and
+  reverse.json (101 comparisons). `needs_go` hands a chat to Go only for SARINA_CRYPTO=on (or auto asking for crypto),
+  SARINA_FORGE, SARINA_VAULT or a council file. **CLI differential 678 cases, 3,390 comparisons: no difference.**
+- **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** a quantum circuit line of only
+  brackets or commas panicked the parser (`sarina quantum 2 "]"` ended in a Go trace; `2cc170a`); reverse_engineer held
+  the analysis's whole output (128 MiB took 1,664 MiB) and waited six minutes for a child holding it (`932a63d`: the first
+  16 MiB, 64 KiB of errors, a child waited for 2 s).
+- **For the owner** (`~/Desktop/finish-todo.sh` steps 3-5): the newer sarina-git (1.0.0-126, built from `932a63d`), SARINA_RS_TRY for typed commands
+  in new terminals, and a question on merging Labyrinth's `voiced-rust-switch`; each says how to go back. Nothing moved to
+  always-Rust; spoken questions stay in Go until vault and forge are ported (the voice's sarina.env sets both).
+- **For Heimdall's board (nothing to change):** `draft_yara_rule`'s request to `/v1/rules/drafts` is byte for byte Go's in
+  both builds. **For Labyrinth's board:** `sarina-rs-switch` is unchanged; the to-do's package is built from its recipe.
+
+Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-13 (night) — Rust port step 5: the system and math tool sets in Rust; four Go fixes
 - **Ported, proved first by new CLI differential cases run Go against Go:** the system set (`rust/sarina/src/sysinfo/`,
   `route.rs`: system_status for every topic, crash_detail, system_fix, and the skills' "status" and "security"

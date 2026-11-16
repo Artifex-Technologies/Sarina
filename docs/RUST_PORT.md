@@ -16,7 +16,7 @@ equal.
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
-| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; quantum, crypto and stego, vault, reverse, forge, council open |
+| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`) and the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM or SARINA_REVERSE; crypto and stego, vault (with daily and insight), forge, council open |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
@@ -693,6 +693,30 @@ Payne-Hanek reduction), the report's number format, `fmt.Sscan` on 40 strings an
 trace, and the model's call failed as "tool quantum_sim failed internally". Such a line is skipped now, as an empty one is
 (`TestLineOfOnlyPunctuationIsSkipped`).
 
+### The reverse cases (2026-11-16)
+
+The reverse-engineering set (54 cases), against a stand-in labyrinth-rea and heimdalld on the case's PATH and the stand-in
+Heimdall: `reverse_engineer` with every kind of command (analyze condensed and followed by the program's own functions
+from nm, functions, decompile with the functions it calls, network-map with web addresses, host names, IPv4 and IPv6
+addresses with and without ports, loopback and unspecified ones left out, Tor addresses and Heimdall's origins, search,
+a failing analysis with and without output, a long output cut at 14,000 characters), unknown commands, refused targets
+(a leading `-`, `;`, 201 characters), paths inside and outside the analysis folder and the quarantine, through links,
+relative, `..`, missing; LABYRINTH_REA_SAMPLES and LABYRINTH_REA; labyrinth-rea missing; the set off; the tools' place
+among the other sets in the request. `stage_binary` on the made-up home's program folders (a copy named by its SHA-256,
+read-only), links in and out, folders, missing files, outside the roots, twice, without write permission.
+`draft_yara_rule` accepted, refused, an answer that is not JSON or has no id, a server error, the base taken from
+HEIMDALL_REVIEW_URL, Heimdall unreachable (the rule's `<`, `&` and U+2028 escaped as Go's json.Marshal escapes them).
+testdata/parity/reverse.json: `net.ParseIP` and `SplitHostPort` on 59 inputs, the network map of 15 texts (bytes that are
+not UTF-8, exactly 61 and 70 entries), the condensed overview, nm's functions (40, 41, 45), the calls, the cut: 101
+comparisons. Mutation run: 11 of 12 caught after the boundaries were added, the other equivalent.
+
+**Found, fixed in Go and Rust both, with Go tests that failed before**: the analysis's output and error output were held
+whole (128 MiB of output took 1,664 MiB to read, the cut to 14,000 characters made a []rune of all of it) and a child
+left holding them kept the answer for the six minutes the call may run. Now the first 16 MiB of output (a large
+program's strings, for network-map), the first 64 KiB of errors, nm's and heimdalld's output bounded too, a child
+waited for 2 s (`runBounded`), and the cut counts characters without the []rune (`TestAnalysisOutputIsBounded`,
+`TestAnalysisDoesNotWaitForAChildHoldingTheOutput`).
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them
@@ -867,11 +891,16 @@ forked from Python carries Python's pages into its own peak).
 | `chat` with SARINA_MATH=auto ("what is 3459 x 8"), a `trachtenberg` call, wall time | 67.0 ms | 23.6 ms | −65 % |
 | the same, peak memory | 23.3 MB | 12.0 MB | −48 % |
 | size on disk | 12.0 MB | 6.9 MB (with the system and math sets, 2026-11-13) | −43 % (both are installed while commands still go to Go) |
+| `sarina quantum --shots 1000 6 '...'` (2026-11-16), wall time | 6.4 ms | 0.7 ms | −89 % |
+| the same, peak memory | 19.4 MB | 13.7 MB | −29 % |
 
 The system and math rows (2026-11-13, night) the same way, inside a user and network namespace of the measurement's own,
 the stand-in programs of the CLI differential's system cases on the run's own PATH (so the programs' own time is a shell
 script's, the same for both builds), 30 runs of each interleaved; the release builds of the same commits. Before
 these, a chat with one of these sets on ran the Go build whole.
+
+The quantum rows: the release builds of sarina-git 1.0.0-125 (the Go build at /usr/lib/sarina/sarina, sarina-rs with
+SARINA_RS_NO_GO=1), a 6-qubit circuit of seven gates with 1,000 shots, 30 runs of each after one warm-up, medians.
 
 The GUI rows were measured the same way (night of 2026-11-12, 30 starts of each, interleaved; the runs 100 in a row on
 one console, after `/api/clear`). The doctor rows too, later that night, inside a user and network namespace of the
@@ -1128,6 +1157,29 @@ Tenth session (2026-11-13, night): step 5, the system and math tool sets; the GU
   set ("The GUI differential").
 - CLI differential **566 cases, 2,830 comparisons, no difference**; service 35 scenarios and GUI 59 scenarios, no difference.
 
+Eleventh session (2026-11-16): step 5, the quantum and reverse-engineering sets; the owner's switch steps.
+
+- **The quantum set in Rust** (`quantum.rs`; Go's `math.Sin`, `Cos`, `Sincos` and the Payne-Hanek reduction in `gomath`,
+  `Rand.Float64` in `gorand`, `fmt.Sscan` of an int, `%q` of bytes and `strings.Fields` of bytes in `gotext`): proved by 58
+  CLI cases written first and run Go against Go ("The quantum cases") and quantum.json (3,637 comparisons, the final
+  states bit for bit). `sarina quantum` moved to `cli::ported` (it needs no model). **Go fix**: a circuit line of only
+  brackets or commas panicked the parser (`2cc170a`).
+- **The reverse-engineering set in Rust** (`reverse.rs`, with Go's `SplitHostPort` and the network map on Go's bytes;
+  `GroupKill::Plain` in `tools/exec.rs` for a plain `CommandContext` whose error output is read): proved by 54 CLI cases
+  written first and run Go against Go ("The reverse cases") and reverse.json (101 comparisons); the tools' definitions are
+  now recorded by TestParityToolDefs (the fullest set has SARINA_REVERSE=on and LABYRINTH_REA). **Go fix**: the analysis's
+  output was held whole and a child holding it kept the call six minutes.
+- `needs_go` now hands a chat to Go only for SARINA_CRYPTO=on (or auto asking for crypto), SARINA_FORGE, SARINA_VAULT and a
+  council file. The voice's sarina.env sets SARINA_VAULT and SARINA_FORGE, so spoken questions stay in Go until those
+  two are ported.
+- CLI differential **678 cases, 3,390 comparisons, no difference** (quantum `2cc170a`, reverse `932a63d`); `sarina quantum`
+  6.4 → 0.7 ms ("Why Rust: measured").
+- **The owner's to-do** (`~/Desktop/finish-todo.sh`, not in this repository): step 3 installs the newer sarina-git 1.0.0-126 (built
+  without root from Labyrinth's `sarina-rs-switch` recipe and this repository's HEAD, in `~/.cache/labyrinth-switch`),
+  step 4 adds `SARINA_RS_TRY=chat,resume,skill,memory-review,gui,doctor` to the owner's ~/.bashrc in a marked block (new
+  terminals only; the step undoes it on `u`), step 5 asks whether to merge Labyrinth's `voiced-rust-switch` (the owner has run
+  the Rust voice server through his own drop-in since 2026-11-12). Each step says how to go back.
+
 Next, in this order:
 
 1. **Proposed, not made: moving chat, resume, skill, memory-review, service, gui and doctor to always-Rust.** All six agree with
@@ -1147,13 +1199,12 @@ Next, in this order:
       it matters. The unit needs no change: `sarina-service` is sarina-rs.
    Going back at any step is removing the name from `cli::ported` (or reinstalling the previous package).
 2. **doctor's move**: with the others (it is read-only and quick; `SARINA_RS_TRY=doctor` for the owner's days of use).
-3. **Step 5, the optional tool sets left** (sysinfo and trachtenberg done 2026-11-13): **quantum** next (a stable
-   provider between doctor and sysinfo in Go's order; it needs Go's own `math.Sin`/`Cos` ported as `gomath` has `Exp`
-   and `Log`, Go's `%g` for its numbers, and its shots drawn with `math/rand` seeded by the clock, so the differential
-   compares the exact amplitudes and leaves `shots` to cases that check only the counts' total), then cryptotools and
-   stego (about 4,900 lines of Go with the "crypto" and "stego" prefetches; SARINA_CRYPTO=auto is decided already), then
-   vault (a temporary vault only, never ~/Documents/Obsidian) with daily and insight, reverse, forge, council. Each with
-   differential cases first, run Go against Go.
+3. **Step 5, the optional tool sets left** (sysinfo and trachtenberg done 2026-11-13, quantum and reverse 2026-11-16), in
+   the owner's order: cryptotools and stego (about 5,100 lines of Go with the "crypto" and "stego" prefetches: x509, JWT
+   signatures, PNG and WAV readers; SARINA_CRYPTO=auto is decided already; too large for the 2026-11-16 session's budget,
+   so the two small sets went first), then vault with daily and insight (a temporary vault only, never
+   ~/Documents/Obsidian), council, forge. Spoken questions stay in Go until vault and forge are ported (the voice's
+   sarina.env sets both). Each with differential cases first, run Go against Go.
 4. The service and GUI differentials do not run in a namespace of their own: their servers take ports from the kernel and
    every address they are given is the scripted server's, so nothing reaches 8899 or 8765 today. If a scenario ever runs
    doctor (or anything that dials a fixed port), give them the CLI differential's `run_case` wrapper first.
