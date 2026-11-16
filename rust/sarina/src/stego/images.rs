@@ -105,6 +105,31 @@ impl Img {
     }
 }
 
+impl Img {
+    /// The pixel at (x, y) as `draw.Draw(nrgba, ..., draw.Src)` writes it: the stored bytes of an NRGBA picture, else
+    /// the colour's `RGBA64At` through NRGBA's `SetRGBA64`.
+    pub fn draw_nrgba(&self, x: usize, y: usize) -> [u8; 4] {
+        let i = (y * self.w + x) * self.kind.bytes();
+        let p = &self.pix[i..i + self.kind.bytes()];
+        let set = |r: u32, g: u32, b: u32, a: u32| {
+            let (r, g, b) = if a != 0 && a != 0xffff { (r * 0xffff / a, g * 0xffff / a, b * 0xffff / a) } else { (r, g, b) };
+            [(r >> 8) as u8, (g >> 8) as u8, (b >> 8) as u8, (a >> 8) as u8]
+        };
+        let s = |v: u8| u32::from(v) * 0x101;
+        match self.kind {
+            Kind::Rgba => set(s(p[0]), s(p[1]), s(p[2]), s(p[3])),
+            Kind::Paletted => match self.palette[usize::from(p[0])] {
+                Pal::Rgba([r, g, b, a]) => set(s(r), s(g), s(b), s(a)),
+                Pal::Nrgba([r, g, b, a]) => {
+                    let a = s(a);
+                    set(s(r) * a / 0xffff, s(g) * a / 0xffff, s(b) * a / 0xffff, a)
+                }
+            },
+            _ => self.nrgba(x, y),
+        }
+    }
+}
+
 /// Go's `nrgbaModel` of a colour whose `RGBA()` is (r, g, b, a).
 fn premultiplied(r: u32, g: u32, b: u32, a: u32) -> [u8; 4] {
     if a == 0xffff {

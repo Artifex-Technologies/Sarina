@@ -1,7 +1,7 @@
 //! Go: `stego/watermark.go`, the text half: [`watermarks`] (invisible characters, variation selectors that are not emoji
 //! styling, look-alike letters from other alphabets inside Latin words, trailing whitespace read as bits) with its
-//! description, [`clean_text`], and [`scan_folder`] over a tree (testdata/parity/watermark.json). `CleanImage` waits for
-//! Go's image encoders.
+//! description, [`clean_text`], [`scan_folder`] over a tree, and [`clean_image`] (testdata/parity/watermark.json,
+//! stegoencode.json).
 
 use super::clip_text;
 use super::text::{bits_to_text, find_hidden, is_hidden, zero_width_name, HiddenText};
@@ -306,4 +306,26 @@ pub fn scan_folder(dir: &str, limit: usize) -> Vec<u8> {
         out.pop();
     }
     out
+}
+
+/// Go's `CleanImage`: the picture redrawn as NRGBA with the lowest bit of every colour sample replaced by noise (`noise`:
+/// Go reads it from crypto/rand, one byte per sample), written back as a JPEG at quality 95 if it was one, else a PNG.
+/// (picture, extension).
+pub fn clean_image(b: &[u8], noise: &[u8]) -> Result<(Vec<u8>, &'static str), String> {
+    let (img, format) = super::images::decode(b).map_err(|e| format!("not a picture I can clean (PNG, JPEG or GIF): {e}"))?;
+    let mut px = Vec::with_capacity(4 * img.w * img.h);
+    for y in 0..img.h {
+        for x in 0..img.w {
+            px.extend_from_slice(&img.draw_nrgba(x, y));
+        }
+    }
+    for (i, v) in px.iter_mut().enumerate() {
+        if i % 4 != 3 {
+            *v = (*v & 0xfe) | (noise[i] & 1);
+        }
+    }
+    if format == "jpeg" {
+        return Ok((super::encode::jpeg_nrgba(img.w, img.h, &px, 95), ".jpg"));
+    }
+    Ok((super::encode::png_nrgba(img.w, img.h, &px), ".png"))
 }

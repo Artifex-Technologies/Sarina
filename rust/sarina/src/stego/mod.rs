@@ -2,6 +2,9 @@
 //! answers (testdata/parity/stegotext.json, ...); the tools are offered by the Go build until the whole set (with
 //! `cryptotools`) is ported, so `needs_go` still hands SARINA_CRYPTO=on to Go (docs/RUST_PORT.md "Resume here").
 
+pub mod deflate;
+mod enc_tables;
+pub mod encode;
 pub mod flate;
 pub mod gif;
 pub mod goio;

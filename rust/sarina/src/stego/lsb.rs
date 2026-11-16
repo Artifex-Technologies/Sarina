@@ -335,3 +335,24 @@ pub fn diff(a: &Pixels, b: &Pixels) -> Result<String, String> {
     };
     Ok(out)
 }
+
+/// Go's `Embed` (of `toImage(p)`, as `sarina stego embed` calls it): the payload in the lowest bits of the RGB samples,
+/// most significant bit first, after a 32-bit length; Go's PNG of the result.
+pub fn embed(p: &Pixels, payload: &[u8]) -> Result<Vec<u8>, String> {
+    let n = p.w * p.h;
+    if (4 + payload.len()) * 8 > n * 3 {
+        return Err(format!("the image has room for {} bytes, the payload is {}", (n * 3 / 8) as i64 - 4, payload.len()));
+    }
+    let mut pix = p.rgba.clone();
+    let mut data = (payload.len() as u32).to_be_bytes().to_vec();
+    data.extend_from_slice(payload);
+    let mut bit = 0;
+    for c in data {
+        for k in (0..8).rev() {
+            let i = (bit / 3) * 4 + bit % 3;
+            pix[i] = (pix[i] & 0xfe) | ((c >> k) & 1);
+            bit += 1;
+        }
+    }
+    Ok(super::encode::png_nrgba(p.w, p.h, &pix))
+}
