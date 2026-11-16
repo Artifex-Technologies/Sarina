@@ -537,6 +537,9 @@ pub(crate) enum GroupKill {
     Inherit,
     /// as `Inherit`, but its standard error read too (Go's plain `CommandContext` with `Stderr` set)
     Plain,
+    /// as `Plain`, its standard output and error one pipe, handed to `sink` as "stdout" (Go's `Stdout` and `Stderr` the
+    /// same writer: the order they were written in is kept)
+    Combined,
 }
 
 /// How a `run_group` program ended: its status (None when it could not be waited for), and whether its pipes were still
@@ -565,6 +568,7 @@ pub(crate) fn run_group(
     let path = if path.contains('/') { path.to_string() } else { look_path_go(path)? };
     // a folder that cannot be entered fails the start as Go's does: "fork/exec <program>: ..."
     let mut cmd = Command::new(&path);
+    let mut combined = None;
     cmd.args(args).env_clear().stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     match kill {
         GroupKill::Group | GroupKill::Process => {
@@ -574,6 +578,12 @@ pub(crate) fn run_group(
             cmd.stderr(Stdio::null());
         }
         GroupKill::Plain => {}
+        GroupKill::Combined => {
+            let (r, w) = std::io::pipe().map_err(|e| goerr::text(&e))?;
+            let w2 = w.try_clone().map_err(|e| goerr::text(&e))?;
+            cmd.stdout(w).stderr(w2);
+            combined = Some(r);
+        }
     }
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
@@ -584,12 +594,17 @@ pub(crate) fn run_group(
         }
     }
     let mut child = cmd.spawn().map_err(|e| goerr::path("fork/exec", path.as_bytes(), &e))?;
+    // the command's copies of a combined pipe's write end closed, so the pipe ends when the program's copies do
+    drop(cmd);
     let pid = child.id() as i32;
     let status;
     let io_incomplete;
     {
         let mut pump = Pump {
-            pipes: vec![(child.stdout.take().map(pipe_file), "stdout"), (child.stderr.take().map(pipe_file), "stderr")],
+            pipes: match combined {
+                Some(r) => vec![(Some(pipe_file(r)), "stdout")],
+                None => vec![(child.stdout.take().map(pipe_file), "stdout"), (child.stderr.take().map(pipe_file), "stderr")],
+            },
             sink,
             pidfd: pidfd(&child),
         };
@@ -602,7 +617,7 @@ pub(crate) fn run_group(
             if now >= deadline || ctx.err().is_some() {
                 match kill {
                     GroupKill::Group => hard_kill(pid),
-                    GroupKill::Process | GroupKill::Inherit | GroupKill::Plain => {
+                    GroupKill::Process | GroupKill::Inherit | GroupKill::Plain | GroupKill::Combined => {
                         let _ = child.kill();
                     }
                 }

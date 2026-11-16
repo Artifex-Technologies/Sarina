@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -312,11 +314,14 @@ func helpersReport(ctx context.Context, path string) string {
 		}
 		ctx2, cancel := context.WithTimeout(ctx, 20*time.Second)
 		cmd := exec.CommandContext(ctx2, h, args...)
-		var out bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &out, &out
+		// the first MiB of what it prints (2,500 bytes are shown); a child left holding the output open is not waited
+		// for longer than 2 s
+		out := &headBuffer{max: 1 << 20}
+		cmd.Stdout, cmd.Stderr = out, out
+		cmd.WaitDelay = 2 * time.Second
 		err := cmd.Run()
 		cancel()
-		text := strings.TrimSpace(out.String())
+		text := strings.TrimSpace(out.buf.String())
 		if len(text) > 2500 {
 			text = text[:2500] + "\n[…]"
 		}
@@ -329,6 +334,19 @@ func helpersReport(ctx context.Context, path string) string {
 		b.WriteString(" None of them was run.")
 	}
 	return b.String()
+}
+
+// headBuffer keeps the first max bytes written to it and drops the rest (the program is not stopped by a write error).
+type headBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (h *headBuffer) Write(p []byte) (int, error) {
+	if room := h.max - h.buf.Len(); room > 0 {
+		h.buf.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
 }
 
 func orNone(xs []string) string {
@@ -600,10 +618,20 @@ func Clean(b []byte, path string) (string, string, error) {
 		}
 	}
 	out := cleanPath(path, ext)
-	if _, err := os.Stat(out); err == nil {
+	// created, never opened: a link planted under the copy's name (to a file that does not exist yet too) is refused
+	// instead of written through
+	f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, fs.ErrExist) {
 		return "", "", fmt.Errorf("%s already exists: I do not overwrite it", filepath.Base(out))
 	}
-	if err := os.WriteFile(out, data, 0o644); err != nil {
+	if err != nil {
+		return "", "", err
+	}
+	_, err = f.Write(data)
+	if err1 := f.Close(); err == nil {
+		err = err1
+	}
+	if err != nil {
 		return "", "", err
 	}
 	return out, report, nil

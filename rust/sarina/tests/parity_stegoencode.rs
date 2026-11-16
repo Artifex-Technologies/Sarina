@@ -116,7 +116,7 @@ fn stego_encode_matches_go() {
         }
         for r in rows {
             let (input, noise) = (unhex(r[1].as_str().unwrap()), unhex(r[2].as_str().unwrap()));
-            let got = match watermark::clean_image(&input, &noise) {
+            let got = match watermark::clean_image(&input, &mut |_| noise.clone()) {
                 Ok((b, ext)) => json!([r[0], r[1], r[2], out(&b), ext, ""]),
                 Err(e) => json!([r[0], r[1], r[2], "", "", e]),
             };

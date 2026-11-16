@@ -308,10 +308,10 @@ pub fn scan_folder(dir: &str, limit: usize) -> Vec<u8> {
     out
 }
 
-/// Go's `CleanImage`: the picture redrawn as NRGBA with the lowest bit of every colour sample replaced by noise (`noise`:
-/// Go reads it from crypto/rand, one byte per sample), written back as a JPEG at quality 95 if it was one, else a PNG.
-/// (picture, extension).
-pub fn clean_image(b: &[u8], noise: &[u8]) -> Result<(Vec<u8>, &'static str), String> {
+/// Go's `CleanImage`: the picture redrawn as NRGBA with the lowest bit of every colour sample replaced by noise (`noise`
+/// gives n bytes, one per sample: Go reads them from crypto/rand), written back as a JPEG at quality 95 if it was one,
+/// else a PNG. (picture, extension).
+pub fn clean_image(b: &[u8], noise: &mut dyn FnMut(usize) -> Vec<u8>) -> Result<(Vec<u8>, &'static str), String> {
     let (img, format) = super::images::decode(b).map_err(|e| format!("not a picture I can clean (PNG, JPEG or GIF): {e}"))?;
     let mut px = Vec::with_capacity(4 * img.w * img.h);
     for y in 0..img.h {
@@ -319,6 +319,7 @@ pub fn clean_image(b: &[u8], noise: &[u8]) -> Result<(Vec<u8>, &'static str), St
             px.extend_from_slice(&img.draw_nrgba(x, y));
         }
     }
+    let noise = noise(px.len());
     for (i, v) in px.iter_mut().enumerate() {
         if i % 4 != 3 {
             *v = (*v & 0xfe) | (noise[i] & 1);

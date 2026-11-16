@@ -1332,6 +1332,240 @@ def quantum_cases():
     return cs
 
 
+TEST_CERT = """-----BEGIN CERTIFICATE-----
+MIIBsjCCAVegAwIBAgIUX3DjraLVXWsVd22PtFwIBeNPOTowCgYIKoZIzj0EAwIw
+KTEVMBMGA1UEAwwMdGVzdC5leGFtcGxlMRAwDgYDVQQKDAdNYWRlIFVwMB4XDTI2
+MTExNjE2MjQ0N1oXDTM2MTExMzE2MjQ0N1owKTEVMBMGA1UEAwwMdGVzdC5leGFt
+cGxlMRAwDgYDVQQKDAdNYWRlIFVwMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE
+UN6JNhkV5gSUILbCD3N9IA5EqPFxb0SoX6F28exZioNkebytvG8dhtTGoQQ0Dv7x
+bsv5vJ0IMqL9A6h0y58AW6NdMFswHQYDVR0OBBYEFCkq2RpbjSNf1cBFWq0vSyE+
+ZE7sMA8GA1UdEwEB/wQFMAMBAf8wKQYDVR0RBCIwIIIMdGVzdC5leGFtcGxlghB3
+d3cudGVzdC5leGFtcGxlMAoGCCqGSM49BAMCA0kAMEYCIQDvmKK/Y5YhaAyWapE4
+ZEcjmdkiDnFnaYgMp84jvyreTAIhAOnvhH12O1sFzXetW3isXtcAsCIrHhs2uMLR
+FJeEmn6w
+-----END CERTIFICATE-----
+"""  # a throwaway self-signed certificate (CN test.example), made for these cases
+
+
+def png(w, h, px, chunks=(), trailing=b""):
+    """A PNG (8-bit RGBA, filter 0) of the w x h pixels px(x, y) -> (r, g, b, a), with extra (type, data) chunks before
+    the image data and bytes after IEND."""
+    import zlib
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    raw = b"".join(b"\0" + b"".join(bytes(px(x, y)) for x in range(w)) for y in range(h))
+    out = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+    for t, d in chunks:
+        out += chunk(t, d)
+    return out + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"") + trailing
+
+
+def lsb_png(w, h, payload, seed=5):
+    """A PNG with payload (after its 32-bit big-endian length) in the lowest bits of R, G, B, first bit highest."""
+    bits = [(c >> (7 - i)) & 1 for c in struct.pack(">I", len(payload)) + payload for i in range(8)]
+    x = [seed]
+
+    def rnd():
+        x[0] = (x[0] * 1103515245 + 12345) & 0x7FFFFFFF
+        return x[0] >> 16
+    pix = {}
+    k = 0
+    for yy in range(h):
+        for xx in range(w):
+            c = []
+            for _ in range(3):
+                v = rnd() & 0xFE
+                c.append(v | (bits[k] if k < len(bits) else rnd() & 1))
+                k += 1
+            pix[xx, yy] = (*c, 255)
+    return png(w, h, lambda a, b: pix[a, b])
+
+
+def wav(samples):
+    """A 16-bit mono 8000 Hz WAV of the samples."""
+    data = b"".join(struct.pack("<h", s) for s in samples)
+    fmt = struct.pack("<HHIIHH", 1, 1, 8000, 16000, 2, 16)
+    return b"RIFF" + struct.pack("<I", 4 + 8 + len(fmt) + 8 + len(data)) + b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + \
+        b"data" + struct.pack("<I", len(data)) + data
+
+
+def jpeg_file(name):
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "testdata", "parity", "jpeg", name), "rb") as f:
+        return f.read()
+
+
+# the folder ExtractReport makes in TMPDIR has a random number in its name; a cleaned picture's lowest bits come from
+# crypto/rand, so its size in the report varies (its file is compared by name and mode only: "vary")
+STEGO_NORM = [(r"sarina-stego-\d+", "sarina-stego-N"), (r"bytes became \d+", "bytes became M")]
+
+
+def crypto_stego_command_cases():
+    """`sarina crypto` and `sarina stego` (commands without a model): every subcommand, its usage and errors; stego's files
+    (PNG, JPEG, GIF, WAV, text, folders), the helper programs it runs (stand-ins on the case's PATH), the copies clean
+    writes (never through a link planted under the copy's name) and the LSB stream lsb writes to TMPDIR."""
+    cs = []
+    for args in [[], ["identify"], ["identify", "SGVsbG8gd29ybGQ="], ["identify", "5d41402abc4b2a76b9719d911017c592"],
+                 ["identify", "Wkh", "txlfn", "eurzq", "ira", "mxpsv", "ryhu", "wkh", "odcb", "grj"], ["decode", "48656c6c6f2c20776f726c64"],
+                 ["decode", "base64", "SGVsbG8=", "IHdvcmxk"], ["decode", "NjE0NzU2NzM2MjQ3Mzg2NzY0MzIzOTc5NjI0NzUxNzM0OTQ4NTI2ZjYzNmQ1NjZjNDk0Nzc4Njg2NTU3NTY3OTYzNzczZDNk"], ["decode", "nope", "x"], ["decode", "hex", "zz"], ["decode", "!!"],
+                 ["classic", "caesar", "3", "Khoor"], ["classic", "caesar", "x", "Khoor"], ["classic", "caesar", "Hello"],
+                 ["classic", "caesar", "crack", "Wkh", "txlfn", "eurzq", "ira", "mxpsv", "ryhu", "wkh", "odcb", "grj"],
+                 ["classic", "rot13", "Hello"], ["classic", "vigenere"], ["classic", "vigenere", "KEY", "Rijvs uyvjn"],
+                 ["classic", "railfence", "3", "WECRLTEERDSOEEFEAOCAIVDEN"], ["classic", "nope", "x"], ["classic", "atbash", "crack"],
+                 ["hash", "hello"], ["hash", "md5", "hello", "world"], ["hash", "sha3-256", ""], ["hash", "nope", "x"],
+                 ["modern", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMiLCJuYW1lIjoiVGVzdCJ9.c2lnbmF0dXJl"],
+                 ["modern", TEST_CERT], ["modern", ""], ["modern", "-----BEGIN PGP MESSAGE-----\n\nhQEMA\n-----END PGP MESSAGE-----"],
+                 ["modern", "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----"], ["frob", "x"], ["-h", "x"]]:
+        cs.append(C(f"crypto command {args!r:.80}", ["crypto"] + args))
+
+    note = lsb_png(40, 30, b"meet at the old mill at noon")
+    plain = png(16, 9, lambda x, y: (x * 16, y * 28, (x * y) % 256, 255), chunks=[(b"tEXt", b"Comment\0made with a test")])
+    zip_tail = b"PK\x03\x04" + b"\0" * 26 + b"secret.txt"
+    msg = b"SECRET MESSAGE IN THE SAMPLES"
+    bits = [(c >> (7 - i)) & 1 for c in msg for i in range(8)]
+    samples = [((i * 37) % 2000 - 1000) & ~1 | (bits[i] if i < len(bits) else 0) for i in range(4000)]
+    gif = (b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xfe\x09a comment\x00!\xf9\x04\x01\x00\x00\x00\x00"
+           b",\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;")
+    files = state(**{
+        "ws/note.png": note, "ws/plain.png": plain, "ws/tail.png": plain + zip_tail, "ws/lies.jpg": plain,
+        "ws/photo.jpg": jpeg_file("base.jpg"), "ws/gray.jpg": jpeg_file("gray.jpg"), "ws/tiny.gif": gif,
+        "ws/song.wav": wav(samples), "ws/zw.txt": "zero​width and pаypal\ntrailing  \n", "ws/clean.txt": "nothing here\n",
+        "ws/empty.bin": b"", "ws/bin.dat": b"\x00\x01\x02binary\xff" * 40, "ws/garbage.png": b"not a picture at all",
+        "ws/dir/a.txt": "hidden​mark\n", "ws/dir/b.md": "fine\n", "ws/dir/c.png": plain,
+        "ws/had.clean.txt": "already here\n", "ws/had.txt": "x​y\n",
+        "ws/linked.txt": "x​y\n", "ws/linked.clean.txt@": "{W}/elsewhere/planted.txt", "elsewhere/": "",
+    })
+    helpers = dict(files, **bins(exiftool='echo "Comment: from exiftool"; echo "warning on stderr" >&2; echo "FileType: PNG"\n',
+                                  binwalk="exit 1\n", zsteg="echo never run\n"))
+    only_zsteg = dict(files, **bins(zsteg="echo never run\n"))
+    tmp = {"TMPDIR": "{W}/tmp"}
+    files_tmp = dict(files, **{"tmp/": ""})
+    for args, fs, env in [([], files, None), (["inspect"], files, None), (["inspect", "missing.png"], files, None), (["inspect", "dir"], files, None),
+                          (["inspect", "note.png"], files, None), (["inspect", "plain.png"], files, None), (["inspect", "tail.png"], files, None),
+                          (["inspect", "lies.jpg"], files, None), (["inspect", "photo.jpg"], files, None), (["inspect", "gray.jpg"], files, None),
+                          (["inspect", "tiny.gif"], files, None), (["inspect", "song.wav"], files, None), (["inspect", "zw.txt"], files, None),
+                          (["inspect", "empty.bin"], files, None), (["inspect", "bin.dat"], files, None), (["inspect", "garbage.png"], files, None),
+                          (["inspect", "plain.png"], helpers, None), (["inspect", "../ws/plain.png"], helpers, None),
+                          (["inspect", "zw.txt"], only_zsteg, None),
+                          (["lsb", "note.png"], files_tmp, tmp), (["lsb", "note.png", "r"], files_tmp, tmp), (["lsb", "note.png", ""], files_tmp, tmp),
+                          (["lsb", "note.png", "bad"], files_tmp, tmp), (["lsb", "song.wav"], files_tmp, tmp), (["lsb", "plain.png", "rgba"], files_tmp, tmp),
+                          (["lsb", "zw.txt"], files_tmp, tmp), (["lsb", "tiny.gif", "a"], files_tmp, tmp), (["lsb", "note.png"], files, {"TMPDIR": "{W}/nowhere"}),
+                          (["text", "zw.txt"], files, None), (["text", "clean.txt"], files, None), (["text", "missing"], files, None),
+                          (["watermark", "zw.txt"], files, None), (["watermark", "dir"], files, None), (["watermark", "."], files, None),
+                          (["clean", "zw.txt"], files, None), (["clean", "clean.txt"], files, None), (["clean", "bin.dat"], files, None),
+                          (["clean", "had.txt"], files, None), (["clean", "linked.txt"], files, None), (["clean", "garbage.png"], files, None),
+                          (["clean", "missing.txt"], files, None),
+                          (["diff", "note.png", "plain.png"], files, None), (["diff", "note.png", "note.png"], files, None), (["diff", "note.png"], files, None),
+                          (["diff", "note.png", "missing.png"], files, None), (["diff", "zw.txt", "note.png"], files, None),
+                          (["diff", "plain.png", "zw.txt"], files, None),
+                          (["embed", "plain.png", "out.png", "hello", "there"], files, None), (["embed", "note.png", "out.png", "x" * 600], files, None),
+                          (["embed", "plain.png", "out.png"], files, None), (["embed", "zw.txt", "out.png", "x"], files, None),
+                          (["embed", "plain.png", "nowhere/out.png", "x"], files, None), (["frob", "x"], files, None)]:
+        cs.append(C(f"stego command {args!r:.70} {sorted(k for k in fs if k.startswith('bin/'))} {env}", ["stego"] + args, files=fs,
+                    env=env, norm=STEGO_NORM))
+    for name in ["plain.png", "photo.jpg", "tiny.gif"]:
+        c = C(f"stego command clean picture {name}", ["stego", "clean", name], files=files, norm=STEGO_NORM)
+        c["vary"] = [r"ws/.*\.clean\.(png|jpg)$"]
+        cs.append(c)
+    return cs
+
+
+def crypto_stego_chat_cases():
+    """The crypto and stego tools (SARINA_CRYPTO=on, or auto asking for them) as a scripted model calls them: every tool,
+    text and files (the workspace's guards, files that look like data, certificates under a secret-looking name), every
+    stego action and its errors, the copies stego_clean writes; and the skills' "crypto" and "stego" prefetches (which
+    run with the set off too)."""
+    cs = []
+    on = {"SARINA_CRYPTO": "on"}
+
+    def add(name, args, http=(), env=None, files=None, **k):
+        e = dict(MODEL_ENV)
+        e.update(on)
+        e.update(env or {})
+        c = C(name, args, files=files, env=e, http=http, norm=CHAT_NORM + STEGO_NORM)
+        c["model"] = True
+        c.update(k)
+        cs.append(c)
+
+    def use(tool, args):
+        return [completion(calls=[(tool, args)]), completion("Done.")]
+    plain = png(16, 9, lambda x, y: (x * 16, y * 28, (x * y) % 256, 255), chunks=[(b"tEXt", b"Comment\0made with a test")])
+    files = state(**{
+        "ws/note.png": lsb_png(40, 30, b"meet at the old mill at noon"), "ws/plain.png": plain, "ws/zw.txt": "zero​width and pаypal\n",
+        "ws/clean.txt": "nothing here\n", "ws/data.txt": "SGVsbG8gd29ybGQ=\n", "ws/cert.pem": TEST_CERT,
+        "ws/key.pem": "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----\n", "ws/notes.pem": "just notes\n",
+        "ws/big.pem": "-----BEGIN CERTIFICATE-----\n" + "A" * (1 << 20), "ws/.env": "TOKEN=abc\n", "ws/dir/a.txt": "hidden​mark\n",
+        "ws/linked.txt": "x​y\n", "ws/linked.clean.txt@": "{W}/elsewhere/planted.txt", "elsewhere/": "", "tmp/": "",
+        "ws/photo.jpg": jpeg_file("base.jpg"), "home/pic.png": plain, "outside.txt": "zero​width\n",
+        "ws/song.wav": wav([((i * 37) % 2000 - 1000) & ~1 for i in range(400)]), "ws/sym.txt@": "{W}/outside.txt",
+        "ws/odd.pem": b"-----BEGIN CERTIFICATE-----\nMIIB\xff\n-----END CERTIFICATE-----\n", "ws/odd.txt": b"caf\xe9 \xff\xfe SGVsbG8=\n",
+    })
+    for args in [{"text": "SGVsbG8gd29ybGQ="}, {"path": "data.txt"}, {"path": "SGVsbG8gd29ybGQgYWdhaW4="}, {"path": "aGVsbG8vd29ybGQvYWdhaW4="},
+                 {"path": ".env"}, {"path": "dir"}, {"path": "missing.txt"}, {"path": "../outside.txt"}, {"path": "sym.txt"}, {},
+                 {"text": "", "path": ""}, {"text": 5}, {"text": "x", "path": "data.txt"}, {"path": "/etc/hostname"},
+                 {"path": "odd.txt"}]:
+        add(f"crypto_identify {json.dumps(args)[:60]}", ["chat", "what is this"], files=files, http=use("crypto_identify", args))
+    for args in [{"text": "48656c6c6f"}, {"text": "SGVsbG8=", "from": "base64"}, {"text": "SGVsbG8=", "from": "auto"}, {"text": "x", "from": "nope"},
+                 {"text": "zz", "from": "hex"}, {"text": "ÿþ", "from": "url"}, {"text": "aGk=", "from": "base64"}, {"from": "hex"}]:
+        add(f"crypto_decode {json.dumps(args)[:60]}", ["chat", "decode"], files=files, http=use("crypto_decode", args))
+    for args in [{"text": "Hello", "cipher": "caesar", "key": "3"}, {"text": "Khoor", "cipher": "caesar", "key": "3", "decode": True},
+                 {"text": "Wkh txlfn eurzq ira mxpsv ryhu wkh odcb grj", "cipher": "caesar", "crack": True},
+                 {"text": "Khoor", "cipher": "caesar", "crack": "true", "key": "x"}, {"text": "x", "cipher": "enigma"}, {"cipher": "rot13"},
+                 {"text": "Rijvs uyvjn", "cipher": "vigenere", "key": "key", "decode": True}]:
+        add(f"crypto_classic {json.dumps(args)[:60]}", ["chat", "cipher"], files=files, http=use("crypto_classic", args))
+    for args in [{"text": "hello"}, {"text": ""}, {"text": "", "path": "data.txt"}, {"path": "data.txt", "algo": "md5"},
+                 {"text": "hello", "algo": "md5", "expected": "5d41402abc4b2a76b9719d911017c592"}, {"text": "hello", "expected": "aa"},
+                 {"text": "hello", "key": "k", "algo": "sha1"}, {"text": "hello", "algo": "nope"}, {"path": ".env"}, {}]:
+        add(f"crypto_hash {json.dumps(args)[:60]}", ["chat", "hash"], files=files, http=use("crypto_hash", args))
+    for args in [{"text": TEST_CERT}, {"path": "cert.pem"}, {"path": "key.pem"}, {"path": "notes.pem"}, {"path": "big.pem"},
+                 {"path": "missing.pem"}, {"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc", "key": "secret"}, {"text": "  "},
+                 {"path": ".env"}, {"path": "odd.pem"}]:
+        add(f"crypto_modern {json.dumps(args)[:60]}", ["chat", "certificate"], files=files, http=use("crypto_modern", args))
+    tmp = {"TMPDIR": "{W}/tmp"}
+    for args in [{"path": "note.png"}, {"path": "note.png", "action": "inspect"}, {"path": "photo.jpg"}, {"path": "dir"},
+                 {"path": "dir", "action": "text"}, {"path": "dir", "action": "diff"}, {"path": "note.png", "action": "lsb"},
+                 {"path": "note.png", "action": "lsb", "order": "r", "bits": 2}, {"path": "note.png", "action": "lsb", "bits": 1e300},
+                 {"path": "note.png", "action": "lsb", "bits": "2"}, {"path": "note.png", "action": "lsb", "order": "nope"},
+                 {"path": "song.wav", "action": "lsb"}, {"action": "text", "text": "a​b"}, {"action": "watermark", "text": "pаypal"},
+                 {"action": "text"}, {"action": "watermark"}, {"path": "zw.txt", "action": "text"}, {"path": "zw.txt", "action": "watermark"},
+                 {"path": "note.png", "action": "diff", "other": "plain.png"}, {"path": "note.png", "action": "diff", "other": "missing.png"},
+                 {"path": "note.png", "action": "diff"}, {"path": "note.png", "action": "frob"}, {"action": "frob"}, {},
+                 {"path": ".env"}, {"path": "../outside.txt"}, {"path": "missing.png"}, {"path": "sym.txt"}]:
+        add(f"stego_inspect {json.dumps(args)[:70]}", ["chat", "look"], files=files, env=tmp, http=use("stego_inspect", args))
+    helpers = dict(files, **bins(exiftool='echo "Comment: from exiftool"; echo "warning" >&2\n', binwalk="exit 3\n"))
+    add("stego_inspect with helpers", ["chat", "look"], files=helpers, http=use("stego_inspect", {"path": "plain.png"}))
+    for args in [{"path": "zw.txt"}, {"path": "clean.txt"}, {"path": "linked.txt"}, {"path": "missing.txt"}, {"path": ".env"}, {},
+                 {"path": "dir"}]:
+        add(f"stego_clean {json.dumps(args)[:60]}", ["chat", "--allow-write", "clean"], files=files, http=use("stego_clean", args))
+    add("stego_clean without write", ["chat", "clean"], files=files, http=use("stego_clean", {"path": "zw.txt"}))
+    c = len(cs)
+    add("stego_clean picture", ["chat", "--allow-write", "clean"], files=files, http=use("stego_clean", {"path": "plain.png"}))
+    cs[c]["vary"] = [r"ws/.*\.clean\.png$"]
+    add("crypto and stego off", ["chat", "x"], files=files, env={"SARINA_CRYPTO": "off"}, http=use("crypto_hash", {"text": "a"}))
+    add("crypto tools offered with the other sets", ["chat", "--allow-write", "x"], files=files,
+        env={"SARINA_MATH": "on", "SARINA_SYSTEM": "on", "SARINA_QUANTUM": "on"}, http=[completion("ok")])
+    add("crypto auto asked", ["chat", "decode this base64 please"], files=files, env={"SARINA_CRYPTO": "auto"}, http=[completion("ok")])
+    add("crypto auto not asked", ["chat", "hello there"], files=files, env={"SARINA_CRYPTO": "auto"}, http=[completion("ok")])
+    sk = lambda pre: {"home/.sarina/skills/look/SKILL.md": f"---\nname: look\ndescription: Look at it.\nprefetch: [{pre}]\n---\nLook: $ARGUMENTS\n"}
+    for task in ["decode SGVsbG8gd29ybGQgaGVsbG8gYWdhaW4=", "what is 5d41402abc4b2a76b9719d911017c592 and 0123456789abcdef0123",
+                 "check this " + TEST_CERT, "the note says \"Wkh txlfn eurzq ira mxpsv ryhu wkh odcb grj\"",
+                 "the note said: Wkh txlfn eurzq ira mxpsv ryhu wkh odcb grj. And then: Uryyb jbeyq guvf vf n grfg bs ebg.",
+                 "hello there, nothing to see", "paths like /usr/share/doc/some/file/here are not data", "a" * 100 + "==",
+                 "tokens aGVsbG8gd29ybGQgaGVsbG8x, aGVsbG8gd29ybGQgaGVsbG8y, aGVsbG8gd29ybGQgaGVsbG8z and aGVsbG8gd29ybGQgaGVsbG80",
+                 "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----", "Supercalifragilisticexpialidocious words",
+                 "“Gur dhvpx oebja sbk whzcf bire gur ynml qbt”"]:
+        add(f"prefetch crypto {task[:50]!r}", ["skill", "run", "look", task], files=dict(files, **sk("crypto")), env={"SARINA_CRYPTO": ""},
+            http=[completion("Looked.")])
+    for task in ["look at note.png and zw.txt", "is ~/pic.png hiding something", "check ../outside.txt", "check .env.txt and missing.png",
+                 "a.png b.png c.png note.png", "check dir/a.txt", "check /etc/passwd.txt", "nothing named here", "check sym.txt"]:
+        add(f"prefetch stego {task[:50]!r}", ["skill", "run", "look", task], files=dict(files, **sk("stego")), env={"SARINA_CRYPTO": ""},
+            http=[completion("Looked.")])
+    add("prefetch crypto and stego", ["skill", "run", "look", "decode SGVsbG8gd29ybGQgaGVsbG8gYWdhaW4= in note.png"],
+        files=dict(files, **{"home/.sarina/skills/look/SKILL.md": "---\nname: look\ndescription: Look.\nprefetch: [stego, crypto]\n---\nLook: $ARGUMENTS\n"}),
+        http=[completion("Looked.")])
+    return cs
+
+
 REA_OVERVIEW = """## evidence_id
 
 ev_1
@@ -1658,7 +1892,7 @@ def normalize(data, norm):
     return data
 
 
-def snapshot(work, norm=()):
+def snapshot(work, norm=(), vary=()):
     """Every file left, by its normalised path. Two files can take one normalised name (a session and its sub-agent's,
     both SESSIONID.json): those are listed in the order of their contents, not of their random names."""
     out = {}
@@ -1673,6 +1907,8 @@ def snapshot(work, norm=()):
                 out[rel] = "link -> " + os.readlink(p)
             elif stat.S_ISDIR(st.st_mode):
                 out[rel] = "dir %o" % (st.st_mode & 0o7777)
+            elif stat.S_ISREG(st.st_mode) and any(re.search(v, rel) for v in vary):
+                out[rel] = "file %o (contents vary)" % (st.st_mode & 0o7777)
             elif stat.S_ISREG(st.st_mode):
                 with open(p, "rb") as f:
                     body = normalize(f.read(), norm)
@@ -1832,13 +2068,14 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
         # requests whose order Go leaves to its map iteration (the route's examples, embedded topic by topic)
         reqs["http"].sort(key=lambda r: json.dumps(r, sort_keys=True))
     res["requests"] = json.loads(normalize(json.dumps(reqs).encode(), case["norm"]).decode())
-    res["files"] = snapshot(work, case["norm"])
+    res["files"] = snapshot(work, case["norm"], case.get("vary", ()))
     return res
 
 
 def cases():
     return (memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
-            + doctor_cases() + system_cases() + math_cases() + quantum_cases() + reverse_cases() + council_cases())
+            + doctor_cases() + system_cases() + math_cases() + quantum_cases() + reverse_cases() + council_cases()
+            + crypto_stego_command_cases())
 
 
 def main():

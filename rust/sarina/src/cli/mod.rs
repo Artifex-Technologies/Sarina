@@ -135,6 +135,8 @@ pub fn ported(name: &str) -> Option<Command> {
         "limbo-validate" => limbocmd::validate,
         "tiers" => tiercmd::tiers,
         "quantum" => crate::quantum::command,
+        "crypto" => crate::cryptotools::tool::command,
+        "stego" => crate::stego::tool::command,
         _ => return None,
     })
 }

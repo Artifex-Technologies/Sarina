@@ -15,6 +15,7 @@ pub mod magic;
 pub mod meta;
 pub mod png;
 pub mod text;
+pub mod tool;
 pub mod watermark;
 pub mod wav;
 

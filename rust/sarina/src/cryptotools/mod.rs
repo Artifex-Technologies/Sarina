@@ -12,6 +12,7 @@ pub mod identify;
 pub mod modern;
 pub(crate) mod pem;
 pub(crate) mod pubkey;
+pub mod tool;
 pub(crate) mod x509;
 
 /// Go's `TruncateText`: the first n characters of s, and how many more there were.

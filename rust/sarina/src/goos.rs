@@ -40,8 +40,56 @@ pub fn write_file(path: &[u8], data: &[u8], perm: u32) -> Result<(), String> {
     f.write_all(data).map_err(|e| goerr::path("write", path, &e))
 }
 
+/// Go's `os.MkdirTemp(dir, pattern)`: a new folder, mode 0700, in `dir` (empty: Go's `os.TempDir`, $TMPDIR or /tmp)
+/// named by the pattern with its last `*` (or its end) replaced by Go's random number.
+pub fn mkdir_temp(dir: &[u8], pattern: &str) -> Result<Vec<u8>, String> {
+    let dir = if dir.is_empty() {
+        match std::env::var_os("TMPDIR") {
+            Some(d) if !d.is_empty() => std::os::unix::ffi::OsStrExt::as_bytes(d.as_os_str()).to_vec(),
+            _ => b"/tmp".to_vec(),
+        }
+    } else {
+        dir.to_vec()
+    };
+    let (prefix, suffix) = match pattern.rfind('*') {
+        Some(i) => (&pattern[..i], &pattern[i + 1..]),
+        None => (pattern, ""),
+    };
+    if pattern.contains('/') {
+        return Err(format!("mkdirtemp {pattern}: pattern contains path separator"));
+    }
+    let join = |name: &str| {
+        let mut p = dir.clone();
+        if p.last() != Some(&b'/') {
+            p.push(b'/');
+        }
+        p.extend_from_slice(name.as_bytes());
+        p
+    };
+    let mut tries = 0;
+    loop {
+        let mut r = [0u8; 4];
+        getrandom(&mut r);
+        let name = join(&format!("{prefix}{}{suffix}", u32::from_le_bytes(r)));
+        match std::fs::DirBuilder::new().mode(0o700).create(gopath::os_path(&name)) {
+            Ok(()) => return Ok(name),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && tries < 10_000 => tries += 1,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    if let Err(se) = std::fs::metadata(gopath::os_path(&dir)) {
+                        if se.kind() == std::io::ErrorKind::NotFound {
+                            return Err(goerr::path("stat", &dir, &se));
+                        }
+                    }
+                }
+                return Err(goerr::path("mkdirtemp", &join(&format!("{prefix}*{suffix}")), &e));
+            }
+        }
+    }
+}
+
 /// Random bytes from the kernel (ring's generator, the one Heimdall's keys use).
-fn getrandom(buf: &mut [u8]) {
+pub(crate) fn getrandom(buf: &mut [u8]) {
     use ring::rand::SecureRandom;
     let _ = ring::rand::SystemRandom::new().fill(buf);
 }
