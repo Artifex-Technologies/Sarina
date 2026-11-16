@@ -879,7 +879,7 @@ fn kasiski(ls: &[u8], max_len: i64) -> String {
     out
 }
 
-fn how_it_fell(text: &str, cipher: &str, per_length: &str) -> String {
+pub(crate) fn how_it_fell(text: &str, cipher: &str, per_length: &str) -> String {
     let ls = lower_letters(text);
     if ls.is_empty() {
         return String::new();

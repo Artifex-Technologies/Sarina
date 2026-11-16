@@ -115,6 +115,11 @@ fn decode_map(alphabet: &[u8]) -> [u8; 256] {
     m
 }
 
+/// Go's `base64.Raw...Encoding.DecodeString` with an alphabet (no padding).
+pub(crate) fn base64_raw(src: &[u8], alphabet: &[u8]) -> Result<Vec<u8>, String> {
+    base64_decode(src, alphabet, false)
+}
+
 /// Go's `base64.Encoding.DecodeString` (not strict): padded or raw; newlines and returns skipped.
 fn base64_decode(src: &[u8], alphabet: &[u8], padded: bool) -> Result<Vec<u8>, String> {
     let map = decode_map(alphabet);
@@ -306,7 +311,7 @@ fn sharp_u(b: u8) -> String {
 }
 
 /// Go's `hex.DecodeString`.
-fn hex_decode(src: &[u8]) -> Result<Vec<u8>, String> {
+pub(crate) fn hex_decode(src: &[u8]) -> Result<Vec<u8>, String> {
     let val = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
     let mut out = Vec::with_capacity(src.len() / 2);
     let mut j = 1;
@@ -370,7 +375,7 @@ fn quote_rune(c: char) -> String {
     }
 }
 
-fn base58_decode(s: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn base58_decode(s: &str) -> Result<Vec<u8>, String> {
     let mut n: Vec<u8> = Vec::new(); // big-endian, no leading zeros
     for r in s.chars() {
         let Some(i) = BASE58.find(r) else { return Err(format!("{} is not a base58 character", quote_rune(r))) };
