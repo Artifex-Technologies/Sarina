@@ -242,7 +242,7 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 - **Ported and proved part by part** (each against a Go fixture written first, mutation-checked, committed and pushed):
   the classical ciphers and their crackers (`4b660b2`), crypto_hash (`efb0362`; md-5 and sha1 crates added, SHA-3, CRC-32
   and HMAC written out), crypto_decode (`1b7e70d`), crypto_identify (`c95b3ad`), crypto_modern without X.509 (`4f08f54`),
-  stego's text and file-type checks (`4dcd138`) and its WAV reader with the LSB judge (`5b525d3`): 3,019 fixture
+  stego's text and file-type checks (`4dcd138`) and its WAV reader with the LSB judge (`5b525d3`): 3,017 fixture
   comparisons in all. **Not wired:** `needs_go` still hands SARINA_CRYPTO=on to Go until X.509, the image readers,
   watermarks and the tools' wiring are done (docs/RUST_PORT.md "Resume here" has the table and the order).
 - **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** crypto_modern panicked on
