@@ -4,6 +4,7 @@
 
 pub mod magic;
 pub mod text;
+pub mod wav;
 
 /// Go's `strings.ToValidUTF8(s, "\u{FFFD}")` on bytes: each run of bytes that are not UTF-8 becomes one U+FFFD.
 pub fn to_valid_utf8(b: &[u8]) -> Vec<u8> {
