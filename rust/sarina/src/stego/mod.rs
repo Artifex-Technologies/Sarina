@@ -12,6 +12,7 @@ pub mod magic;
 pub mod meta;
 pub mod png;
 pub mod text;
+pub mod watermark;
 pub mod wav;
 
 /// Go's `strings.ToValidUTF8(s, "\u{FFFD}")` on bytes: each run of bytes that are not UTF-8 becomes one U+FFFD.

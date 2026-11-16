@@ -4,7 +4,7 @@
 use super::clip_text;
 use std::collections::BTreeMap;
 
-fn zero_width_name(r: char) -> Option<&'static str> {
+pub(crate) fn zero_width_name(r: char) -> Option<&'static str> {
     Some(match r as u32 {
         0x200B => "zero-width space",
         0x200C => "zero-width non-joiner",
@@ -37,7 +37,7 @@ fn zero_width_name(r: char) -> Option<&'static str> {
     })
 }
 
-fn is_hidden(r: char) -> bool {
+pub(crate) fn is_hidden(r: char) -> bool {
     zero_width_name(r).is_some() || (0xE0000..=0xE007F).contains(&(r as u32))
 }
 
@@ -128,7 +128,7 @@ pub fn find_hidden(s: &[u8]) -> HiddenText {
 
 /// Go's `bitsToText`: the bits (groups split by spaces, else `width` at a time) as characters, all printable or a
 /// newline or tab and in the BMP; None otherwise or for fewer than two.
-fn bits_to_text(bits: &str, width: usize) -> Option<String> {
+pub(crate) fn bits_to_text(bits: &str, width: usize) -> Option<String> {
     let groups: Vec<&str> = if bits.contains(' ') {
         bits.split_whitespace().collect()
     } else {

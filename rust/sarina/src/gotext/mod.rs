@@ -9,6 +9,7 @@
 mod cf;
 mod letters;
 mod parsefloat;
+mod scripts;
 mod tables;
 
 pub use parsefloat::{parse_float, underscore_ok, ParseFloatError};
@@ -190,6 +191,26 @@ pub fn is_digit(c: char) -> bool {
 /// Go's `strings.Fields`: the runs of characters between Unicode spaces.
 pub fn fields(s: &str) -> Vec<&str> {
     s.split(is_space).filter(|w| !w.is_empty()).collect()
+}
+
+/// Go's `unicode.Is(unicode.So, c)`: a symbol of the "other" kind (emoji, dingbats).
+pub fn is_symbol_other(c: char) -> bool {
+    in_table(scripts::SO, c)
+}
+
+/// Go's `unicode.Is(unicode.Sm, c)`: a mathematical symbol.
+pub fn is_symbol_math(c: char) -> bool {
+    in_table(scripts::SM, c)
+}
+
+/// Go's `unicode.Is(unicode.Latin, c)`.
+pub fn is_latin(c: char) -> bool {
+    in_table(scripts::LATIN, c)
+}
+
+/// Go's `unicode.Is` of Cyrillic, Greek or Armenian: the alphabets with letters that look Latin.
+pub fn is_cyrillic_greek_armenian(c: char) -> bool {
+    in_table(scripts::CYRILLIC, c) || in_table(scripts::GREEK, c) || in_table(scripts::ARMENIAN, c)
 }
 
 /// Go's `unicode.Is(unicode.Cf, c)`: a format character (Go's table, written by go/guard's parity test).
