@@ -3,6 +3,7 @@
 //! `cryptotools`) is ported, so `needs_go` still hands SARINA_CRYPTO=on to Go (docs/RUST_PORT.md "Resume here").
 
 pub mod magic;
+pub mod meta;
 pub mod text;
 pub mod wav;
 

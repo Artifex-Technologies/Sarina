@@ -134,6 +134,10 @@ func ParseJPEG(b []byte) Container {
 			continue
 		}
 		n := int(binary.BigEndian.Uint16(b[pos+2:]))
+		if n < 2 { // the length counts its own two bytes
+			c.Problems = append(c.Problems, fmt.Sprintf("segment %02x at %d claims %d bytes, under its own 2 bytes", m, pos, n))
+			break
+		}
 		if pos+2+n > len(b) {
 			c.Problems = append(c.Problems, fmt.Sprintf("segment %02x at %d runs past the end", m, pos))
 			break
