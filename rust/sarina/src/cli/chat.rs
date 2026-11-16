@@ -4,10 +4,10 @@
 //!
 //! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`:
 //! `doctor_tool`), the reverse-engineering set with SARINA_REVERSE=on, quantum_sim with SARINA_QUANTUM=on, the system set
-//! (`sysinfo`) with SARINA_SYSTEM=on and the Trachtenberg tool with SARINA_MATH=on. The optional tool sets that are not
-//! ported yet (vault, crypto and steganography, the forge) make [`needs_go`] answer, and the command is then handed to the Go build whole. SARINA_CRYPTO=auto and
-//! SARINA_MATH=auto are decided from the command line before that (`sarina-rs`'s main, as Go's `cli.Main`), so an auto
-//! that comes out "off" needs no Go build.
+//! (`sysinfo`) with SARINA_SYSTEM=on, the crypto and stego tools with SARINA_CRYPTO=on and the Trachtenberg tool with
+//! SARINA_MATH=on. The optional tool sets that are not ported yet (vault, the forge) make [`needs_go`] answer, and the
+//! command is then handed to the Go build whole. SARINA_CRYPTO=auto and SARINA_MATH=auto are decided from the command
+//! line before that (`sarina-rs`'s main, as Go's `cli.Main`).
 
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -45,10 +45,8 @@ pub const DRAFT_WITHDRAWN: &str = "\u{1e}draft withdrawn\u{1e}";
 /// Why this command line needs the Go build: an optional tool set that is not ported is switched on, so the Go build
 /// would offer the model tools the port does not have. None: the port offers exactly the Go build's tools.
 pub fn needs_go(getenv: &dyn Fn(&str) -> String) -> Option<String> {
-    for (k, on) in [("SARINA_CRYPTO", &["on", "auto"][..]), ("SARINA_FORGE", &["on"][..])] {
-        if on.contains(&getenv(k).as_str()) {
-            return Some(format!("{k}={}", getenv(k)));
-        }
+    if getenv("SARINA_FORGE") == "on" {
+        return Some("SARINA_FORGE=on".into());
     }
     if !getenv("SARINA_VAULT").is_empty() {
         return Some("SARINA_VAULT is set".into());
@@ -593,10 +591,13 @@ pub fn builtins() -> Vec<Tool> {
     out
 }
 
-/// Go's per-question tools, after every other tool (the Builder's extra ones too): the Trachtenberg tool with
-/// SARINA_MATH=on (the crypto and stego tools, before it in Go's order, still hand the chat to Go: [`needs_go`]).
+/// Go's per-question tools, after every other tool (the Builder's extra ones too), in Go's order: the crypto and stego
+/// tools with SARINA_CRYPTO=on, the Trachtenberg tool with SARINA_MATH=on.
 pub fn per_prompt() -> Vec<Tool> {
-    crate::trachtenberg::tools()
+    let mut out = crate::cryptotools::tool::tools();
+    out.extend(crate::stego::tool::tools());
+    out.extend(crate::trachtenberg::tools());
+    out
 }
 
 /// `sarina_doctor` (Go's `doctor.Tools`): the read-only check-up ([`crate::doctor`]) of the session's workspace and

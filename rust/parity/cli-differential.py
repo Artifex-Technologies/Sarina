@@ -1395,9 +1395,11 @@ def jpeg_file(name):
         return f.read()
 
 
-# the folder ExtractReport makes in TMPDIR has a random number in its name; a cleaned picture's lowest bits come from
-# crypto/rand, so its size in the report varies (its file is compared by name and mode only: "vary")
-STEGO_NORM = [(r"sarina-stego-\d+", "sarina-stego-N"), (r"bytes became \d+", "bytes became M")]
+# the folder ExtractReport makes in TMPDIR has a random number in its name (of 9 or 10 digits: where a session file's
+# result preview is cut moves with it); a cleaned picture's lowest bits come from crypto/rand, so its size in the report
+# varies (its file is compared by name and mode only: "vary")
+STEGO_NORM = [(r'"result_preview": "(Extracted|Cleaned the picture)[^"]*"', r'"result_preview": "\1 ..."'), (r"sarina-stego-\d+", "sarina-stego-N"),
+              (r"bytes became \d+", "bytes became M")]
 
 
 def crypto_stego_command_cases():
@@ -2075,7 +2077,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 def cases():
     return (memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
             + doctor_cases() + system_cases() + math_cases() + quantum_cases() + reverse_cases() + council_cases()
-            + crypto_stego_command_cases())
+            + crypto_stego_command_cases() + crypto_stego_chat_cases())
 
 
 def main():

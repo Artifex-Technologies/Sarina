@@ -238,6 +238,27 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-16 (4) — Rust port: crypto and stego finished and wired; needs_go no longer names SARINA_CRYPTO; three Go fixes
+- **Ported and proved part by part** (each against a Go fixture written first, mutation-checked, committed and pushed):
+  crypto_modern's X.509 and RS/PS/ES signatures (`8a045f2`, with Go's encoding/asn1, crypto/x509 parsing, RSA and ECDSA
+  verification on an own bigint; `da8a810` closed the certificate URI gap with url.Parse's and netip's error texts),
+  stego's containers (`218d0eb`), the PNG and GIF pictures (`3ca684f`), JPEG (`f5aa06b`), text watermarks (`4acfae3`) and
+  the pictures Sarina writes (`f26a4be`: Go's deflate, PNG and JPEG encoders); 11,795 more fixture comparisons.
+- **Wired:** `sarina crypto` and `sarina stego` run in sarina-rs (`dc96e08`); the model's seven crypto and stego tools and
+  the skills' "crypto" and "stego" prefetches are in Rust, and `needs_go` hands a chat to Go only for SARINA_FORGE=on or
+  SARINA_VAULT (this entry's commit). **CLI differential 963 cases, 4,815 comparisons: no difference** (202 new cases,
+  written first and run Go against Go). Nothing moved to always-Rust (chat still runs in Rust only under SARINA_RS_TRY).
+- **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** ParseJPEG sliced backwards on a
+  segment length of 0 or 1, a panic in stego_inspect (`218d0eb`); **stego_clean wrote its copy through a link planted
+  under the copy's name**, creating the file wherever it pointed, outside the workspace too (now O_EXCL, `dc96e08`);
+  Inspect kept exiftool's and binwalk's whole output and waited for a child holding it open (now 1 MiB, WaitDelay 2 s,
+  `dc96e08`).
+- **For every board:** nothing to change (no package, port or contract change; the tests never run the real exiftool,
+  binwalk or gpg).
+
+Signed: Sarina / Claude Opus 5.5
+
+
 ### 2026-11-16 (3) — Rust port: crypto and stego in finished parts (seven proved, not wired); two Go panics fixed
 - **Ported and proved part by part** (each against a Go fixture written first, mutation-checked, committed and pushed):
   the classical ciphers and their crackers (`4b660b2`), crypto_hash (`efb0362`; md-5 and sha1 crates added, SHA-3, CRC-32

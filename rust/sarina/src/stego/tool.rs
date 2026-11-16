@@ -1,11 +1,22 @@
 //! Go: `stego/stego.go`: the reports the tools and `sarina stego` give (`Inspect`, with the helper programs it runs,
-//! `ExtractReport`, `DiffReport`, `Clean`) and the command itself.
+//! `ExtractReport`, `DiffReport`, `Clean`), the command, the two tools the model gets with SARINA_CRYPTO=on and the
+//! skills' "stego" prefetch.
 
 use super::{clip_text, lsb, magic, meta, watermark, wav};
 use crate::cryptotools::fmt_f;
+use crate::cryptotools::tool::root_of;
+use crate::goany::Any;
 use crate::goctx::Ctx;
 use crate::gopath;
 use crate::gotext::{self, lossy, quote, quote_bytes};
+use crate::tools::defs::tool;
+use crate::tools::files::{arg_str, fail};
+use crate::tools::fsutil::resolve_in_root;
+use crate::tools::private::is_private;
+use crate::tools::registry::{Context, Output, Tool};
+use crate::tools::secret::is_secret_path;
+use std::collections::BTreeMap;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 /// Go's `MaxFile`: the most of a file the tool reads.
@@ -474,4 +485,167 @@ pub fn command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
             2
         }
     }
+}
+
+// ---- the tools (SARINA_CRYPTO=on) ------------------------------------------------------------------------------------
+
+/// Go's `evidenceNote`, after every answer of stego_inspect.
+const EVIDENCE_NOTE: &str = "\n[Computed, not guessed: say what this shows and no more. A sign is not proof; 'no sign' is not 'nothing hidden' (a payload placed with a key or in JPEG coefficients needs its own tool and password). Name only helpers this report says were run.]";
+
+/// Go's `readFile`: a regular file of at most [`MAX_FILE`] in the workspace, not key-like, not in a private folder.
+fn read_in_workspace(path: &str, tc: &Context) -> Result<Vec<u8>, String> {
+    if path.is_empty() {
+        return Err("give a path".into());
+    }
+    let resolved = resolve_in_root(&root_of(tc), path)?;
+    if is_secret_path(path.as_bytes()) || is_secret_path(&resolved) {
+        return Err(format!("refusing to read {path}: it looks like a credentials or key file"));
+    }
+    if is_private(&resolved) {
+        return Err(format!("refusing to read {path}: the owner keeps that folder private from me"));
+    }
+    let st = std::fs::metadata(gopath::os_path(&resolved))
+        .map_err(|e| format!("cannot read {path}: {}", crate::goerr::path("stat", &resolved, &e)))?;
+    if !st.is_file() {
+        return Err(format!("{path} is not a regular file"));
+    }
+    if st.len() > MAX_FILE {
+        return Err(format!("{path} is {} bytes; I look at files up to {MAX_FILE}", st.len()));
+    }
+    std::fs::read(gopath::os_path(&resolved)).map_err(|e| crate::goerr::path("open", &resolved, &e))
+}
+
+/// Go's `folderIn`: the folder path names in the workspace (not a private one), if it is one.
+fn folder_in(path: &str, tc: &Context) -> Option<Vec<u8>> {
+    let resolved = resolve_in_root(&root_of(tc), path).ok().filter(|r| !is_private(r))?;
+    std::fs::metadata(gopath::os_path(&resolved)).is_ok_and(|m| m.is_dir()).then_some(resolved)
+}
+
+fn md(pairs: &[(&str, &str)]) -> BTreeMap<String, Any> {
+    pairs.iter().map(|(k, v)| (k.to_string(), Any::String(v.to_string()))).collect()
+}
+
+fn answer(text: &[u8], md: BTreeMap<String, Any>) -> Output {
+    Output { content: lossy(text) + EVIDENCE_NOTE, metadata: md, error: None }
+}
+
+/// stego_inspect's handler.
+fn inspect_tool(a: &BTreeMap<String, Any>, tc: &Context) -> Output {
+    let action = match arg_str(a, "action") {
+        s if s.is_empty() => "inspect".to_string(),
+        s => s,
+    };
+    let path = arg_str(a, "path");
+    if (action == "text" || action == "watermark") && path.is_empty() {
+        let t = arg_str(a, "text");
+        if t.is_empty() {
+            return fail("give text or a path".into());
+        }
+        return answer(&watermark::watermarks(t.as_bytes()).describe(), md(&[("action", &format!("stego_{action}"))]));
+    }
+    if !path.is_empty() && matches!(action.as_str(), "inspect" | "text" | "watermark") {
+        if let Some(dir) = folder_in(&path, tc) {
+            return answer(&watermark::scan_folder(&lossy(&dir), 2000), md(&[("action", "stego_watermark"), ("path", &path)]));
+        }
+    }
+    let b = match read_in_workspace(&path, tc) {
+        Ok(b) => b,
+        Err(e) => return fail(e),
+    };
+    let out = match action.as_str() {
+        "inspect" => Ok(inspect(&tc.ctx, &b, &path)),
+        "lsb" => {
+            let bits = match a.get("bits") {
+                Some(Any::Number(f)) => crate::config::go_int(*f),
+                _ => 1,
+            };
+            extract_report(&b, &path, &arg_str(a, "order"), bits)
+        }
+        "text" | "watermark" => Ok(watermark::watermarks(&b).describe()),
+        "diff" => match read_in_workspace(&arg_str(a, "other"), tc) {
+            Ok(b2) => diff_report(&b, &b2).map(String::into_bytes),
+            Err(e) => return fail(e),
+        },
+        _ => return fail(format!("unknown action {}", quote(&action))),
+    };
+    match out {
+        Ok(out) => answer(&out, md(&[("action", &format!("stego_{action}")), ("path", &path)])),
+        Err(e) => fail(e),
+    }
+}
+
+/// stego_clean's handler: the cleaned copy next to the file, named relative to the workspace.
+fn clean_tool(a: &BTreeMap<String, Any>, tc: &Context) -> Output {
+    let path = arg_str(a, "path");
+    let b = match read_in_workspace(&path, tc) {
+        Ok(b) => b,
+        Err(e) => return fail(e),
+    };
+    // Go resolves against the context's root as it is (its error ignored: the read above resolved it)
+    let resolved = resolve_in_root(&tc.root, &path).unwrap_or_default();
+    match clean(&b, &lossy(&resolved)) {
+        Err(e) => fail(e),
+        Ok((out, report)) if out.is_empty() => {
+            Output { content: report, metadata: md(&[("action", "stego_clean"), ("path", &path)]), error: None }
+        }
+        Ok((out, report)) => {
+            let rel = lossy(&gopath::rel(tc.root.as_bytes(), out.as_bytes()).unwrap_or_default());
+            Output {
+                content: format!(
+                    "{report}\nThe original {path} is unchanged; the cleaned copy is {rel}. Compare them before replacing the original (that is the owner's choice)."
+                ),
+                metadata: md(&[("action", "stego_clean"), ("path", &path), ("copy", &rel)]),
+                error: None,
+            }
+        }
+    }
+}
+
+/// Go's `Tools`: stego_clean and stego_inspect when SARINA_CRYPTO=on (read when the registry is built).
+pub fn tools() -> Vec<Tool> {
+    if std::env::var("SARINA_CRYPTO").unwrap_or_default() != "on" {
+        return Vec::new();
+    }
+    vec![tool("stego_clean", Arc::new(clean_tool)), tool("stego_inspect", Arc::new(inspect_tool))]
+}
+
+// ---- the "stego" prefetch --------------------------------------------------------------------------------------------
+
+static PATH_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| crate::goregexp::compile(r"(?:~|\.{0,2})?/?[\w./~-]+\.(png|jpe?g|gif|bmp|wav|txt|md|pdf|zip|bin)\b").expect("pathRE"));
+
+/// Go's `Prefetch`: Inspect on up to three files a skill's task names (in the folder Sarina runs in, `~/` the home),
+/// with the tool's guards; 40 s for each.
+pub fn prefetch(task: &str) -> Vec<u8> {
+    let cwd = gopath::getwd().map(|b| lossy(&b)).unwrap_or_default();
+    let mut parts: Vec<Vec<u8>> = Vec::new();
+    for m in PATH_RE.find_iter(task).take(3) {
+        let m = m.as_str();
+        let mut p = m.to_string();
+        if let Some(rest) = p.strip_prefix("~/") {
+            if let Some(h) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
+                p = lossy(&gopath::join(&[std::os::unix::ffi::OsStrExt::as_bytes(h.as_os_str()), rest.as_bytes()]));
+            }
+        }
+        if !gopath::is_abs(p.as_bytes()) {
+            p = lossy(&gopath::join(&[cwd.as_bytes(), p.as_bytes()]));
+        }
+        let Ok(resolved) = resolve_in_root(&cwd, &p) else { continue };
+        if is_secret_path(p.as_bytes()) || is_private(&resolved) {
+            continue;
+        }
+        if !std::fs::metadata(gopath::os_path(&resolved)).is_ok_and(|st| st.is_file() && st.len() <= MAX_FILE) {
+            continue;
+        }
+        let Ok(b) = std::fs::read(gopath::os_path(&resolved)) else { continue };
+        let ctx = Ctx::with_deadline(Instant::now() + Duration::from_secs(40));
+        parts.push(inspect(&ctx, &b, m));
+    }
+    if parts.is_empty() {
+        return Vec::new();
+    }
+    let mut out =
+        b"Already looked at the file for you (stego_inspect, read-only; call it with action lsb, text or diff for more):\n\n".to_vec();
+    out.extend(parts.join(&b"\n\n"[..]));
+    out
 }

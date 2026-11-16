@@ -1,6 +1,6 @@
 //! Go: `go/stego`: read-only checks for data hidden in files and text. Ported part by part, each proved against Go's own
-//! answers (testdata/parity/stegotext.json, ...); the tools are offered by the Go build until the whole set (with
-//! `cryptotools`) is ported, so `needs_go` still hands SARINA_CRYPTO=on to Go (docs/RUST_PORT.md "Resume here").
+//! answers (testdata/parity/stegotext.json, ...); the tools, the "stego" prefetch and `sarina stego` in [`tool`],
+//! proved by the CLI differential.
 
 pub mod deflate;
 mod enc_tables;

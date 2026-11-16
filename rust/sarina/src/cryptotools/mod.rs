@@ -1,6 +1,6 @@
 //! Go: `go/cryptotools`: cryptography Sarina does in code instead of in her head. Ported part by part, each proved
-//! against Go's own answers (testdata/parity/classic.json, ...); the tools are offered by the Go build until the whole
-//! set (with `stego`) is ported, so `needs_go` still hands SARINA_CRYPTO=on to Go (docs/RUST_PORT.md "Resume here").
+//! against Go's own answers (testdata/parity/classic.json, ...); the tools, the "crypto" prefetch and `sarina crypto`
+//! in [`tool`], proved by the CLI differential.
 
 pub(crate) mod asn1;
 pub(crate) mod bigint;

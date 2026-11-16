@@ -349,11 +349,14 @@ pub fn by_words(list: &[&Skill], query: &str, limit: usize) -> Vec<Passage> {
 /// A prefetch: the task in, the context out (bytes, as Go's string: what a command printed may not be UTF-8).
 pub type ContextFn = Arc<dyn Fn(&str) -> Vec<u8> + Send + Sync>;
 
-/// Go's registered contexts: the ones its packages add at start (sysinfo's "status" and "security"), and any added later.
+/// Go's registered contexts: the ones its packages add at start (sysinfo's "status" and "security", cryptotools' "crypto",
+/// stego's "stego"), and any added later.
 static CONTEXTS: LazyLock<RwLock<HashMap<String, ContextFn>>> = LazyLock::new(|| {
     let mut m: HashMap<String, ContextFn> = HashMap::new();
     m.insert("status".into(), Arc::new(crate::sysinfo::status_context));
     m.insert("security".into(), Arc::new(crate::sysinfo::security_context));
+    m.insert("crypto".into(), Arc::new(crate::cryptotools::tool::prefetch));
+    m.insert("stego".into(), Arc::new(crate::stego::tool::prefetch));
     RwLock::new(m)
 });
 
