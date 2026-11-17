@@ -1671,6 +1671,39 @@ def vault_cases():
                             ("trends no vault", ["trends"], None), ("trends help", ["trends", "-h"], on), ("trends bad days", ["trends", "--days", "x"], on),
                             ("trends empty", ["trends", "--path", "{W}/empty"], None), ("trends days zero", ["trends", "--days=0"], on)]:
         cs.append(C(f"daily command {name}", args, files=state(**daily), env=env))
+    # daily-report: the probe's own numbers (load, memory, disks, the time) are the machine's and move between the two runs
+    import datetime
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    probe_norm = VAULT_NORM + [(r"Load: [\d.]+ on \d+ cores \([^)]*\)", "Load: L"), (r"Memory: [^\n]*", "Memory: M"), (r"Disks: [^\n]*", "Disks: D"),
+                               (r"\| disk [^|]*\|", "| disk D |"), (r"memory \d+% \| load [\d.]+", "memory M | load L"), (r"\d{2}:\d{2}", "HH:MM")]
+    probes = {
+        "bin/systemctl*": "#!/bin/sh\ncase \"$*\" in *--user*) echo 'pipewire.service loaded failed failed PipeWire'; echo 'run-u12.scope x';; *) echo 'foo.service loaded failed failed Foo';; esac\n",
+        "bin/coredumpctl*": "#!/bin/bash\necho \"Thu 2026-11-16 09:00:00 UTC 4242 $UID 1000 SIGSEGV present /usr/bin/game 1M\"\necho \"Thu 2026-11-16 09:01:00 UTC 4243 $UID 1000 SIGSEGV present /opt/game 1M\"\necho \"Thu 2026-11-16 09:02:00 UTC 4244 $UID 1000 SIGABRT present /usr/bin/editor 1M\"\necho \"Thu 2026-11-16 09:03:00 UTC 4245 99999 1000 SIGABRT present /usr/bin/other 1M\"\necho short line\n",
+        "bin/journalctl*": "#!/bin/sh\necho 'kernel: one'\necho\necho 'kernel: two'\n",
+    }
+    heim = {"HEIMDALL_REVIEW_URL": "{H}/v1/review"}
+    audit = {"/v1/audit": resp({"kernels": [{"kernel": "6.1", "running": True, "count": 2}, {"kernel": "6.0", "running": False, "count": 9}],
+                                "packages": [{"Package": "a", "Severity": "Low"}, {"Package": "b", "Severity": "HIGH"}], "hardening": [{"ID": "x"}]}),
+             "/v1/quarantine": resp([{"sha256": "ab", "status": "held"}, {"sha256": "cd", "status": "released"}])}
+    planted = {f"vault/Daily/{today}.md": "---\ncreated: x\n---\n\n# day\n- 07:00 check-up: all fine\n\n## Status (00:00)\n\n- Load: 0.1 on 8 cores (idle)\n\n## Numbers\n\n- 00:00 | disk / 50% | crashes 0 | failed 0 | memory 10% | load 0.1\n"}
+    for name, args, f, env, routes in [
+            ("report no write", ["daily-report", "--no-write"], {}, dict(on, **heim), audit),
+            ("report write", ["daily-report"], {}, dict(on, **heim), audit),
+            ("report no vault", ["daily-report"], {}, heim, audit),
+            ("report fresh", ["daily-report", "--max-age", "100000"], planted, dict(on, **heim), audit),
+            ("report not fresh", ["daily-report", "--max-age=0"], planted, dict(on, **heim), audit),
+            ("report heimdall down", ["daily-report", "--no-write"], {}, on, {}),
+            ("report heimdall broken", ["daily-report", "--no-write"], {}, dict(on, **heim), {"/v1/audit": resp("not json")}),
+            ("report heimdall clean", ["daily-report", "--no-write"], {}, dict(on, **heim), {"/v1/audit": resp({}), "/v1/quarantine": resp([])}),
+            ("report heimdall far", ["daily-report", "--no-write"], {}, dict(on, HEIMDALL_REVIEW_URL="http://192.0.2.1:8930/v1/review"), {}),
+            ("report planted pipe", ["daily-report"], {f"vault/Daily/{today}.md|": ""}, dict(on, **heim), audit),
+            ("report planted tmp link", ["daily-report"], {f"vault/Daily/{today}.md.tmp@": "{W}/outside/planted", "outside/": ""}, dict(on, **heim), audit),
+            ("report help", ["daily-report", "-h"], {}, on, {}), ("report bad flag", ["daily-report", "--nope"], {}, on, {}),
+            ("report no programs", ["daily-report", "--no-write"], None, dict(on, **heim), audit)]:
+        files_ = state(**vault) if f is None else state(**vault, **probes, **f)
+        c = C(f"daily command {name}", args, files=files_, env=env, norm=probe_norm)
+        c["routes"] = routes
+        cs.append(c)
     for name, calls in [("search, write, search", [[("vault_search", {"query": "proton games"})],
                                                    [("vault_write", {"path": "Entities/Proton", "content": "Now also about steam.", "mode": "append"})],
                                                    [("vault_search", {"query": "steam"})]]),

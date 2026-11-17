@@ -143,6 +143,7 @@ pub fn ported(name: &str) -> Option<Command> {
         "note" => crate::vault::tools::note_command,
         "lessons" => crate::vault::tools::lessons_command,
         "trends" => crate::daily::trends_command,
+        "daily-report" => crate::daily::report_command,
         _ => return None,
     })
 }

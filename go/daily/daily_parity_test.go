@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/internal/parity"
 )
@@ -122,5 +123,24 @@ func TestParityDaily(t *testing.T) {
 		made = append(made, []any{set, Trends(ds)})
 	}
 	cases = append(cases, parity.Case{Fn: "trendsdays", Out: made})
+
+	// Status.Render and SetStatus on made-up probes (the CLI differential cannot compare a real probe's numbers)
+	at := time.Date(2026, 11, 16, 9, 5, 0, 0, time.Local)
+	statuses := []Status{{At: at}, {At: at, Cores: 8, Load: 4.05, MemUsed: 6_500_000_000, MemTotal: 16_000_000_000, SwapUsed: 1,
+		Disks: []Disk{{"/", 90, 50_500_000_000}, {"/home", 40, 499_999_999}}, Crashes: map[string]int{"b": 2, "a": 2, "c": 5}, Kernel: 3, Security: "Heimdall: x"},
+		{At: at, Cores: 4, Load: 4.5, MemUsed: 1, MemTotal: 3, Failed: []string{"x.service", "y (your session)"}}, {At: at, Cores: 4, Load: 2.0}}
+	var renders []any
+	for i, st := range statuses {
+		section, n := st.Render()
+		note := Parse("2026-11-16", texts[2])
+		if i == 1 {
+			for k := 0; k < 50; k++ {
+				note.Numbers = append(note.Numbers, lines[0])
+			}
+		}
+		note.SetStatus(st)
+		renders = append(renders, []any{i, section, numbers(n), note.Render(), note.Print(at, false)})
+	}
+	cases = append(cases, parity.Case{Fn: "render", Out: renders})
 	parity.Fixture(t, "daily", cases)
 }

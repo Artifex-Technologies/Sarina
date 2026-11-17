@@ -79,6 +79,51 @@ fn daily_matches_go() {
                     d.eq("trendsdays", &json!([r[0], daily::trends(&ds)]), r);
                 }
             }
+            "render" => {
+                let at = ("2026-11-16".to_string(), "09:05".to_string());
+                let statuses = [
+                    daily::Status { at: at.clone(), ..daily::Status::default() },
+                    daily::Status {
+                        at: at.clone(),
+                        cores: 8,
+                        load: 4.05,
+                        mem_used: 6_500_000_000,
+                        mem_total: 16_000_000_000,
+                        swap_used: 1,
+                        disks: vec![
+                            daily::Disk { mount: "/".into(), pct: 90, free: 50_500_000_000 },
+                            daily::Disk { mount: "/home".into(), pct: 40, free: 499_999_999 },
+                        ],
+                        crashes: [("b".to_string(), 2), ("a".to_string(), 2), ("c".to_string(), 5)].into_iter().collect(),
+                        kernel: 3,
+                        security: "Heimdall: x".into(),
+                        ..daily::Status::default()
+                    },
+                    daily::Status {
+                        at: at.clone(),
+                        cores: 4,
+                        load: 4.5,
+                        mem_used: 1,
+                        mem_total: 3,
+                        failed: vec!["x.service".into(), "y (your session)".into()],
+                        ..daily::Status::default()
+                    },
+                    daily::Status { at: at.clone(), cores: 4, load: 2.0, ..daily::Status::default() },
+                ];
+                let text =
+                    common::cases("daily").into_iter().find(|c| c["fn"] == "parse").unwrap()["out"][2][0].as_str().unwrap().to_string();
+                for (i, st) in statuses.iter().enumerate() {
+                    let (section, n) = st.render();
+                    let mut note = daily::parse("2026-11-16", &text);
+                    if i == 1 {
+                        for _ in 0..50 {
+                            note.numbers.push("- 09:00 | disk / 40% | crashes 0 | failed 0 | memory 30% | load 0.5".into());
+                        }
+                    }
+                    note.set_status(st);
+                    d.eq(format!("render {i}"), &json!([i, section, numbers(&n), note.render(), note.print(false)]), &rows[i]);
+                }
+            }
             other => panic!("unknown case {other}"),
         }
     }

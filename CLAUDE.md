@@ -238,6 +238,20 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-16 (6) — Rust port: `sarina daily-report` in Rust; three more Go fixes in daily
+- **Ported, proved by a Go fixture and 14 CLI differential cases written first and run Go against Go:** probing the
+  computer, the day's note brought up to date and `sarina daily-report` (with sysinfo's Heimdall headline), against
+  stand-in systemctl, coredumpctl and journalctl and a stand-in Heimdall (never the real one on 8930). daily is now whole
+  in Rust; insight and the forge are left (docs/RUST_PORT.md "Resume here").
+- **Go fixes (live code), in Go and Rust both, each with a Go test that failed before:** `Load` waited for ever on a named
+  pipe under the day's note; `Save` wrote the note through a link planted under its `.tmp` name (outside the vault too);
+  `Probe` waited for a child holding a program's output (60 s in the test) and kept the whole output (now 1 MiB and
+  WaitDelay 2 s). These touch the check-up's daily-report on the owner's PC once a newer sarina-git is installed.
+- **For every board:** nothing to change.
+
+Signed: Sarina / Claude Opus 5.5
+
+
 ### 2026-11-16 (5) — Rust port: the vault in Rust, daily's notes and trends; needs_go names only SARINA_FORGE; three Go fixes
 - **Ported and proved part by part** (each against Go fixtures or CLI differential cases written first, mutation-checked,
   committed and pushed): reading a vault and recall without a model, with Go's sort.Slice (`efd44d6`); writing, the vault

@@ -82,8 +82,13 @@ pub fn heimdall_base(getenv: &dyn Fn(&str) -> String) -> Result<String, String> 
 /// Go's `(&http.Client{Timeout: 10 s}).Do(GET url)` under `ctx`, its body read to `limit` bytes: the status and what
 /// was read (the body's own error ends it), or Go's error text.
 fn get(ctx: &Ctx, url: &str, limit: usize) -> Result<(u16, Vec<u8>), String> {
+    get_within(ctx, url, limit, 10)
+}
+
+/// `get` with the client's timeout in seconds.
+fn get_within(ctx: &Ctx, url: &str, limit: usize, secs: u64) -> Result<(u16, Vec<u8>), String> {
     let o = Opts { dial: Dial::Tcp, method: "GET", url, headers: &[], body: None, tls: None };
-    let deadline: gohttp::Deadline = Rc::new(Cell::new(Instant::now() + Duration::from_secs(10)));
+    let deadline: gohttp::Deadline = Rc::new(Cell::new(Instant::now() + Duration::from_secs(secs)));
     let mut resp = gohttp::open(&o, ctx, &deadline).map_err(|f| {
         gohttp::go_url_error(
             "GET",
@@ -369,6 +374,57 @@ pub fn summary(ctx: &Ctx) -> Vec<u8> {
     out.push(b'\n');
     out.extend_from_slice(&held_summary(&held));
     out
+}
+
+/// Go's `SecurityHeadline`: Heimdall's audit in one line (the running kernel, packages with known holes and the worst
+/// of them, settings that could be safer, files held), for the day's note.
+pub fn security_headline(ctx: &Ctx) -> String {
+    let getenv = |k: &str| std::env::var(k).unwrap_or_default();
+    let Ok(base) = heimdall_base(&getenv) else { return "Heimdall is not set up here".into() };
+    let Ok((status, body)) = get_within(ctx, &format!("{base}/v1/audit"), 2 << 20, 5) else { return "Heimdall does not answer".into() };
+    let Some(r) = (if status == 200 { decode(&AUDIT, &body) } else { None }) else {
+        return "Heimdall's answer could not be read".into();
+    };
+    let r = fs(&r);
+    let (packages, kernels, hardening) = (items(&r[0]), items(&r[1]), items(&r[2]));
+    let mut parts = Vec::new();
+    for k in kernels {
+        let k = fs(k);
+        if b(&k[1]) {
+            parts.push(if i(&k[2]) == 0 {
+                "running kernel has no known holes".to_string()
+            } else {
+                format!("running kernel has {} known holes (update)", i(&k[2]))
+            });
+        }
+    }
+    if packages.is_empty() {
+        parts.push("no packages with known holes".into());
+    } else {
+        let rank = |s: &str| match s {
+            "critical" => 4,
+            "high" => 3,
+            "medium" => 2,
+            "low" => 1,
+            _ => 0,
+        };
+        let mut worst = String::new();
+        for p in packages {
+            let sev = crate::gotext::to_lower(s(&fs(p)[3]));
+            if rank(&sev) > rank(&worst) {
+                worst = sev;
+            }
+        }
+        parts.push(format!("{} package(s) with known holes (worst {worst})", packages.len()));
+    }
+    if !hardening.is_empty() {
+        parts.push(format!("{} setting(s) could be safer", hardening.len()));
+    }
+    let held = fetch_held(ctx, &base).iter().filter(|e| s(&fs(e)[6]) == "held").count();
+    if held > 0 {
+        parts.push(format!("{held} file(s) held"));
+    }
+    format!("Heimdall: {}", parts.join("; "))
 }
 
 fn fetch_held(ctx: &Ctx, base: &str) -> Vec<Val> {

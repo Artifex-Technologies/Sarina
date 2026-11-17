@@ -9,6 +9,7 @@
 package daily
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -164,11 +165,28 @@ func mounts() []string {
 func run(ctx context.Context, args ...string) string {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, args[0], args[1:]...).Output()
-	if err != nil && len(out) == 0 {
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	// the first MiB of what it prints; a child left holding the output open is not waited for longer than 2 s
+	out := &headBuffer{max: 1 << 20}
+	cmd.Stdout = out
+	cmd.WaitDelay = 2 * time.Second
+	if err := cmd.Run(); err != nil && out.buf.Len() == 0 {
 		return ""
 	}
-	return string(out)
+	return out.buf.String()
+}
+
+// headBuffer keeps the first max bytes written to it and drops the rest (the program is not stopped by a write error).
+type headBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (h *headBuffer) Write(p []byte) (int, error) {
+	if room := h.max - h.buf.Len(); room > 0 {
+		h.buf.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
 }
 
 func gb(b int64) string { return fmt.Sprintf("%.0f GB", float64(b)/1e9) }

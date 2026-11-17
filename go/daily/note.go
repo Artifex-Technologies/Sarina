@@ -2,6 +2,7 @@ package daily
 
 import (
 	"fmt"
+	"github.com/Artifex-Technologies/Sarina/go/session"
 	"github.com/Artifex-Technologies/Sarina/go/testguard"
 	"os"
 	"path/filepath"
@@ -119,7 +120,8 @@ func Path(vault string, day time.Time) string {
 
 // Load reads the day's note (an empty one when there is none).
 func Load(vault string, day time.Time) Note {
-	b, _ := os.ReadFile(Path(vault, day))
+	// a bounded regular file: a named pipe planted under the day's name is not waited on
+	b, _ := session.ReadRegular(Path(vault, day), 1<<20)
 	return Parse(day.Format("2006-01-02"), string(b))
 }
 
@@ -132,8 +134,19 @@ func Save(vault string, n Note) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
 	}
+	// the copy is made anew: whatever was left under its name (a link too) is removed, not written through
 	tmp := p + ".tmp"
-	if err := os.WriteFile(tmp, []byte(n.Render()), 0o644); err != nil {
+	_ = os.Remove(tmp)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write([]byte(n.Render()))
+	if err1 := f.Close(); err == nil {
+		err = err1
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, p)
