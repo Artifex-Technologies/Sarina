@@ -14,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/Artifex-Technologies/Sarina/go/cli"
+	"github.com/Artifex-Technologies/Sarina/go/session"
 	"github.com/Artifex-Technologies/Sarina/go/vault"
 )
 
@@ -124,7 +125,12 @@ func tidyCommand(env *cli.Env, args []string) int {
 	var changes []change
 	total := 0
 	for _, f := range files {
-		b, err := os.ReadFile(f)
+		// only a regular file in Talks/ is tidied: a link there is not followed (it could name any file on the computer),
+		// a named pipe not waited on
+		if st, err := os.Lstat(f); err != nil || !st.Mode().IsRegular() {
+			continue
+		}
+		b, err := session.ReadRegular(f, 4<<20)
 		if err != nil {
 			continue
 		}

@@ -1704,6 +1704,41 @@ def vault_cases():
         c = C(f"daily command {name}", args, files=files_, env=env, norm=probe_norm)
         c["routes"] = routes
         cs.append(c)
+    # vault-tidy: the talk log's small talk and her own voice heard back
+    import datetime as _dt
+    now_ = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    said = ["hi", "Hey Sarina!", "thanks so much", "ok", "good morning sarina", "yeah, how's the system looking?", "I love my cat", "haha that was funny",
+            "my name is Sam", "Sam's laptop is slow", "what time is it", "testing", "is everything ok?", "so um alright then",
+            "remember that the backup runs at night", "bye", "how are things looking today?", "yes please", "nope", "cool cool",
+            "i'm here whenever you need me", "let me know if you want anything else", "the disk is full again and the game crashed twice this morning before lunch",
+            "please check how things are going", "yo", "a b c d e f g", "tell me about rust", "all good", "😂", "",
+            "the cpu fan seems quite loud", "sam here", "hi", "rust compiles quickly sometimes maybe", "one", "two", "three", "four", "five",
+            "your answer about the weather report today"]
+    me = ["Hello.", "Your system is looking good.", "You're welcome.", "Okay.", "Everything is stable.", "All good here, no hiccups today.",
+          "Cats are great.", "Glad you liked it.", "Nice to meet you.", "Let me check.", "It is noon.", "I hear you.", "Yes.", "Sure.",
+          "I will remember the backup schedule at night.", "Bye.", "No issues.", "Okay.", "Fine.", "Thanks.", "Sure.", "Okay.", "Let me look into the disk.",
+          "Your network is fine.", "Hi.", "Letters.", "Rust is a language.", "Good.", "Ha.", "Hm.",
+          "Your system is fine.", "All good.", "Hello! " + "This answer is long on purpose, so that the line it sits in runs well past the width the report shows. " * 2,
+          "Rust compiles quickly without garbage collection overhead.", "The weather report today says rain.", "Okay.", "Okay.", "Okay.", "Okay.", "Okay."]
+    def talk(stamp):
+        out = "# Talks\n\n"
+        for i, (a_, b_) in enumerate(zip(said, me)):
+            out += f"- {stamp} | they said: {a_} | I said: {b_}\n"
+            if i == 14:
+                out += "- " + stamp + " | they said: I will remember the backup schedule at night | I said: Yes.\n"
+        return out + "not a talk line\n- 2026-13-45 10:00 | they said: hi | I said: Hello.\n"
+    talks = dict(vault, **{"vault/Talks/2020-01.md": talk("2020-01-01 10:00"), "vault/Talks/2099-01.md": talk(now_),
+                           "vault/Talks/notes.md": talk("2020-01-01 10:00"), "vault/Talks/2021-02.md": "- 2021-02-01 10:00 | they said: plain words here | I said: Fine.\n"})
+    planted_t = dict(talks, **{"vault/Talks/2022-01.md@": "{W}/outside/theirs.md", "outside/theirs.md": talk("2020-01-01 10:00"), "vault/Talks/2022-02.md|": ""})
+    for name, args, f, env, stdin in [("dry run", ["vault-tidy", "--dry-run"], talks, on, None), ("yes", ["vault-tidy", "--yes"], talks, on, None),
+                                      ("asked yes", ["vault-tidy"], talks, on, b"y\n"), ("asked no", ["vault-tidy"], talks, on, b"n\n"),
+                                      ("asked nothing", ["vault-tidy"], talks, on, b""), ("older than 0", ["vault-tidy", "--yes", "--older-than", "0"], talks, on, None),
+                                      ("owner named", ["vault-tidy", "--dry-run"], talks, dict(on, SARINA_OWNER_NAME="Sam"), None),
+                                      ("owner with a dot", ["vault-tidy", "--dry-run"], talks, dict(on, SARINA_OWNER_NAME="S.am"), None),
+                                      ("planted", ["vault-tidy", "--yes"], planted_t, on, None), ("nothing", ["vault-tidy"], files, on, None),
+                                      ("no vault", ["vault-tidy"], files, None, None), ("missing vault", ["vault-tidy", "--path", "{W}/nowhere"], files, None, None),
+                                      ("help", ["vault-tidy", "-h"], files, on, None), ("with git", ["vault-tidy", "--yes"], dict(talks, **git, **{"vault/.git/": ""}), on, None)]:
+        cs.append(C(f"insight command tidy {name}", args, files=state(**f) if f is not files else files, env=env, stdin=stdin))
     for name, calls in [("search, write, search", [[("vault_search", {"query": "proton games"})],
                                                    [("vault_write", {"path": "Entities/Proton", "content": "Now also about steam.", "mode": "append"})],
                                                    [("vault_search", {"query": "steam"})]]),

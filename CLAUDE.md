@@ -238,6 +238,18 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-16 (7) — Rust port: `sarina vault-tidy` in Rust; a Go fix: it rewrote files through planted links
+- **Ported, proved by 14 CLI differential cases written first and run Go against Go:** the talk log's lines, her own voice
+  heard back, small talk, and `sarina vault-tidy`. Left (docs/RUST_PORT.md "Resume here"): vault-ingest, reflect, the
+  forge; `needs_go` names only SARINA_FORGE=on.
+- **Go fix (live code), in Go and Rust both, with a Go test that failed before:** vault-tidy followed a link planted in the
+  vault's Talks/ and rewrote the file it named, anywhere on the computer, without its "small talk" lines, and waited for
+  ever on a named pipe there (TestTidyLeavesPlantedLinksAndPipesAlone).
+- **For every board:** nothing to change.
+
+Signed: Sarina / Claude Opus 5.5
+
+
 ### 2026-11-16 (6) — Rust port: `sarina daily-report` in Rust; three more Go fixes in daily
 - **Ported, proved by a Go fixture and 14 CLI differential cases written first and run Go against Go:** probing the
   computer, the day's note brought up to date and `sarina daily-report` (with sysinfo's Heimdall headline), against

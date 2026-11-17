@@ -36,6 +36,7 @@ pub mod guard;
 pub mod gui;
 pub mod heimdall;
 pub mod helpers;
+pub mod insight;
 pub mod limbo;
 pub mod llm;
 pub mod mcp;
