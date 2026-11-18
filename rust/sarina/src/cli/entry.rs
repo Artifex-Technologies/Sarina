@@ -1,6 +1,6 @@
 //! Go: `go/cmd/sarina/main.go`, as `sarina-rs` starts (docs/RUST_PORT.md, "The plan for `sarina-rs`"): the command the
 //! name it was started as stands for, Heimdall's containment lock before anything else, and where the Go build is that
-//! every command not ported yet is handed to.
+//! a command line not ported yet (one with an argument that is not UTF-8) is handed to.
 
 use crate::gopath;
 use crate::gotext;
@@ -31,7 +31,7 @@ pub fn contained_message(why: &str) -> String {
 /// would drop out of those checks.
 pub const GO_BUILD: &str = "/usr/lib/sarina/sarina";
 
-/// The Go build every command not ported yet goes to: `$SARINA_GO_BINARY` when it is an absolute path, else
+/// The Go build a command line not ported yet goes to: `$SARINA_GO_BINARY` when it is an absolute path, else
 /// [`GO_BUILD`]. It is never looked up on PATH.
 pub fn go_binary(getenv: &dyn Fn(&str) -> Vec<u8>) -> Vec<u8> {
     let v = getenv("SARINA_GO_BINARY");
@@ -42,8 +42,12 @@ pub fn go_binary(getenv: &dyn Fn(&str) -> Vec<u8>) -> Vec<u8> {
     }
 }
 
-/// The message (exit status 127) when the Go build a command needs is not there.
+/// The message (exit status 127) when the Go build a command line needs (one with an argument that is not UTF-8) is not
+/// there.
 pub fn missing_go_message(command: &[u8], path: &[u8]) -> String {
     let c = if command.is_empty() { "sarina".to_owned() } else { gotext::lossy(command) };
-    format!("sarina: {c} is not in the Rust build yet, and the Go build ({}) is missing\n", gotext::lossy(path))
+    format!(
+        "sarina: {c} with an argument that is not UTF-8 is not in the Rust build yet, and the Go build ({}) is missing\n",
+        gotext::lossy(path)
+    )
 }

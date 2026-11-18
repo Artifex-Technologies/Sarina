@@ -6,8 +6,9 @@
 # Sarina's core is two builds of one program (docs/RUST_PORT.md "The switch"): the Rust
 # build (rust/, sarina-rs) is /usr/bin/sarina and answers to three names, `sarina`,
 # `sarina-gui` and `sarina-service` (the last two are symlinks; the command comes from
-# the name it was started as). It runs the commands ported to it and hands every other
-# one, unchanged, to the Go build (go/cmd/sarina) by execve. The Go build is
+# the name it was started as). It runs every command itself (since 2026-11-18); only a
+# command with an argument that is not UTF-8 is still handed, unchanged, to the Go build
+# (go/cmd/sarina) by execve, until the Go build is removed. The Go build is
 # /usr/lib/sarina/sarina: named sarina so that Heimdall still knows the process as Sarina.
 # The optional ML/voice helper is a small separate Python package
 # (python/sarina_helpers) installed alongside.

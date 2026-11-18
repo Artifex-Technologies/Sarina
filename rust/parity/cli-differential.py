@@ -14,8 +14,9 @@ up): the scripted servers and both builds live in it, so nothing a case runs can
 real service on 127.0.0.1:8899 and console on 8765, which `doctor` dials, or a model server on 11434), and a case may
 hold a port of its own (`listen`) without meeting a real one. Without namespaces the harness stops.
 
-sarina-rs runs with SARINA_RS_NO_GO=1: a command it has not ported fails ("is not ported") instead of being handed to
-the Go build, so a case for a command still in Go shows up as a difference, never as a silent pass.
+sarina-rs runs with SARINA_RS_NO_GO=1: a command line it would hand to the Go build fails ("is not ported") instead of
+reaching it, so such a case shows up as a difference, never as a silent pass. (Since 2026-11-18 every command, the usage
+and `version` are Rust; only a command with an argument that is not UTF-8 is still handed over.)
 
     python3 -I rust/parity/cli-differential.py --go GO_SARINA --rs SARINA_RS [--out DIR] [--only SUBSTRING] [--show]
 
@@ -885,6 +886,47 @@ def other_cases():
         # started with SIGPIPE ignored (systemd's default for services): Go's runtime still ends the process by SIGPIPE
         c = dict(c, name="stdout closed, SIGPIPE ignored " + " ".join(args), closed_stdout="ignored")
         cs.append(c)
+    return cs
+
+
+# the toolchain a build names in `sarina version` (Go's `go1.27.4`, sarina-rs's `rustc 1.x.y`, under the same key): the
+# one part of the answer that differs on purpose (docs/RUST_PORT.md "Differences"); commit, time and the uncommitted flag
+# are compared as they are, so both builds must come from the same tree
+TOOLCHAIN_NORM = [(r'go1\.[0-9][^)"]*|rustc [0-9][^)"]*', "TOOLCHAIN")]
+
+
+def usage_cases():
+    """`sarina version` (both builds' stamps, from one tree) and Go's cli.Main for what is not a command: no command,
+    help (-h, --help, help, with anything after it), an unknown command (quoted as Go's %q: odd characters, bytes that
+    are not UTF-8), each with its stream and exit status; standard output closed; Heimdall's lock (version and help
+    still answer)."""
+    cs = []
+
+    def add(name, args, closed=None, **k):
+        c = C(name, args, norm=TOOLCHAIN_NORM, **k)
+        if closed:
+            c["closed_stdout"] = closed
+        cs.append(c)
+    for args in (["version"], ["version", "--json"], ["version", "-h"], ["version", "--json", "extra"], ["version", "extra", "--json"],
+                 ["version", "--JSON"], ["version", "-json"], ["version", ""]):
+        add("version " + repr(args[1:]), args)
+    add("version with SARINA_CRYPTO=auto", ["version", "decode this base64"], env={"SARINA_CRYPTO": "auto"})
+    add("no command", [])
+    for h in ("help", "-h", "--help"):
+        add(h, [h])
+        add(h + " with more", [h, "chat", "--bogus"])
+        add(h + " with bytes not UTF-8", [h, "\udcff"])
+    for bad in ("bogus", "Version", "HELP", "-help", "--", "-", "", " version", "version ", "chat\x01", "caf\u00e9", "a\tb\nc", "\u202eevil",
+                "\x7f", "\u00a0", "\U0001f600", "say \"hi\" \\ there", "\udcff", "caf\udce9", "\udce2\udc80", "x" * 300, "--json", "memory_show"):
+        add("unknown " + repr(bad), [bad])
+    add("unknown with arguments", ["serve", "--port", "1", "\udcff"])
+    add("unknown, SARINA_CRYPTO=auto", ["bogus", "decode this base64"], env={"SARINA_CRYPTO": "auto"})
+    for args in (["version"], ["version", "--json"], ["help"], [], ["bogus"]):
+        add("stdout closed " + repr(args), args, closed=True)
+        add("stdout closed, SIGPIPE ignored " + repr(args), args, closed="ignored")
+    lock = {"no-lock": '{"reason": "a made-up lock"}'}
+    for args in (["version"], ["version", "--json"], ["help"], ["--help"], ["-h"], [], ["bogus"], ["Version"]):
+        add("contained " + repr(args), args, files=dict(state(), **lock))
     return cs
 
 
@@ -3683,7 +3725,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
     return res
 
 
-CASE_GROUPS = ["memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
+CASE_GROUPS = ["usage_cases", "memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
                "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "desktop_cases", "chymaera_cases", "ext_cases", "quantum_cases", "reverse_cases", "council_cases",
                "crypto_stego_command_cases", "crypto_stego_chat_cases", "vault_cases", "insight_cases", "forge_cases"]
 
@@ -3724,7 +3766,8 @@ def main():
                 print(f"== rs {c['name']}: {json.dumps(r, indent=1, ensure_ascii=False)}")
         if diffs:
             bad += 1
-            print(f"DIFF {c['name']}: {' '.join(c['args'])}")
+            # an argument that is not UTF-8 is a lone surrogate here: printed as \udcff, not a crash of the report
+            print(f"DIFF {c['name']}: {' '.join(c['args'])}".encode("utf-8", "backslashreplace").decode())
             for k in diffs:
                 a_, b_ = json.dumps(g[k], ensure_ascii=False), json.dumps(r[k], ensure_ascii=False)
                 i = next((j for j in range(min(len(a_), len(b_))) if a_[j] != b_[j]), min(len(a_), len(b_)))

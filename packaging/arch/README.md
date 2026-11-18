@@ -10,8 +10,9 @@ Contents:
 - `PKGBUILD` — builds the Rust build (`rust/`, `sarina-rs`) and the Go build
   (`go/cmd/sarina`): the Rust one is `/usr/bin/sarina`, with `sarina-gui` and
   `sarina-service` as symlinks (the command comes from the name it was started
-  as); it runs the commands ported to it and hands every other one to the Go
-  build at `/usr/lib/sarina/sarina` (docs/RUST_PORT.md "The switch"). Also builds and installs the optional ML/voice helper wheel
+  as); it runs every command itself (since 2026-11-18) and hands only a command
+  with an argument that is not UTF-8 to the Go build at `/usr/lib/sarina/sarina`
+  (docs/RUST_PORT.md "The switch"; the Go build goes after the rollback week). Also builds and installs the optional ML/voice helper wheel
   (`python/sarina_helpers`), which only matters if `python` and the
   `ml`/`voice` dependencies are present.
 - `sarina-service.service` — systemd unit for `sarina service`, the

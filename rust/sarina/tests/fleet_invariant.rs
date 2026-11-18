@@ -32,10 +32,10 @@ fn nothing_outside_the_command_table_names_the_fleet() {
         for (n, line) in text.lines().enumerate() {
             let allowed = match rel.as_str() {
                 "lib.rs" => line.trim() == "pub mod fleet;",
-                // the command table: `"fleet-launch" => crate::fleet::launch::command,` and its comment
+                // the command table: `("fleet-launch", "SUMMARY", crate::fleet::launch::command),` and comments
                 "cli/mod.rs" => {
                     let t = line.trim();
-                    (t.starts_with("\"fleet-") && t.contains("=> crate::fleet::")) || t.starts_with("//")
+                    (t.starts_with("(\"fleet-") && t.ends_with("::command),") && t.contains(", crate::fleet::")) || t.starts_with("//")
                 }
                 _ => false,
             };

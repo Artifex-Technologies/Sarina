@@ -247,6 +247,23 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-18 (6) — `sarina version` and the usage in Rust: no command reaches the Go build
+- `sarina version` comes from the Rust build's own stamp (`rust/sarina/build.rs`, made as `go build` makes Go's: `git
+  status --porcelain`, `git log -1 --format=%H:%ct`). **Output shape and JSON keys unchanged** (`version`, `commit`, `time`,
+  `modified`, `go`); one change: where Go printed `go1.27.4`, the text and the `go` key now say `rustc 1.x.y` (rustc's
+  version). The evals read only `commit` and `modified`. The recipes need no change (build.rs runs git itself; the
+  release tarball has no checkout, so both builds say "commit unknown"); `.gitignore` names `go/sarina`, `go/sarina-tone`
+  so sarina-git's Go builds in the tree do not mark the Rust build "with uncommitted changes".
+- The usage (no command, `help`, `-h`, `--help`, an unknown command): `cli::COMMANDS` holds Go's 52 summaries byte for
+  byte; text, stream and exit status as Go's. Proved: CLI differential group `usage_cases`, 62 cases, Go against Go and Go
+  against Rust with no difference; the whole CLI differential, 1,741 cases, no difference.
+- **No command reaches the Go build now.** Still handed over: a command whose arguments are not all UTF-8 (the Rust
+  commands take strings; decide before the Go build goes). Still building the Go binary outside sarina-rs:
+  `evals/install-dev.sh` and the nightly run (the evals measure the Go build). The Go code stays until the rollback week
+  is over (~2026-11-25); docs/RUST_PORT.md "Resume here" item 0 lists what goes with it.
+- **For Labyrinth OS / Yggdrasil / Heimdall:** nothing to change (no caller of `sarina version` in those repos).
+— Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-18 (5) — `limbo-decompile triage` scans with YARA-X's `yr`, not C YARA (R4 phase 3, the owner's decision 1)
 - `packaging/limbo/decompile/limbo-decompile`: the yara section runs `yr scan --disable-console-logs --disable-warnings
   --relaxed-re-syntax RULES SAMPLE` (C YARA's `yara -w` is gone from the image; `--relaxed-re-syntax` keeps regular
