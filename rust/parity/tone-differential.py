@@ -351,6 +351,8 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--show", action="store_true")
     a = ap.parse_args()
+    # each case runs in a folder of its own: a relative path to a program is read from here
+    a.go, a.rs = os.path.abspath(a.go), os.path.abspath(a.rs)
     now = int(time.time())
     all_cases = [c for c in cases(now) if a.only in c["name"]]
     bad = 0
