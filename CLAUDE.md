@@ -98,7 +98,8 @@ go/
   sysinfo/           read-only system_status tool
   reverse/           reverse-engineering tool (REA with Ghidra, sandboxed)
   quantum/ trachtenberg/    exact quantum-circuit simulator; Trachtenberg arithmetic, step by step
-  voice/ tone/       Piper text-to-speech without Python; how something was said (pace, pitch)
+  voice/ tone/       Piper text-to-speech without Python; how something was said (pace, pitch; installed
+                     as the Rust build's sarina-tone since 2026-11-18, the Go kept as the reference)
   testguard/         under SARINA_TEST=1 nothing writes outside the test's folders
   notes/ NOTES.md    design notes and status for the Go core
 python/sarina_helpers/   the Python ML and voice helper, kept for the rollback week (goes ~2026-11-25)
@@ -248,6 +249,28 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-11-18 (9) — `sarina-tone` in Rust: the last Go program installed; the Go one is no longer built
+- `go/cmd/sarina-tone` with `go/tone` (how a spoken question sounded: pace, pitch, loudness, pauses) is ported to
+  `rust/sarina/src/tone.rs` and the binary `sarina-tone` (`src/bin/sarina-tone.rs`), a second `[[bin]]` beside sarina-rs
+  (it reuses the crate's proved Go JSON, math, time zone, path and test-guard pieces; the recipes add `--bin
+  sarina-tone`). Same command line (Go's flag package, on bytes), output, exit status, errors and files:
+  `tone-baseline.json` and `mood-history.jsonl` keep their format byte for byte, so old files read as before.
+- **Proof** (written first, run Go against Go): `testdata/parity/tone.json` (`go/tone/tone_parity_test.go`), 931
+  comparisons (every float as its bits); `rust/parity/tone-differential.py`, the two programs on 207 cases (349 runs),
+  no difference (now a CI step); a mutation run, 19 of 24 caught (the 5 left change no answer or need root or a race);
+  fuzz targets `tone_wav` and `tone_files`. docs/RUST_PORT.md "sarina-tone".
+- **A Go bug, fixed in Go and Rust:** a baseline with means but no variances made every run panic (a write into a nil
+  map) and never repaired itself; the variances now start at zero
+  (`TestABaselineWithMeansButNoVariancesIsStillUpdated`).
+- **The Go source stays** as the proof's reference until the Go deletion (~2026-11-25) and goes with it; nothing builds
+  or installs it any more.
+- **For Labyrinth OS:** both sarina-git copies build `--bin sarina-rs --bin sarina-tone`, run `--test parity_tone` in
+  `check()` and install the Rust `/usr/bin/sarina-tone`; the Go `sarina-tone` build line is gone. Callers unchanged
+  (`labyrinth-sarina-ask`, `labyrinth-ask-sarina --pattern`, Settings' "Forget how I sound"). Sarina's own
+  `packaging/arch/PKGBUILD` installs it too (it never did).
+- **For Heimdall:** nothing to change.
+— Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-18 (8) — Nothing reaches the Go build: arguments that are not UTF-8 refused; the evals measure sarina-rs
 - **A command with an argument that is not UTF-8 is refused** (the parent session's decision), the last command line that

@@ -301,6 +301,7 @@ changed with the deletion).
 | `sysinfo/` (`mod.rs`, `crash.rs`, `gaming.rs`, `security.rs`), `route.rs`, `skills/recall.rs` (the prefetches as bytes), `tools/exec.rs` (`GroupKill::Inherit`), `gohttp.rs` (an IPv4-mapped address dialled as IPv4), `gojson.rs` (`write_f32`), `gotime.rs` (civil time, `Local`), `goos.rs` (`mkdir_all_mode`) | `sysinfo/` (every topic's commands with their line and column cuts, the boot, gaming and crashes summaries, `GameRunning`, Heimdall's audit and quarantine with the facts counted in code, `CrashDetail` with addr2line and the source line, `system_fix`'s table, the "status" and "security" prefetches), `route` (the cache file byte for byte Go's, scores, `pick`) | the CLI differential's system cases, against stand-in programs and a stand-in Heimdall | 102 cases, 510 comparisons |
 | `trachtenberg.rs`, `bin/sarina-rs.rs` (the auto decisions), `cli/chat.rs` (`per_prompt`) | `trachtenberg` (every rule, the two-finger method, the exactness check with a product of its own, `Grade`, `Report`), `cli.Main`'s `cryptoForPrompt` and `mathForPrompt` | the CLI differential's math cases | 47 cases, 235 comparisons |
 | `tz.rs` (from Limbo's) | Go's `time.Local`: initLocal ($TZ, /etc/localtime), LoadLocationFromTZData, `lookup` with the POSIX TZ footer; the prompt's "Today's date is" | `tz.json` (`go/internal/parity/tz_parity_test.go`) | 47 files, 1,080 lookups |
+| `tone.rs`, `bin/sarina-tone.rs` | `tone` (ReadWAV, Analyze, the baseline, the history, Pattern) and `cmd/sarina-tone` ("sarina-tone") | `tone.json`; `rust/parity/tone-differential.py` | 931 comparisons; 207 program cases |
 | `gotext/` | Go's `%q`, `%v` of a float64, `strings.ToLower`, `TrimSpace`, `Atoi`, `IsPrint` (Unicode 17 tables from Heimdall's generator) | through the above | |
 
 How each corpus is made (the Go side, `go/internal/parity` and each `*parity_test.go`):
@@ -1162,6 +1163,68 @@ branch (`python()`, `PYTHON_ENV`, `PATH_ENV`, the "importable" text), and rewrit
 `testdata/parity/helpers.json` and the CLI differential's stand-in interpreter cases). Only if the owner wants
 faster-whisper back would any Python stay, and then only for speech to text.
 
+## sarina-tone (`rust/sarina/src/tone.rs`, `src/bin/sarina-tone.rs`, 2026-11-18)
+
+The last Go program installed: `go/cmd/sarina-tone` with `go/tone` (about 620 lines), how a spoken question sounded
+(pace, pitch, loudness, pauses, brightness) against the voice's own usual, for the spoken-question path. It is now the
+Rust build's second binary, `sarina-tone`, installed as `/usr/bin/sarina-tone` by all three recipes; the Go one is no
+longer built or installed. Its source (`go/tone`, `go/cmd/sarina-tone`, `tone_test.go`) stays in the repository as the
+reference the proof runs against until the Go code is deleted (~2026-11-25), and goes with it.
+
+**Where, and why there:** a `[[bin]]` in `rust/sarina` beside `sarina-rs`, not a crate of its own like packaging/voice:
+everything it needs is already proved there (Go's JSON reading into a struct with its tolerance, `gojson`'s float and
+string writing, Go's amd64 `math.Log` for Log10 and Log2, Go's local time zone, `filepath`, `testguard`, Go's error
+texts), and the recipes only add `--bin sarina-tone` to the cargo line that builds sarina-rs (one build, one lock file,
+nothing copied). The binary is 0.6 MB; only what it uses is linked.
+
+**Callers** (grepped in Sarina, Labyrinth_OS and Yggdrasil): Labyrinth's `labyrinth-sarina-ask` (`packages/tools`
+`sarina_voice.rs`: `sarina-tone FILE.wav`, the hint read from stdout, unless Settings turned tone off), Sarina's
+`labyrinth-ask-sarina` (`packaging/voice` `ask.rs`: `sarina-tone --pattern` while the vault is searched), and the
+desktop integration's "Forget how I sound" (`sarina.integration.conf`: `/usr/bin/sarina-tone --forget`). The stand-ins
+in `packaging/voice/tests` and Labyrinth's `parity/cases_voice.py` only fake it. The two files keep their format byte
+for byte: `~/.local/state/labyrinth/tone-baseline.json` (`{"n":..,"mean":{..},"var":{..},"count":{..}}`, keys sorted,
+Go's floats) and `mood-history.jsonl` (`{"t":UNIX,"mood":"..."}` per line, the newest 600), both 0600 in 0700 folders,
+written through `.tmp` and a rename; old files read as Go read them.
+
+**Proof**, written first and run Go against Go before any Rust existed:
+- `testdata/parity/tone.json` (`go/tone/tone_parity_test.go`, `tests/parity_tone.rs`): 931 comparisons, every float as
+  its bits. ReadWAV on 33 good and broken files (chunk order, odd and oversized chunks, data sizes 0 and past the end,
+  other bit depths and channel counts); Analyze on 81 made-up voices read through ReadWAV (integer-only synthesis, so Go
+  and the test make the same samples: 300 Hz to 48 kHz, 1 to 3 channels, pitch from 47 to 533 Hz, noise, silence,
+  clipping, fragments); the baseline over 34 saved files (measurements exactly on the moods' thresholds, old ones
+  without counts, nulls, wrong types, capital and duplicate keys, N and counts at the int64 edge, negative variances,
+  values that overflow to infinity and make the save empty, odd keys) and up to 248 measurements each, Mood, every Z,
+  Update and the bytes Save writes; the history on 15 files (CRLF, bad lines, keys in other cases, odd moods, the 64 KiB
+  line limit of Go's bufio.Scanner on both sides, 605 entries, a byte order mark): what is read and the file after one
+  append; Pattern for 768 histories in 8 made-up zones (summer time starting at midnight, half-hour and 45-minute
+  offsets) at 16 times each, the 7- and 14-day edges, midnight and the evening hours exactly.
+- `rust/parity/tone-differential.py` (CI runs it): the Go and Rust programs side by side, 207 cases (349 runs), no
+  difference: Go's flag syntax and messages (unknown flags, bad booleans, `-h`, `--`, bytes that are not UTF-8, the
+  usage with odd $HOME values and program names), `--forget` (folders, links, errors, no $HOME), `--pattern` (40 made-up
+  histories in five real zones and odd files), every recording kind with and without learning, a voice learned over 14
+  questions and then heard rushed, tired, animated and usual, saved baselines of every odd kind, save errors (a folder
+  in the way, a file in the way, no write permission, stale `.tmp` files, test runs outside their folders), standard
+  output or error closed (SIGPIPE as Go dies of it). Compared: stdout, stderr, exit status and every file left (type,
+  mode, bytes; the new entry's time written as NOW).
+- Mutation run: 24 deliberate changes (limits off by one, a dropped CR, HTML escaping off, the rename check, the
+  midnight lookup, chunk padding, a flag's exit status, SIGPIPE, a threshold's `<` for `<=`, ...): 19 caught (three
+  after the cases were widened: thresholds hit exactly, syllables 7 to 9 frames apart, a folder two levels under a
+  file). The 5 left change no answer (Max's `>` for `>=` on equal values; `e0 <= 1e-9`; the CR before a newline, which
+  JSON reads as space anyway) or need root or a race to reach (Remove's choice between unlink's and rmdir's error; a
+  folder made between MkdirAll's look and its mkdir).
+- Properties (`tests/properties.rs`, the bodies of the fuzz targets `tone_wav` and `tone_files`): any bytes as a
+  recording, a baseline file or a history file: no panic; measurements finite; the history read back as written.
+
+**A Go bug, fixed in Go and Rust both:** a baseline file with means but no variances (`{"n":3,"mean":{...}}`, written by
+hand or another tool) made Update write into a nil map: sarina-tone panicked (exit 2, a goroutine trace) on every spoken
+question from then on and never repaired the file. Now the variances start at zero
+(`TestABaselineWithMeansButNoVariancesIsStillUpdated`, which panicked before the fix).
+
+**Not identical:** nothing found. Two limits are known and left: with no program name at all (argc 0) Go panics at start
+(its flag package reads `os.Args[0]`), Rust runs with an empty name; and the proof ran on x86_64, where Go's results are
+the reference. On aarch64 Go would fuse multiply-adds into FMA instructions and use its pure-Go `Log`, so the Go build
+could differ there in a last bit; the Rust build computes the same bits on both (no fusing, amd64's Log written out).
+
 ## Why Rust: measured
 
 The Go build (`go build -ldflags "-s -w"`, as the package builds it) against sarina-rs (`cargo build --release`), on my
@@ -1231,6 +1294,8 @@ $CAP cargo test -j4 --offline                 # every fixture, the properties, t
 $CAP cargo clippy -j4 --offline --all-targets -- -D warnings
 cd ../go && $CAP go test -p 4 ./... -run Parity               # the fixtures are current with the Go code
 $CAP env SARINA_PARITY_UPDATE=1 go test -p 4 ./... -run Parity  # after a deliberate change: rewrite them, review the diff
+cd .. && go -C go build -o /tmp/sarina-tone-go ./cmd/sarina-tone && (cd rust && cargo build --bin sarina-tone)
+$CAP python3 -I rust/parity/tone-differential.py --go /tmp/sarina-tone-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-tone"
 ```
 
 Never set `RUST_MIN_STACK` around cargo: rustc reads it too (a small value made it crash on 2026-11-11).
@@ -1604,7 +1669,9 @@ Next, in this order:
    the evals' `sarina`. What is left for after the rollback week (~2026-11-25; the Go code stays until then): delete
    `go/` (and the Go fixture writers' part of the proof: `go/internal/parity`, the CLI, service and GUI differentials
    compare against a Go build, so they go or keep a frozen Go reference, to decide then; CI's Go steps with them;
-   `go/cmd/sarina-tone` is Go too and installed as `/usr/bin/sarina-tone`), and the recipes stop building and installing
+   `go/tone` and `go/cmd/sarina-tone` go too: since 2026-11-18 they are only the reference of "sarina-tone", whose Rust
+   build is `/usr/bin/sarina-tone`, and with them `tone_parity_test.go`, `testdata/parity/tone.json`'s writer and the CI
+   step of `rust/parity/tone-differential.py`), and the recipes stop building and installing
    `/usr/lib/sarina/sarina` (packaging/arch/PKGBUILD and both of Labyrinth's sarina-git copies, whose `check()` comment on
    `tests/sarina_rs.rs` still names the hand-over; and Heimdall's file-integrity list in Labyrinth's `heimdall-config.json`).
 

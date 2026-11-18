@@ -533,3 +533,70 @@ fn session_files_mutated() {
     }
     assert!(n > 100, "{n}");
 }
+
+/// A WAV file around samples (sarina-tone's recordings).
+fn tone_wav_file(rate: u32, channels: u16, samples: &[i16]) -> Vec<u8> {
+    let data: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+    let mut b = b"RIFF\0\0\0\0WAVEfmt \x10\0\0\0\x01\0".to_vec();
+    b.extend_from_slice(&channels.to_le_bytes());
+    b.extend_from_slice(&rate.to_le_bytes());
+    b.extend_from_slice(&(rate * 2 * u32::from(channels)).to_le_bytes());
+    b.extend_from_slice(&(2 * channels).to_le_bytes());
+    b.extend_from_slice(b"\x10\0data");
+    b.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    b.extend_from_slice(&data);
+    b
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 400, ..ProptestConfig::default() })]
+
+    #[test]
+    fn tone_wav_any_bytes(data in prop::collection::vec(any::<u8>(), 0..200)) {
+        fuzzing::tone_wav(&data);
+        let mut head = tone_wav_file(16000, 1, &[]);
+        head.extend_from_slice(&data);
+        fuzzing::tone_wav(&head);
+    }
+
+    /// Speech-shaped recordings at low rates (so the analysis is quick): syllables of a sawtooth over noise, any pitch, pace
+    /// and loudness, cut anywhere.
+    #[test]
+    fn tone_wav_shaped(rate in 600u32..4000, channels in 1u16..3, per in 2i64..80, syl in 1usize..400, gap in 0usize..400,
+                       amp in 0i64..40000, noise in 0i64..3000, secs in 0usize..4, cut in any::<prop::sample::Index>(), seed in any::<u64>()) {
+        let n = rate as usize * secs * usize::from(channels);
+        let mut st = seed | 1;
+        let mut x = Vec::with_capacity(n);
+        for i in 0..n {
+            st ^= st << 13;
+            st ^= st >> 7;
+            st ^= st << 17;
+            let on = (i / usize::from(channels)) % (syl + gap) < syl;
+            let saw = (i as i64 % per) * 2 * amp / per - amp;
+            let v = if on { saw } else { 0 } + (st % (2 * noise as u64 + 1)) as i64 - noise;
+            x.push(v.clamp(-32768, 32767) as i16);
+        }
+        let f = tone_wav_file(rate, channels, &x);
+        fuzzing::tone_wav(&f);
+        fuzzing::tone_wav(&f[..cut.index(f.len() + 1)]);
+    }
+
+    #[test]
+    fn tone_files_any_bytes(data in prop::collection::vec(any::<u8>(), 0..200)) {
+        fuzzing::tone_files(&data);
+    }
+
+    /// Baseline- and history-shaped files: the keys, values of every JSON kind, lines that are entries or almost.
+    #[test]
+    fn tone_files_shaped(vals in prop::collection::vec(any_value(), 0..8), keys in prop::collection::vec("(n|N|mean|var|count|t|mood|loud|f0|range|rate|pause|bright|x)", 0..8)) {
+        let json = |v: &Any| sarina::gojson::any_json(v, false).unwrap_or_else(|_| "null".into());
+        let members: Vec<String> = keys.iter().zip(vals.iter()).map(|(k, v)| format!("\"{k}\":{}", json(v))).collect();
+        let doc = format!("{{{}}}", members.join(","));
+        fuzzing::tone_files(doc.as_bytes());
+        let inner: Vec<String> = keys.iter().zip(vals.iter()).map(|(k, v)| format!("\"{k}\":{}", json(v))).collect();
+        let base = format!(r#"{{"n":30,"mean":{{{}}},"var":{{{}}},"count":{{"loud":12}}}}"#, inner.join(","), inner.join(","));
+        fuzzing::tone_files(base.as_bytes());
+        let lines: Vec<String> = vals.iter().enumerate().map(|(i, v)| format!(r#"{{"t":{},"mood":{}}}"#, i as i64 - 2, json(v))).collect();
+        fuzzing::tone_files(lines.join("\n").as_bytes());
+    }
+}

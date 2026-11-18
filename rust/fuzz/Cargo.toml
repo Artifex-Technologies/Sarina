@@ -149,3 +149,17 @@ path = "fuzz_targets/glob_pattern.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "tone_wav"
+path = "fuzz_targets/tone_wav.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tone_files"
+path = "fuzz_targets/tone_files.rs"
+test = false
+doc = false
+bench = false

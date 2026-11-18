@@ -354,3 +354,36 @@ pub fn glob_pattern(data: &[u8]) {
         assert!(!name.contains(&b'/'), "a pattern without a slash matched a name with one");
     }
 }
+
+/// Any bytes as a recording (sarina-tone): ReadWAV's reading does not panic, and when the samples measure, every measure
+/// is finite and the voiced time is at least the 1.2 s the measuring asks for.
+pub fn tone_wav(data: &[u8]) {
+    if let Ok((x, rate)) = crate::tone::parse_wav(data) {
+        assert!(x.iter().all(|v| (-1.0..1.0).contains(v)), "a sample out of range");
+        if let Some(f) = crate::tone::analyze(&x, rate) {
+            let all = [f.loud_db, f.f0_median, f.f0_range_st, f.rate, f.pause_ratio, f.voiced_sec, f.bright];
+            assert!(all.iter().all(|v| v.is_finite()), "{f:?}");
+            assert!(f.voiced_sec >= 1.2 && (75.0..=rate as f64).contains(&f.f0_median), "{f:?}");
+            assert!(f.json().is_ok());
+        }
+    }
+}
+
+/// Any bytes as sarina-tone's files: the baseline reads, judges, learns and writes without a panic (its JSON reads back
+/// as the same numbers when it can be written); the history keeps only entries with a time and a mood, and what it writes
+/// reads back the same.
+pub fn tone_files(data: &[u8]) {
+    use crate::tone::{history_text, parse_baseline, parse_history, Features};
+    let mut b = parse_baseline(data);
+    let f = Features { loud_db: -25.0, f0_median: 130.0, f0_range_st: 3.0, rate: 4.8, pause_ratio: 0.25, voiced_sec: 2.4, bright: 680.0 };
+    let _ = b.mood(&f);
+    let _ = b.z(&f);
+    b.update(&f);
+    if let Ok(text) = b.json() {
+        let again = parse_baseline(text.as_bytes());
+        assert_eq!((again.n, &again.mean, &again.var), (b.n, &b.mean, &b.var));
+    }
+    let h = parse_history(data);
+    assert!(h.iter().all(|e| e.t > 0 && !e.mood.is_empty()));
+    assert_eq!(parse_history(history_text(&h).as_bytes()), h);
+}

@@ -10,6 +10,8 @@
 # build (since 2026-11-18; a command with an argument that is not UTF-8 is refused). The Go
 # build (go/cmd/sarina) is still built and installed as /usr/lib/sarina/sarina, only as the
 # rollback copy until the Go code is deleted (~2026-11-25); nothing runs it.
+# sarina-tone (how a spoken question sounded: pace, pitch; the voice runs it) is the Rust
+# build's second program, /usr/bin/sarina-tone (docs/RUST_PORT.md "sarina-tone").
 # The optional ML/voice helper is sarina-helpers (Rust, packaging/helpers) at
 # /usr/lib/sarina/sarina-helpers, which the core runs when it is there; the Python package
 # (python/sarina_helpers) it replaces stays installed for the rollback week (SARINA_HELPERS=python),
@@ -47,7 +49,7 @@ build() {
   go build -ldflags "-s -w" -o sarina ./cmd/sarina
 
   cd ../rust
-  cargo build --release --locked --bin sarina-rs --target-dir "$srcdir/target"
+  cargo build --release --locked --bin sarina-rs --bin sarina-tone --target-dir "$srcdir/target"
 
   cd ../packaging/helpers
   cargo build --release --locked --target-dir "$srcdir/target"
@@ -61,6 +63,7 @@ package() {
   cd "Sarina-$pkgver"
 
   install -Dm755 "$srcdir/target/release/sarina-rs" "$pkgdir/usr/bin/sarina"
+  install -Dm755 "$srcdir/target/release/sarina-tone" "$pkgdir/usr/bin/sarina-tone"
   install -Dm755 go/sarina "$pkgdir/usr/lib/sarina/sarina"
   install -Dm755 "$srcdir/target/release/sarina-helpers" "$pkgdir/usr/lib/sarina/sarina-helpers"
   ln -s sarina "$pkgdir/usr/bin/sarina-gui"

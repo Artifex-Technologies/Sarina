@@ -60,6 +60,7 @@ pub mod stego;
 pub mod sysinfo;
 pub mod testguard;
 pub mod tiers;
+pub mod tone;
 pub mod tools;
 pub mod trachtenberg;
 pub mod trust;

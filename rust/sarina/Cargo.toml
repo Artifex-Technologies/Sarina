@@ -16,6 +16,11 @@ path = "src/lib.rs"
 name = "sarina-rs"
 path = "src/bin/sarina-rs.rs"
 
+# go/cmd/sarina-tone in Rust (docs/RUST_PORT.md "sarina-tone"): installed as /usr/bin/sarina-tone
+[[bin]]
+name = "sarina-tone"
+path = "src/bin/sarina-tone.rs"
+
 # Exact versions on purpose (the lock file pins the rest).
 [dependencies]
 # Go's regexp: \b \w \d \s are written out as Go's ASCII classes where a pattern uses them, so Unicode's Perl classes stay out;
