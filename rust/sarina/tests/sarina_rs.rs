@@ -78,11 +78,11 @@ fn sarina_rs_starts_as_go_does() {
     }
 
     // the hand-over: bytes that are not UTF-8, the folder, the environment, the exit status
-    let out = run("sarina", &[b"desktop-audit", b"caf\xe9", b"--allow-write"], false);
-    let want = format!("arg=desktop-audit\narg=caf\u{FFFD}\narg=--allow-write\npwd={}\nmark=kept\nsigpipe_ignored=0\n", tmp.display());
+    let out = run("sarina", &[b"version", b"caf\xe9", b"--allow-write"], false);
+    let want = format!("arg=version\narg=caf\u{FFFD}\narg=--allow-write\npwd={}\nmark=kept\nsigpipe_ignored=0\n", tmp.display());
     check.eq("hand-over", &json!(String::from_utf8_lossy(&out.stdout)), &json!(want));
     let mut cmd = Command::new(tmp.join("sarina"));
-    cmd.arg("desktop-audit").env("SARINA_GO_BINARY", &go).env("SARINA_CONTAINED_PATH", tmp.join("none")).env("EXIT_WITH", "7");
+    cmd.arg("version").env("SARINA_GO_BINARY", &go).env("SARINA_CONTAINED_PATH", tmp.join("none")).env("EXIT_WITH", "7");
     check.eq("exit status", &json!(cmd.output().unwrap().status.code()), &json!(7));
     // a caller that ignores SIGPIPE (systemd's default for services) hands that on, as it would to the Go build itself
     let out = Command::new("/bin/bash")
@@ -95,14 +95,14 @@ fn sarina_rs_starts_as_go_does() {
     check.eq("sigpipe ignored", &json!(String::from_utf8_lossy(&out.stdout).contains("sigpipe_ignored=1\n")), &json!(true));
     // no Go build: 127 and what is missing; a relative SARINA_GO_BINARY is not taken
     let mut cmd = Command::new(tmp.join("sarina"));
-    cmd.arg("desktop-audit").env("SARINA_GO_BINARY", tmp.join("absent")).env("SARINA_CONTAINED_PATH", tmp.join("none"));
+    cmd.arg("version").env("SARINA_GO_BINARY", tmp.join("absent")).env("SARINA_CONTAINED_PATH", tmp.join("none"));
     let out = cmd.output().unwrap();
     check.eq(
         "missing go build",
         &json!([out.status.code(), String::from_utf8_lossy(&out.stderr)]),
         &json!([
             127,
-            format!("sarina: desktop-audit is not in the Rust build yet, and the Go build ({}) is missing\n", tmp.join("absent").display())
+            format!("sarina: version is not in the Rust build yet, and the Go build ({}) is missing\n", tmp.join("absent").display())
         ]),
     );
     // a ported command runs here (the stand-in is never started); one with an argument that is not UTF-8 goes to Go
@@ -125,7 +125,7 @@ fn sarina_rs_starts_as_go_does() {
     check.eq("ported, no Go", &ported(&[b"memory-show"], true), &json!([0, "No curated memory is stored.\n", ""]));
     let away = ported(&[b"memory-show", b"\xff"], false);
     check.eq("not UTF-8 handed over", &json!(away[1].as_str().unwrap().starts_with("arg=memory-show\n")), &json!(true));
-    for c in ["desktop-audit", "fleet-status", "version", "help", "--help", "-h", ""] {
+    for c in ["mcp", "agents", "version", "help", "--help", "-h", ""] {
         let args: Vec<&[u8]> = if c.is_empty() { vec![] } else { vec![c.as_bytes()] };
         check.eq(
             format!("{c:?} with SARINA_RS_NO_GO"),

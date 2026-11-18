@@ -297,7 +297,7 @@ fn is_leap(y: i64) -> bool {
     y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
 }
 
-fn days_in_month(y: i64, m: u32) -> u32 {
+pub(crate) fn days_in_month(y: i64, m: u32) -> u32 {
     match m {
         2 if is_leap(y) => 29,
         2 => 28,
@@ -307,7 +307,7 @@ fn days_in_month(y: i64, m: u32) -> u32 {
 }
 
 /// Days since 1970-01-01 of a civil date (Howard Hinnant's algorithm).
-fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+pub(crate) fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = y.div_euclid(400);
     let yoe = y - era * 400;

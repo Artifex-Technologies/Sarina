@@ -1438,6 +1438,280 @@ def helper_cases():
     return cs
 
 
+def usage_session(sid=None, model="local-model", turns=3, usage=None, **more):
+    """A made-up session file with token counts, as fleet-usage reads it."""
+    o = {"session_id": sid, "model_config": {"model": model}, "turns": turns,
+         "usage": usage if usage is not None else {"input_tokens": 1200, "output_tokens": 300, "cache_read_input_tokens": 50,
+                                                   "cache_creation_input_tokens": 7}}
+    if sid is None:
+        del o["session_id"]
+    o.update(more)
+    return json.dumps(o)
+
+
+def agent_record(aid, **more):
+    """A made-up record of another agent in Omarchy's usage folder."""
+    o = {"schemaVersion": 1, "id": aid, "name": aid.title(), "updatedAt": "2026-11-18T10:00:00Z", "ready": True,
+         "todayTotalTokens": 12000, "totalSessions": 4, "recentDays": [{"date": "2026-11-17", "messageCount": 5000},
+                                                                       {"date": "2026-11-18", "messageCount": 12000}],
+         "limits": [{"label": "5h", "percent": 42.5, "resetsAt": "16:00"}, {"label": "week", "percent": 10, "resetsAt": "Mon"}]}
+    o.update(more)
+    return json.dumps(o)
+
+
+AGENT_STANDIN = r"""#!/bin/sh
+# a stand-in agent: logs how it was started and where, says whether it was given a terminal, exits as told
+printf '%s|%s\n' "${0##*/} $*" "$PWD" >> {W}/agents.log
+if [ -t 0 ]; then echo "agent: standard input is a terminal"; fi
+case "$*" in *exit5*) exit 5;; *die*) kill -9 $$;; esac
+exit 0
+"""
+
+
+def fleet_cases():
+    """fleet-usage, fleet-status (text and --json: Yggdrasil's contract) and fleet-launch (CLI-only: it is never a model
+    tool). Every case runs with an empty tmpfs over /var/lib (the service's sessions at /var/lib/sarina/sessions are a
+    default folder: never the machine's own), stand-in agents on the case's PATH, made-up records in the case's folders.
+    The record's updatedAt, the audit log's time and Sarina's lastActive are the clock's and are normalised."""
+    import datetime
+    cs = []
+    utc = datetime.timezone.utc
+    now = datetime.datetime.now(utc)
+    recent = (now - datetime.timedelta(minutes=10))
+    norm = [(r'"time":"\d{4}-\d{2}-\d{2}T[0-9:.]+\+00:00"', '"time":"NOW"'),
+            (r'"lastActive":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"', '"lastActive":"T"'),
+            (r"\.sarina\.\d+", ".sarina.N")]
+
+    def add(name, args, files=None, env=None, var_lib=None, **k):
+        e = {"SARINA_SESSION_DIRS": "{W}/sessions"}
+        e.update(env or {})
+        e = {k2: v for k2, v in e.items() if v is not None}
+        # fleet-usage's record says when it was made (the clock's, in the local zone)
+        n = norm + ([(r'"updatedAt":"\d{4}-\d{2}-\d{2}T[0-9:.]+[+-]\d{2}:\d{2}"', '"updatedAt":"NOW"')] if args[0] == "fleet-usage" else [])
+        c = C(name, args, files=files, env=e, norm=n)
+        c["tmpfs"] = {"/var/lib": var_lib or {}}
+        c.update(k)
+        cs.append(c)
+    # ---- fleet-usage
+    sess = state(**{
+        "sessions/a.json": usage_session("a"),
+        "sessions/b.json": usage_session("b", model="other-model", turns=1, usage={"input_tokens": 10, "output_tokens": 5}),
+        "sessions/c.json": usage_session(None, usage={"input_tokens": 1.9e3, "output_tokens": -5, "cache_read_input_tokens": "9",
+                                                      "cache_creation_input_tokens": 1e300}),
+        "sessions/d.json": usage_session("a", turns=9),
+        "sessions/e.json": usage_session("old", turns=2),
+        "sessions/f.json": usage_session("week", model="local-model"),
+        "sessions/no-usage.json": json.dumps({"session_id": "n", "turns": 3}),
+        "sessions/broken.json": "{",
+        "sessions/array.json": "[1, 2]",
+        "sessions/notes.txt": usage_session("txt"),
+        "sessions/folder.json/": "",
+        "sessions/link.json@": "{W}/sessions/b.json",
+        "sessions/dangling.json@": "{W}/nowhere.json",
+    })
+    times = {"sessions/e.json": 40 * 86400, "sessions/f.json": 3 * 86400, "sessions/d.json": 5}
+    add("fleet-usage", ["fleet-usage"], files=sess, mtimes=times)
+    add("fleet-usage time zone", ["fleet-usage"], files=sess, mtimes=times, env={"TZ": "Pacific/Kiritimati"})
+    add("fleet-usage nothing", ["fleet-usage"])
+    add("fleet-usage session folder missing", ["fleet-usage"], env={"SARINA_SESSION_DIRS": "{W}/none"})
+    add("fleet-usage --session-dir twice", ["fleet-usage", "--session-dir", "{W}/sessions", "--session-dir={W}/more"],
+        files=dict(sess, **{"more/a.json": usage_session("a", turns=1), "more/z.json": usage_session("z", model="ünïcode-módel 🙂")}),
+        mtimes={"more/a.json": 1000, "sessions/a.json": 10})
+    add("fleet-usage the same session twice at the same time", ["fleet-usage"],
+        env={"SARINA_SESSION_DIRS": "{W}/sessions:{W}/more"},
+        files=state(**{"sessions/a.json": usage_session("a", turns=1), "more/a.json": usage_session("a", turns=5)}),
+        mtimes={"sessions/a.json": 100, "more/a.json": 100})
+    add("fleet-usage SARINA_SESSION_DIRS list", ["fleet-usage"], files=dict(sess, **{"home/s2/x.json": usage_session("x")}),
+        env={"SARINA_SESSION_DIRS": "{W}/sessions::~/s2:~"})
+    add("fleet-usage the defaults", ["fleet-usage"], env={"SARINA_SESSION_DIRS": None},
+        files=state(**{SESSIONS + "u1.json": usage_session("u1"), "home/.port_sessions/agent/u2.json": usage_session("u2", model="m2")}),
+        var_lib={"sarina/sessions/svc.json": usage_session("svc", model="service-model")})
+    add("fleet-usage the defaults, home as the workspace", ["fleet-usage"], env={"SARINA_SESSION_DIRS": None}, cwd="home",
+        files=state(**{"home/.port_sessions/agent/u2.json": usage_session("u2")}))
+    odd = state(**{
+        "sessions/m1.json": usage_session("m1", model=42),
+        "sessions/m2.json": usage_session("m2", model={"b": [1, None, "x"], "a": True}),
+        "sessions/m3.json": usage_session("m3", model=[1.5, 1e21, 1e-7]),
+        "sessions/m4.json": usage_session(7, model=False),
+        "sessions/m5.json": usage_session("", model=""),
+        "sessions/m6.json": usage_session(["s"], model=None),
+        "sessions/m7.json": usage_session("m7", turns="many", usage={"input_tokens": True}),
+        "sessions/m8.json": usage_session("m8", turns=9.3e18, usage={"input_tokens": 9.2e18, "output_tokens": 9.2e18}),
+        "sessions/m9.json": usage_session("m9", turns=-4.5, usage={"input_tokens": 0.9, "output_tokens": -1e300}),
+        "sessions/m10.json": usage_session("<b>&</b>   café 😀"),
+        "sessions/m11.json": json.dumps({"session_id": "m11", "model_config": "flat", "usage": {}}),
+        "sessions/m12.json": json.dumps({"session_id": "m12", "usage": []}),
+        "sessions/m13.json": usage_session("m13") + " trailing",
+    })
+    add("fleet-usage odd values", ["fleet-usage"], files=odd)
+    add("fleet-usage overflowing sums", ["fleet-usage"], files=state(**{
+        f"sessions/o{i}.json": usage_session(f"o{i}", turns=9.2e18, usage={"input_tokens": 9.2e18, "output_tokens": 9.2e18})
+        for i in range(3)}))
+    add("fleet-usage planted pipe", ["fleet-usage"], files=dict(sess, **{"sessions/0pipe.json|": ""}))
+    add("fleet-usage a link to a device", ["fleet-usage"], files=dict(sess, **{"sessions/0dev.json@": "/dev/zero"}))
+    add("fleet-usage an unreadable session", ["fleet-usage"], files=dict(sess, **{"sessions/0locked.json": usage_session("locked")}),
+        env={"__chmod": "sessions/0locked.json=000"})
+    add("fleet-usage --write", ["fleet-usage", "--write"], files=sess)
+    add("fleet-usage --write XDG_STATE_HOME", ["fleet-usage", "--write"], files=sess, env={"XDG_STATE_HOME": "{W}/state"})
+    add("fleet-usage --write --usage-dir", ["fleet-usage", "--write", "--usage-dir", "{W}/panel/usage", "--force", "--limits-only"],
+        files=sess)
+    add("fleet-usage --write over an old record", ["fleet-usage", "--write", "--usage-dir", "{W}/panel"],
+        files=dict(sess, **{"panel/sarina.json": "old", "panel/codex.json": agent_record("codex")}))
+    add("fleet-usage --write a link at the record", ["fleet-usage", "--write", "--usage-dir", "{W}/panel"],
+        files=dict(sess, **{"panel/sarina.json@": "{W}/elsewhere", "elsewhere": "keep"}))
+    add("fleet-usage --write a pipe at the record", ["fleet-usage", "--write", "--usage-dir", "{W}/panel"],
+        files=dict(sess, **{"panel/sarina.json|": ""}))
+    add("fleet-usage --write a folder at the record", ["fleet-usage", "--write", "--usage-dir", "{W}/panel"],
+        files=dict(sess, **{"panel/sarina.json/x": "x"}))
+    add("fleet-usage --write the folder a file", ["fleet-usage", "--write", "--usage-dir", "{W}/panel"],
+        files=dict(sess, **{"panel": "a file"}))
+    add("fleet-usage --write the folder read-only", ["fleet-usage", "--write", "--usage-dir", "{W}/panel"],
+        files=dict(sess, **{"panel/": ""}), env={"__chmod": "panel=555"})
+    add("fleet-usage --write relative --usage-dir", ["fleet-usage", "--write", "--usage-dir", "rel/usage"], files=sess)
+    for bad in (["-h"], ["--help"], ["--nope"], ["--write=maybe"], ["--session-dir"], ["extra", "words"], ["--usage-dir"]):
+        add(f"fleet-usage {' '.join(bad)}", ["fleet-usage"] + bad, files=sess)
+    # ---- fleet-status
+    ts = lambda d: d.strftime("%Y-%m-%dT%H:%M:%S")
+    usage = "{W}/home/.local/state/omarchy/agents/usage/"
+    rel = "home/.local/state/omarchy/agents/usage/"
+    recs = {
+        rel + "codex.json": agent_record("codex", updatedAt=ts(recent) + ".123456+00:00"),
+        rel + "claude.json": agent_record("claude", updatedAt=ts(recent) + "Z", todayTotalTokens=1250,
+                                          limits=[{"label": "5h", "percent": 80}, {"label": "week", "percent": 2.5e-7}]),
+        rel + "gemini.json": agent_record("gemini", updatedAt="2026-01-01T00:00:00Z"),
+        rel + "pi.json": agent_record("pi", updatedAt=ts(recent) + "Z", limits=[], usageStatusText="prepaid \x1b[31mcredits\x1b[0m"),
+        rel + "grok.json": agent_record("grok", updatedAt=ts(recent) + "Z", ready=False),
+        rel + "sarina.json": agent_record("sarina", updatedAt=ts(recent) + "Z", limits=[{"label": "x", "percent": 0}]),
+        rel + "opencode.json": agent_record("opencode", name=None, updatedAt=None, limits=None, recentDays=None),
+    }
+    add("fleet-status", ["fleet-status"], files=state(**recs))
+    add("fleet-status --suggest", ["fleet-status", "--suggest"], files=state(**recs))
+    add("fleet-status --json", ["fleet-status", "--json"], files=state(**recs))
+    add("fleet-status --json --suggest", ["fleet-status", "--json", "--suggest"], files=state(**recs))
+    add("fleet-status nothing", ["fleet-status"])
+    add("fleet-status nothing --suggest", ["fleet-status", "--suggest"])
+    add("fleet-status nothing --json --suggest", ["fleet-status", "--json", "--suggest"])
+    add("fleet-status --usage-dir", ["fleet-status", "--usage-dir={W}/other"],
+        files=state(**{"other/codex.json": agent_record("codex", updatedAt=ts(recent) + "Z")}))
+    add("fleet-status XDG_STATE_HOME", ["fleet-status", "--suggest"], env={"XDG_STATE_HOME": "{W}/xdg"},
+        files=state(**{"xdg/omarchy/agents/usage/codex.json": agent_record("codex", updatedAt=ts(recent) + "Z")}))
+    add("fleet-status the folder a file", ["fleet-status"], files=state(**{"home/.local/state/omarchy/agents/usage": "x"}))
+    # every time layout Go reads, and what it refuses
+    layouts = [ts(recent) + "Z", ts(recent) + ".5+00:00", ts(recent) + "+0000", ts(recent) + ".123Z",
+               ts(recent).replace("T", " ") + "+00:00", ts(recent).replace("T", " ") + "Z", ts(recent).replace("T", " ") + "+0000",
+               ts(recent).replace("T", " ") + ".25-0130", ts(recent), ts(recent).replace("T", " "), ts(recent).replace("T", "   "),
+               recent.strftime("%Y-%m-%d"), (now + datetime.timedelta(days=400)).strftime("%Y-%m-%d"),
+               ts(recent) + ",5Z", ts(recent) + ".1234567890123Z", ts(recent) + "Z junk", "2026-02-29T00:00:00Z",
+               "2028-02-29T10:00:00", "2026-13-01T00:00:00Z", "2026-11-18T24:00:00Z", "2026-11-18T9:00:00Z", "2026-11-18T10:60:00Z",
+               "26-11-18", "", "yesterday", "9999-12-31T23:59:59Z", "0001-01-01T00:00:00Z", "2026-11-18T10:00:00+25:00",
+               "2026-11-18T10:00:00+05:61", "2026-11-18T10:00:00x05:00", ts(recent) + "+05", ts(recent).replace("T", " ") + "+05:30",
+               ts(now + datetime.timedelta(hours=3)) + "+05:00"]
+    lrecs = {rel + f"a{i:02d}.json": agent_record(f"a{i:02d}", updatedAt=v) for i, v in enumerate(layouts)}
+    lrecs[rel + "num.json"] = agent_record("num", updatedAt=1700000000)
+    add("fleet-status time layouts", ["fleet-status", "--json"], files=state(**lrecs))
+    hostile = {
+        rel + "a.json": agent_record("Bad ID"),
+        rel + "b.json": agent_record("-dash"),
+        rel + "c.json": agent_record("x" * 33),
+        rel + "d.json": agent_record("y" * 32, name="N‮ame​ with\x07 controls⁦ and a very long name that goes on and on past eighty characters ünïcödé"),
+        rel + "e.json": json.dumps({"id": 5}),
+        rel + "f.json": "[]",
+        rel + "g.json": "{",
+        rel + "h.json": agent_record("h", limits=[{"label": "", "percent": True}, {"percent": "50"}, {"label": "neg", "percent": -5},
+                                                   {"label": "big", "percent": 1e300}, "not a limit", {"label": "w", "percent": 99.5,
+                                                                                                         "resetsAt": 7}]
+                                     + [{"label": f"l{i}", "percent": i} for i in range(20)]),
+        rel + "i.json": agent_record("i", todayTotalTokens=1e300, totalSessions=-3, recentDays=[{"messageCount": 9.2e18}, {"messageCount": 9.2e18},
+                                                                                               "x", {"messageCount": "5"}]),
+        rel + "j.json": agent_record("j", todayTotalTokens=999, recentDays=[{"messageCount": 999999}, {"messageCount": 1}],
+                                     totalSessions=2.9),
+        rel + "k.json": agent_record("k", ready="yes", name=12),
+        rel + "dup.json": agent_record("h", name="Second H"),
+        rel + "notes.txt": agent_record("txt"),
+        rel + "folder.json/": "",
+        rel + "big.json": agent_record("big", pad="x" * (1 << 20)),
+        rel + "trail.json": agent_record("trail") + " x",
+    }
+    add("fleet-status hostile records", ["fleet-status", "--suggest"], files=state(**hostile))
+    add("fleet-status hostile records --json", ["fleet-status", "--json", "--suggest"], files=state(**hostile))
+    tie = {rel + "p.json": agent_record("p", updatedAt=ts(recent) + "Z", todayTotalTokens=500),
+           rel + "q.json": agent_record("q", updatedAt=ts(recent) + "Z", todayTotalTokens=100),
+           rel + "r.json": agent_record("r", updatedAt=ts(recent) + "Z", todayTotalTokens=100)}
+    add("fleet-status --suggest ties", ["fleet-status", "--suggest"], files=state(**tie))
+    add("fleet-status --suggest over 100", ["fleet-status", "--suggest"], files=state(**{
+        rel + "p.json": agent_record("p", updatedAt=ts(recent) + "Z", limits=[{"label": "a", "percent": 150}])}))
+    add("fleet-status planted pipe", ["fleet-status"], files=state(**dict(recs, **{rel + "0pipe.json|": ""})))
+    add("fleet-status a link to a device", ["fleet-status"], files=state(**dict(recs, **{rel + "0dev.json@": "/dev/zero"})))
+    add("fleet-status a link to a record", ["fleet-status"], files=state(**{rel + "0l.json@": "{W}/r.json",
+                                                                          "r.json": agent_record("linked")}))
+    add("fleet-status an unreadable record", ["fleet-status"], files=state(**dict(recs, **{rel + "0l.json": agent_record("locked")})),
+        env={"__chmod": rel + "0l.json=000"})
+    # --json's "self": the session folders' times and the service in the process list
+    add("fleet-status --json self, the defaults", ["fleet-status", "--json"], env={"SARINA_SESSION_DIRS": None},
+        files=state(**recs), var_lib={"sarina/sessions/x.json": "{}"})
+    add("fleet-status --json self, no folders", ["fleet-status", "--json"], env={"SARINA_SESSION_DIRS": "{W}/none:{W}/none2"})
+    add("fleet-status --json self, a file for a folder", ["fleet-status", "--json"], env={"SARINA_SESSION_DIRS": "{W}/f"},
+        files=state(f="x"))
+    add("fleet-status --json self, the service running", ["fleet-status", "--json"], files=state(**recs),
+        spawn=[("/usr/bin/sleep", ["/usr/bin/sarina-service", "60"])])
+    for bad in (["-h"], ["--nope"], ["--json=2"], ["extra"], ["--usage-dir"]):
+        add(f"fleet-status {' '.join(bad)}", ["fleet-status"] + bad, files=state(**recs))
+    # ---- fleet-launch: stand-in agents only (the case's PATH is its own folder)
+    agents = state(**{f"bin/{n}*": AGENT_STANDIN for n in ["claude", "codex", "opencode", "gemini", "copilot", "hermes", "pi",
+                                                            "cursor-agent", "grok", "muse", "omp"]}, **{"proj/": ""})
+    st = {"XDG_STATE_HOME": "{W}/state"}
+    for agent in ["claude", "codex", "opencode", "gemini", "copilot", "hermes", "pi", "cursor-agent", "grok", "muse", "omp"]:
+        add(f"fleet-launch {agent} --yes", ["fleet-launch", agent, "fix the build", "--yes", "--cwd", "{W}/proj"], files=agents, env=st)
+    add("fleet-launch no prompt", ["fleet-launch", "--yes", "claude"], files=agents, env=st)
+    add("fleet-launch not a terminal", ["fleet-launch", "claude", "x"], files=agents, env=st)
+    for ans, label in [(b"y\n", "y"), (b"  YES \n", "yes"), (b"n\n", "n"), (b"\n", "nothing"), (b"\x04", "end of input"),
+                       (b"yep\n", "yep")]:
+        add(f"fleet-launch at a terminal, answer {label}", ["fleet-launch", "codex", "fix it"], files=agents, env=st,
+            stdin=ans, tty=True)
+    add("fleet-launch at a terminal, the agent gets it", ["fleet-launch", "--yes", "codex", "x"], files=agents, env=st,
+        stdin=b"\x04", tty=True)
+    add("fleet-launch agent exits 5", ["fleet-launch", "--yes", "claude", "exit5"], files=agents, env=st)
+    add("fleet-launch agent killed", ["fleet-launch", "--yes", "claude", "die"], files=agents, env=st)
+    add("fleet-launch agent not on PATH", ["fleet-launch", "--yes", "codex", "x"], files=state(), env=st)
+    add("fleet-launch agent not on PATH, asked", ["fleet-launch", "codex", "x"], files=state(), env=st, stdin=b"y\n", tty=True)
+    add("fleet-launch agent not executable", ["fleet-launch", "--yes", "claude", "x"], files=state(**{"bin/claude": "#!/bin/sh\n"}),
+        env=st)
+    add("fleet-launch unsupported", ["fleet-launch", "crush", "x"], files=agents, env=st)
+    add("fleet-launch unsupported openclaw", ["fleet-launch", "--yes", "openclaw"], files=agents, env=st)
+    add("fleet-launch unknown", ["fleet-launch", "evil-agent", "x"], files=agents, env=st)
+    add("fleet-launch no agent", ["fleet-launch"], files=agents, env=st)
+    add("fleet-launch three words", ["fleet-launch", "claude", "a", "b"], files=agents, env=st)
+    add("fleet-launch -h", ["fleet-launch", "-h"], files=agents, env=st)
+    add("fleet-launch a bad flag", ["fleet-launch", "claude", "--auto-approve", "x"], files=agents, env=st)
+    add("fleet-launch --yes=false", ["fleet-launch", "--yes=false", "claude", "x"], files=agents, env=st)
+    add("fleet-launch a prompt after --", ["fleet-launch", "--yes", "claude", "--", "--rm -rf / $(id)"], files=agents, env=st)
+    add("fleet-launch -- twice", ["fleet-launch", "--yes", "--", "claude", "--"], files=agents, env=st)
+    add("fleet-launch flags between", ["fleet-launch", "claude", "--cwd", "proj", "a prompt", "--yes"], files=agents, env=st, cwd="")
+    add("fleet-launch --cwd missing", ["fleet-launch", "--yes", "claude", "--cwd", "{W}/none"], files=agents, env=st)
+    add("fleet-launch --cwd a file", ["fleet-launch", "--yes", "claude", "--cwd", "{W}/f"], files=dict(agents, f="x"), env=st)
+    add("fleet-launch --cwd a link", ["fleet-launch", "--yes", "claude", "--cwd", "{W}/lnk"], files=dict(agents, **{"lnk@": "{W}/proj"}),
+        env=st)
+    add("fleet-launch --cwd empty", ["fleet-launch", "--yes", "claude", "--cwd="], files=agents, env=st)
+    add("fleet-launch a long prompt", ["fleet-launch", "--yes", "claude", "é" * 8000], files=agents, env=st)
+    add("fleet-launch a prompt too long", ["fleet-launch", "--yes", "claude", "é" * 8001], files=agents, env=st)
+    add("fleet-launch a prompt with lines", ["fleet-launch", "--yes", "hermes", "line one\nline two\n" + "ü" * 70], files=agents, env=st)
+    add("fleet-launch the default audit log", ["fleet-launch", "--yes", "claude", "x"], files=agents)
+    add("fleet-launch an audit log already there", ["fleet-launch", "--yes", "claude", "x"], env=st,
+        files=dict(agents, **{"state/sarina/agent-launch.jsonl": '{"old":"line"}\n'}))
+    add("fleet-launch a link at the audit log", ["fleet-launch", "--yes", "claude", "x"], env=st,
+        files=dict(agents, **{"state/sarina/agent-launch.jsonl@": "{W}/elsewhere", "elsewhere": "keep\n"}))
+    add("fleet-launch a dangling link at the audit log", ["fleet-launch", "--yes", "claude", "x"], env=st,
+        files=dict(agents, **{"state/sarina/agent-launch.jsonl@": "{W}/made"}))
+    add("fleet-launch a pipe at the audit log", ["fleet-launch", "--yes", "claude", "x"], env=st,
+        files=dict(agents, **{"state/sarina/agent-launch.jsonl|": ""}))
+    add("fleet-launch a folder at the audit log", ["fleet-launch", "--yes", "claude", "x"], env=st,
+        files=dict(agents, **{"state/sarina/agent-launch.jsonl/": ""}))
+    add("fleet-launch the audit folder a file", ["fleet-launch", "--yes", "claude", "x"], env=st, files=dict(agents, **{"state/sarina": "x"}))
+    add("fleet-launch refused with a link at the audit log", ["fleet-launch", "claude", "x"], env=st, stdin=b"n\n", tty=True,
+        files=dict(agents, **{"state/sarina/agent-launch.jsonl@": "{W}/elsewhere", "elsewhere": "keep\n"}))
+    return cs
+
+
 # shots are drawn from a clock-seeded generator in both builds: the counts are left out, their total is checked by
 # testdata/parity/quantum.json's fixed seeds (here only the line's shape and the number of shots)
 SHOTS_NORM = [(r"(?: \|[01]+(?:>|\\u003e):\d+)+", " COUNTS")]
@@ -2604,11 +2878,14 @@ def snapshot(work, norm=(), vary=()):
     return out
 
 
-def enter_netns():
+def enter_netns(tmpfs=None):
     """A user and network namespace of this process's own (the user mapped to itself, so files and permissions read as
-    outside), with loopback up: nothing in it can reach a port of the machine's own."""
+    outside), with loopback up: nothing in it can reach a port of the machine's own. With `tmpfs` (a case's: folder ->
+    files), also a mount namespace with an empty tmpfs over each folder that exists, holding only the case's made-up
+    files: a command whose defaults name a folder of the machine's (/var/lib/sarina's sessions, /usr/share/applications)
+    never reads the machine's own."""
     uid, gid = os.getuid(), os.getgid()
-    os.unshare(os.CLONE_NEWUSER | os.CLONE_NEWNET)
+    os.unshare(os.CLONE_NEWUSER | os.CLONE_NEWNET | (os.CLONE_NEWNS if tmpfs else 0))
     with open("/proc/self/setgroups", "w") as f:
         f.write("deny")
     with open("/proc/self/uid_map", "w") as f:
@@ -2619,6 +2896,18 @@ def enter_netns():
     flags = struct.unpack_from("16sH", fcntl.ioctl(s, 0x8913, struct.pack("16sH22x", b"lo", 0)))[1]  # SIOCGIFFLAGS
     fcntl.ioctl(s, 0x8914, struct.pack("16sH22x", b"lo", flags | 1))  # SIOCSIFFLAGS: lo up
     s.close()
+    if tmpfs:
+        import ctypes
+        libc = ctypes.CDLL(None, use_errno=True)
+        MS_REC, MS_PRIVATE = 0x4000, 1 << 18
+        if libc.mount(b"none", b"/", None, MS_REC | MS_PRIVATE, None) != 0:
+            raise OSError(ctypes.get_errno(), "cannot make the mounts private")
+        for mnt, files in tmpfs.items():
+            if not os.path.isdir(mnt):
+                continue
+            if libc.mount(b"tmpfs", mnt.encode(), b"tmpfs", 0, b"mode=755") != 0:
+                raise OSError(ctypes.get_errno(), f"cannot put a tmpfs over {mnt}")
+            make_files(mnt, files, lambda x: x)
 
 
 def start_servers(base):
@@ -2640,8 +2929,10 @@ def run_case(case, go, rs, base):
     if pid == 0:
         os.close(r)
         try:
-            enter_netns()
+            enter_netns(case.get("tmpfs"))
             limbo, http, hurl = start_servers(base)
+            spawned = [subprocess.Popen(argv, executable=exe, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL) for exe, argv in case.get("spawn", ())]
             held = []
             for port in case.get("listen", ()):
                 ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -2649,6 +2940,9 @@ def run_case(case, go, rs, base):
                 ls.listen(4)
                 held.append(ls)
             out = json.dumps([run_one(go, case, base, limbo, http, hurl, go), run_one(rs, case, base, limbo, http, hurl, go)])
+            for p in spawned:
+                p.kill()
+                p.wait()
         except BaseException:
             out = json.dumps({"error": traceback.format_exc()})
         with os.fdopen(w, "w") as f:
@@ -2686,6 +2980,10 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
     sub = lambda s: (s.replace("{W}", work).replace("{S}", sockp).replace("{H_HOSTPORT}", hurl[len("http://"):]).replace("{H_PORT}", hurl.rsplit(":", 1)[1])
                      .replace("{H}", hurl).replace("{G}", gobin))
     make_files(work, case["files"], sub)
+    t0 = time.time()
+    for path, ago in case.get("mtimes", {}).items():
+        # a file's time this many seconds before now (a session written on another day; the same for the same `ago`)
+        os.utime(os.path.join(work, path), (t0 - ago, t0 - ago), follow_symlinks=False)
     env = {"PATH": os.path.join(work, "bin"), "LANG": "C.UTF-8", "HOME": os.path.join(work, "home"), "USER": "tester",
            "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"), "SARINA_RS_NO_GO": "1"}
     chmods = []
@@ -2763,7 +3061,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 
 CASE_GROUPS = ["memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
-               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "quantum_cases", "reverse_cases", "council_cases",
+               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "quantum_cases", "reverse_cases", "council_cases",
                "crypto_stego_command_cases", "crypto_stego_chat_cases", "vault_cases", "insight_cases", "forge_cases"]
 
 

@@ -76,7 +76,14 @@ fn run_here(run: sarina::cli::Command, args: &[String]) -> i32 {
     use std::io::Write;
     let mut env = sarina::cli::Env {
         sink: Some(Box::new(|fd, b| {
-            let r = if fd == 1 { std::io::stdout().lock().write_all(b) } else { std::io::stderr().lock().write_all(b) };
+            // written through at once, as Go's unbuffered os.Stdout: a prompt without a newline ("Launch? [y/N] ") must be
+            // out before a program started next writes to the same terminal
+            let r = if fd == 1 {
+                let mut o = std::io::stdout().lock();
+                o.write_all(b).and_then(|()| o.flush())
+            } else {
+                std::io::stderr().lock().write_all(b)
+            };
             if matches!(&r, Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe) {
                 // SAFETY: the default disposition restored and the signal raised; the process ends here as Go's would.
                 unsafe {

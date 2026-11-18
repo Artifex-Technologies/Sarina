@@ -12,6 +12,7 @@ pub mod daily;
 pub mod doctor;
 pub mod embed;
 pub mod flagx;
+pub mod fleet;
 pub mod forge;
 pub mod fuzzing;
 pub mod goany;

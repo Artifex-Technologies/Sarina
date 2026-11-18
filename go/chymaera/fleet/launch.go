@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -231,9 +232,15 @@ func audit(p LaunchProposal, prompt, outcome, logPath, detail string) error {
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	// only as a regular file of its own: a link at its name is not followed (the entry is not written wherever it
+	// leads) and a named pipe is not waited on; either way nothing is launched
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0o644)
 	if err != nil {
 		return err
+	}
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
+		f.Close()
+		return fmt.Errorf("%s is not a regular file", logPath)
 	}
 	_, werr := f.WriteString(line + "\n")
 	if cerr := f.Close(); werr == nil {

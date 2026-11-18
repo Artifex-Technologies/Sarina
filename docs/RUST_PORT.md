@@ -830,6 +830,34 @@ pipes of `passthrough`. voice-chat's `--sarina-bin` given as two words, as `--sa
 is not it. On purpose: the binary voice-chat names for each turn is the build's own file, so it is now sarina-rs (the
 turns' chats run in Rust) where it was the Go build; the cases normalise it. Mutation run 5 of 5.
 
+**3. The fleet** (110 cases, `fleet_cases`; `rust/sarina/src/fleet/`): every case runs with an empty tmpfs of its own
+over /var/lib (a new harness option, `tmpfs`: the service's sessions at /var/lib/sarina/sessions are one of fleet-usage's
+default folders, and this machine's are readable; the made-up ones go there instead), stand-in agents on the case's PATH.
+`fleet-usage`: sessions of every shape (no usage, broken, an array, a folder named .json, links, a dangling link, odd
+models: a number, a map, a list, false, empty, null; odd ids, turns and counts: strings, bools, 9.3e18, -1e300, sums
+that wrap as Go's int does), days written 3 and 40 days ago (file times, a new harness option `mtimes`), the same session
+in two folders newer and at the same time, SARINA_SESSION_DIRS with `~`, the defaults (workspace, home, the service's
+folder in the tmpfs), a time zone, a planted pipe, a link to /dev/zero, an unreadable file; `--write` to the default,
+XDG_STATE_HOME and `--usage-dir`, over an old record, with a link, a pipe and a folder at sarina.json, the folder a file
+or read-only; flags. `fleet-status` text and `--json` (Yggdrasil's keys): records current and stale, every time layout
+Go reads and twenty it refuses (made at the case's start, minutes old), hostile records (ids, control and direction
+characters, names past 80 characters, 26 limits with every kind of percent, counts past int64, duplicates, a record over
+1 MiB, trailing data), `--suggest` with ties and over 100 %, planted pipe and device link, `--json`'s "self" with the
+default folders, none, a file, and a stand-in `sarina-service` process running (a new harness option, `spawn`).
+`fleet-launch` with each of the eleven agents, at a terminal (y, YES with spaces, n, nothing, the end of input, yep; the
+agent then gets the terminal), not at one, exit 5, killed (255), not on PATH (also when asked), not executable,
+unsupported, unknown, every argument shape (flags among the words, `--`, a prompt starting with a dash), `--cwd` missing,
+a file, a link, empty, prompts of 8,000 and 8,001 characters, with lines, the audit log by default, XDG_STATE_HOME,
+existing, and a link, dangling link, pipe or folder at its name. Found and fixed in Go and Rust (Go tests that failed
+before, `go/chymaera/fleet/planted_test.go`): a named pipe planted in a session folder held `fleet-usage` for ever, and one
+in Omarchy's usage folder held `fleet-status` (and Yggdrasil's Agents item) for ever (now bounded regular files only);
+**the audit log was opened through a link planted at its name** (every launch attempt written wherever it led) and waited
+for ever on a pipe (now a regular file of its own, else nothing is launched). Fixed in Rust: sarina-rs's standard output
+was line-buffered, so `Launch? [y/N] ` came out after the launched agent's own output (now written through at once, as
+Go's). A Rust test (`tests/fleet_invariant.rs`) keeps Go's rule: nothing but the command table names the fleet, and no
+tool definition is a launcher. Mutation run 12 of 13 after one case was added; the other is equivalent (a duplicate
+default folder read twice gives the same record).
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them

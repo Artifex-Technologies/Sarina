@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // Reading other agents' usage records from Omarchy's directory. READ-ONLY, and
@@ -224,7 +226,9 @@ func ReadAgentStatus(dir string, now time.Time, staleAfter time.Duration) []Agen
 		if err != nil || info.IsDir() || info.Size() > MaxRecordBytes {
 			continue
 		}
-		raw, err := os.ReadFile(path)
+		// a regular file only, bounded: these records are other programs' (untrusted), and a named pipe or a link to a
+		// device planted under one's name would hold the reader for ever
+		raw, err := session.ReadRegular(path, MaxRecordBytes)
 		if err != nil {
 			continue
 		}

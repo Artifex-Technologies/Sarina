@@ -139,6 +139,10 @@ pub fn ported(name: &str) -> Option<Command> {
         "trachtenberg" => crate::trachtenberg::command,
         "memory-search" => crate::helpers::memory_search_command,
         "voice-chat" => crate::helpers::voice_chat_command,
+        // the fleet: commands only, never model tools (tests/fleet_invariant.rs)
+        "fleet-usage" => crate::fleet::usage::command,
+        "fleet-status" => crate::fleet::status::command,
+        "fleet-launch" => crate::fleet::launch::command,
         // always Rust since 2026-11-18 (the owner's switch; before, only under SARINA_RS_TRY)
         "chat" => chat::chat_command,
         "resume" => chat::resume_command,

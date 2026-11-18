@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // Sarina's usage record for Omarchy's agents panel. The record shape is
@@ -147,7 +149,8 @@ func readSession(path string, info os.FileInfo) *SessionUsage {
 	if info.Size() > MaxSessionBytes {
 		return nil
 	}
-	raw, err := os.ReadFile(path)
+	// a regular file only, bounded: a named pipe planted under a session's name would hold the reader for ever
+	raw, err := session.ReadRegular(path, MaxSessionBytes)
 	if err != nil {
 		return nil
 	}

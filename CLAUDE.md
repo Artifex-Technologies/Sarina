@@ -254,6 +254,10 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 - Moved: `system-status`, `crash-detail`, `system-fix`, `route`, `trachtenberg` (103 cases; the tools were Rust already).
 - Moved: `memory-search`, `voice-chat` (40 cases). voice-chat now names sarina-rs (`/usr/bin/sarina`) as the binary for
   each spoken turn, where the Go build named itself; the helper still gets the terminal as it is.
+- Moved: `fleet-usage`, `fleet-status` (`--json` keys unchanged: Yggdrasil's contract), `fleet-launch` (110 cases; still
+  CLI-only, never a tool: `rust/sarina/tests/fleet_invariant.rs` keeps Go's rule for the Rust build). Fixed in Go and
+  Rust: a named pipe in a session folder or in Omarchy's usage folder no longer holds fleet-usage or fleet-status for
+  ever, and fleet-launch's audit log is no longer written through a link planted at its name (nothing is launched then).
 - **For Labyrinth OS / Yggdrasil:** nothing to change: same names, arguments, output and exit statuses.
 — Signed: Sarina / Claude Opus 5.5
 
