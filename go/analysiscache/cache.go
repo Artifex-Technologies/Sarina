@@ -40,7 +40,8 @@ type Cache struct {
 // treated as empty, never as an error.
 func New(path, namespace string) *Cache {
 	c := &Cache{path: path, namespace: namespace, entries: map[string]any{}}
-	raw, err := os.ReadFile(path)
+	// a regular file only, bounded: a named pipe planted at the cache's name would hold the reader for ever
+	raw, err := session.ReadRegular(path, session.MaxFileBytes)
 	if err != nil {
 		return c
 	}

@@ -69,7 +69,8 @@ fn key(content: &[u8]) -> String {
 impl Cache {
     /// Go's `New`: the cache at `path`; a missing, damaged or other-namespace file is empty, never an error.
     pub fn new(path: &[u8], namespace: &str) -> Cache {
-        let entries = std::fs::read(gopath::os_path(path)).map(|raw| read_entries(&raw, namespace)).unwrap_or_default();
+        // a regular file only, bounded: a named pipe planted at the cache's name would hold the reader for ever
+        let entries = crate::session::readfile::read_file(path).map(|raw| read_entries(&raw, namespace)).unwrap_or_default();
         Cache { path: path.to_vec(), namespace: namespace.to_string(), entries: Mutex::new(entries) }
     }
 

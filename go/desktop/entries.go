@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // GeneratedMarker marks every file this package generates, so cleanup removes
@@ -188,9 +190,13 @@ func ApplicationDirs() []string {
 	return found
 }
 
-// readText reads a file, replacing invalid UTF-8 bytes with U+FFFD.
+// maxEntryBytes bounds a .desktop file read: real ones are a few KiB.
+const maxEntryBytes = 1 << 20
+
+// readText reads a file, replacing invalid UTF-8 bytes with U+FFFD. Only a regular file is read, bounded: a named pipe
+// planted under an entry's name would hold the scan for ever.
 func readText(path string) (string, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := session.ReadRegular(path, maxEntryBytes)
 	if err != nil {
 		return "", err
 	}

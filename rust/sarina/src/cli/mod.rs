@@ -143,6 +143,7 @@ pub fn ported(name: &str) -> Option<Command> {
         "fleet-usage" => crate::fleet::usage::command,
         "fleet-status" => crate::fleet::status::command,
         "fleet-launch" => crate::fleet::launch::command,
+        "desktop-audit" => crate::desktop::command,
         // always Rust since 2026-11-18 (the owner's switch; before, only under SARINA_RS_TRY)
         "chat" => chat::chat_command,
         "resume" => chat::resume_command,

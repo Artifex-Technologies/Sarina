@@ -258,6 +258,8 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   CLI-only, never a tool: `rust/sarina/tests/fleet_invariant.rs` keeps Go's rule for the Rust build). Fixed in Go and
   Rust: a named pipe in a session folder or in Omarchy's usage folder no longer holds fleet-usage or fleet-status for
   ever, and fleet-launch's audit log is no longer written through a link planted at its name (nothing is launched then).
+- Moved: `desktop-audit` (54 cases). Fixed in Go and Rust: `--apply` no longer writes an entry through a link planted at
+  its name; a named pipe among the entries or at the classification cache no longer holds it for ever.
 - **For Labyrinth OS / Yggdrasil:** nothing to change: same names, arguments, output and exit statuses.
 — Signed: Sarina / Claude Opus 5.5
 

@@ -858,6 +858,29 @@ Go's). A Rust test (`tests/fleet_invariant.rs`) keeps Go's rule: nothing but the
 tool definition is a launcher. Mutation run 12 of 13 after one case was added; the other is equivalent (a duplicate
 default folder read twice gives the same record).
 
+**4. desktop-audit** (54 cases, `desktop_cases`; `rust/sarina/src/desktop.rs`): made-up application folders through
+XDG_DATA_DIRS and the user's, and the system's own /usr/share/applications and /usr/local/share/applications each under an
+empty tmpfs of the case's with made-up entries (never this machine's), a stand-in pacman (`-Qi` with wrapped lines,
+"None", groups, dependencies; `-Ql` with folders and nested paths) and a stand-in helper for `--model-dir` (the classify
+protocol, the prototypes' fingerprint computed in the harness). Entries of every kind (placed, stranded with a
+BlackArch token, by description, by meaning, undetermined, NoDisplay, Hidden, Type=Link, no group, a group before it,
+CRLF, bytes that are not UTF-8, duplicate keys, shadowed, escapes, a dot file, a subfolder, a .txt), folders with glob
+characters and a bad pattern, a planted pipe, a link to /dev/zero, a link, a file over 1 MiB, a folder named .desktop,
+an unreadable entry; pacman missing or failing; `--apply` to the default, XDG_DATA_HOME and `--target-dir`, with
+`--only-category`, `--min-confidence` (at a score too), over existing files, with a link, a dangling link or a pipe at
+an entry's name, the target a file or read-only; `--remove-generated` (markers empty, in a later group, through a link,
+a pipe, a .txt; no folder, a file, read-only); `--model-dir` with thresholds below, at and above a score, the cache
+(hits, a null label, a score that is not a number, another prototype set, damaged, a pipe at its name, its folder a
+file), `--no-cache`, other prototypes, another protocol, the helper dying, no Python, SARINA_HELPERS_PYTHON; flags.
+Found and fixed in Go and Rust (Go tests that failed before: `go/desktop/planted_test.go`,
+`go/analysiscache/planted_test.go`): a named pipe named *.desktop held the scan and `--remove-generated` for ever;
+**`--apply` wrote an entry through a link planted at its name** (into whatever file it named; now only a regular file
+of its own, else the error); a named pipe at the classification cache's name held `--model-dir` for ever (analysiscache
+reads a bounded regular file now). Not ported: Go's `EmbeddingScorer` (nothing but Go's tests uses it). Accepted
+difference: a pacman description that is not UTF-8 reaches a created entry's Comment as U+FFFD (Go writes its bytes; a
+.desktop file must be UTF-8). Mutation run 11 of 11 after the cases were widened (a package whose binaries tie, an
+`env VAR=x` program that is also a package, blank lines of different kinds before a second group).
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them

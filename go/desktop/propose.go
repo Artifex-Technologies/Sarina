@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // CategoryProposal is a single proposed menu change.
@@ -309,7 +310,7 @@ func ApplyProposals(proposals []CategoryProposal, targetDir string, minConfidenc
 			stem = "sarina-" + p.Target
 		}
 		path := filepath.Join(targetDir, stem+".desktop")
-		if err := os.WriteFile(path, []byte(p.Render()), 0o644); err != nil {
+		if err := writeEntry(path, p.Render()); err != nil {
 			return written, err
 		}
 		written = append(written, path)
@@ -339,4 +340,22 @@ func RemoveGenerated(targetDir string) []string {
 		}
 	}
 	return removed
+}
+
+// writeEntry writes an entry only as a regular file of its own: a link planted at its name is not followed (the entry
+// is not written into whatever file it names) and a named pipe is not waited on.
+func writeEntry(path, body string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0o644)
+	if err != nil {
+		return err
+	}
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
+		f.Close()
+		return fmt.Errorf("%s is not a regular file", path)
+	}
+	_, werr := f.WriteString(body)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	return werr
 }

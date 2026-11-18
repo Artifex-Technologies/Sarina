@@ -1712,6 +1712,280 @@ def fleet_cases():
     return cs
 
 
+DESKTOP_PROTOTYPES = [  # go/desktop/semantic.go's CategoryPrototypes: the stand-in helper answers their fingerprint
+    ("Network;Security", "network scanning, port scanning, packet capture, sniffing, wireless and wifi auditing, spoofing, proxies and remote network attacks"),
+    ("System;Security", "password cracking, hash cracking, digital forensics, malware and rootkit analysis, privilege escalation and host exploitation"),
+    ("Development;Security", "disassembly, decompilation, debugging, fuzzing and reverse engineering of binaries and executables"),
+    ("Utility;Security", "encryption, decryption, cryptography, hashing, encoding and steganography"),
+    ("Development", "software development, programming languages, compilers, build systems, version control and source code editing"),
+    ("Network", "web browsing, downloading, file transfer, email, chat and general internet client software"),
+    ("Graphics", "image editing, photo manipulation, drawing, vector graphics and viewing pictures"),
+    ("AudioVideo", "playing, recording and editing audio, music and video"),
+    ("Office", "word processing, spreadsheets, presentations, documents and note taking"),
+    ("Science", "scientific computing, mathematics, statistics, data analysis and plotting"),
+    ("Settings", "configuring the desktop, appearance, input devices and system preferences"),
+    ("System", "system administration, managing processes, services, disks, filesystems and monitoring the machine"),
+    ("Utility", "small general purpose desktop utilities, archiving, clipboard and text tools"),
+]
+DESKTOP_FP = hashlib.sha256("\n".join(f"{c}|{t}" for c, t in DESKTOP_PROTOTYPES).encode()).hexdigest()
+
+
+def desktop_helper(fp=DESKTOP_FP, protocol=1, die=False):
+    """A stand-in Python whose helper serves the classify protocol: each description's label by a word in it (the
+    request logged), the prototypes' fingerprint on ping."""
+    return ("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {W}/helper.log\n"
+            "while IFS= read -r line; do printf '%s\\n' \"$line\" >> {W}/helper.log; case \"$line\" in\n"
+            f" *'\"op\":\"ping\"'*) echo '{{\"ok\":true,\"protocol\":{protocol},\"prototypes\":\"{fp}\"}}';;\n"
+            + (" *'\"op\":\"classify\"'*) exit 3;;\n" if die else "")
+            + " *'\"op\":\"classify\"'*) case \"$line\" in\n"
+            "   *quantum*) echo '{\"ok\":true,\"label\":\"Science\",\"score\":0.81}';;\n"
+            "   *mystery*) echo '{\"ok\":true,\"label\":\"Network;Security\",\"score\":0.2}';;\n"
+            "   *unknown*) echo '{\"ok\":true,\"label\":\"Nonsense\",\"score\":0.9}';;\n"
+            "   *broken*) echo '{\"ok\":false,\"error\":\"model failed\"}';;\n"
+            "   *) echo '{\"ok\":true,\"label\":null,\"score\":0.05}';;\n"
+            "  esac;;\n"
+            " *) echo '{\"ok\":false,\"error\":\"unknown op\"}';;\n"
+            "esac; done\n")
+
+
+PACMAN_QI = """Name            : nmap
+Version         : 7.95-1
+Description     : Utility for network discovery and security auditing
+Groups          : None
+Install Reason  : Explicitly installed
+
+Name            : sqlmap
+Description     : Automatic SQL injection and database takeover tool
+Groups          : blackarch blackarch-webapp
+                  blackarch-exploitation
+Install Reason  : Explicitly installed
+
+Name            : quantumsim
+Description     : A quantum circuit simulator
+Groups          : None
+Install Reason  : Explicitly installed
+
+Name            : mysterytool
+Description     : Does a mystery thing
+Install Reason  : Explicitly installed
+
+Name            : unknowntool
+Description     : Some unknown helper
+Install Reason  : Explicitly installed
+
+Name            : brokentool
+Description     : A broken helper
+Install Reason  : Explicitly installed
+
+Name            : plaintool
+Description     : Does nothing in particular
+Install Reason  : Explicitly installed
+
+Name            : zlib
+Description     : Compression library
+Install Reason  : Installed as a dependency for another package
+
+Name            : libpcap
+Description     : A system-independent interface for user-level packet capture
+Install Reason  : Explicitly installed
+
+Name            : python-scapy
+Description     : Packet manipulation
+Install Reason  : Explicitly installed
+
+Name            : firefox
+Description     : Fast, Private & Safe Web Browser
+Install Reason  : Explicitly installed
+
+Name            : ghidra
+Description     : Software reverse engineering framework
+  with a decompiler
+Install Reason  : Explicitly installed
+
+Name            : nobin
+Description     : A packet sniffer with no binaries
+Install Reason  : Explicitly installed
+
+Name            : depapp
+Description     : A text editor installed as a dependency
+Install Reason  : Installed as a dependency for another package
+
+Name            : zenmap
+Description     : Graphical frontend for nmap
+Install Reason  : Explicitly installed
+
+Name            : tietool
+Description     : A packet tool with two commands
+Install Reason  : Explicitly installed
+
+Name            : ünïcode-tool
+Description     : Ein Werkzeug für Netzwerk dns Abfragen
+Install Reason  : Explicitly installed
+"""
+
+PACMAN_QL = """nmap /usr/bin/
+nmap /usr/bin/nmap
+nmap /usr/bin/ncat
+nmap /usr/share/nmap/nmap-services
+sqlmap /usr/bin/sqlmap
+quantumsim /usr/local/bin/qsim
+quantumsim /usr/local/bin/qsim-gui
+mysterytool /usr/bin/mystery
+unknowntool /usr/bin/unk
+brokentool /usr/bin/brk
+plaintool /usr/bin/plain
+zlib /usr/lib/libz.so
+libpcap /usr/bin/pcap-config
+python-scapy /usr/bin/scapy
+firefox /usr/bin/firefox
+ghidra /usr/bin/ghidra
+ghidra /usr/bin/sub/dir/x
+depapp /usr/bin/depapp
+ünïcode-tool /usr/bin/uni
+zenmap /usr/bin/zenmap
+tietool /usr/bin/bbb
+tietool /usr/bin/aaa
+"""
+
+
+def desktop_cases():
+    """desktop-audit: made-up application folders (XDG_DATA_DIRS and the user's; the system's /usr/share/applications
+    under an empty tmpfs of the case's, never the machine's own), a stand-in pacman on the case's PATH, and the stand-in
+    helper for --model-dir. --apply and --remove-generated write and delete in the case's folders only."""
+    cs = []
+    sys_apps = {"/usr/share/applications": {}, "/usr/local/share/applications": {}}
+
+    def add(name, args, files=None, env=None, tmpfs=None, **k):
+        e = {"XDG_DATA_DIRS": "{W}/share1:{W}/share2"}
+        e.update(env or {})
+        e = {k2: v for k2, v in e.items() if v is not None}
+        c = C(name, args, files=files, env=e)
+        c["tmpfs"] = tmpfs or sys_apps
+        c.update(k)
+        cs.append(c)
+    pac = sh('case "$1" in -Qi) ' + heredoc(PACMAN_QI) + ';; -Ql) ' + heredoc(PACMAN_QL) + ';; esac\n')
+    entries = {
+        "share1/applications/firefox.desktop": "[Desktop Entry]\nName=Firefox\nExec=/usr/lib/firefox/firefox %u\nCategories=Network;WebBrowser;\n",
+        "share1/applications/nmap-zenmap.desktop": "[Desktop Entry]\nName=Zenmap\nExec=env LANG=C GTK=1 zenmap %F\nCategories=X-BlackArch-Scanner;\nIcon=zenmap\nTerminal=TRUE\n",
+        "share1/applications/stranded.desktop": "# a comment\n[Desktop Entry]\nName[de]=Gestrandet\nName=Strand\\sed \\\\ text editor\\n\nExec=stranded\nCategories=KDE;Qt;\nMimeType=text/plain;\n \n\t\n[Desktop Action new]\nName=New\nCategories=Office;\n",
+        "share1/applications/nosignal.desktop": "[Desktop Entry]\nName=Nothing Here\nExec=nosignal\n",
+        "share1/applications/hidden.desktop": "[Desktop Entry]\nName=Hidden\nNoDisplay=true\nExec=hid\n",
+        "share1/applications/deleted.desktop": "[Desktop Entry]\nName=Deleted\nHidden=True\nExec=del\n",
+        "share1/applications/link.desktop": "[Desktop Entry]\nType=Link\nName=A link\nURL=https://example.org\n",
+        "share1/applications/nogroup.desktop": "Name=No group\nExec=x\n",
+        "share1/applications/other-group-first.desktop": "[Other]\nName=Other\n[Desktop Entry]\nName=Second Group\nExec=sg\nCategories=Utility\n",
+        "share1/applications/crlf.desktop": "[Desktop Entry]\r\nName=Crlf Packet sniffer\r\nExec=crlf\r\nType=Application\r\nCategories=X-Odd\r\n",
+        "share1/applications/badutf.desktop": b"[Desktop Entry]\nName=Bad \xff\xfe bytes video player\nExec=bad\n",
+        "share1/applications/dup-keys.desktop": "[Desktop Entry]\nName=First\nName=Second\nExec=dup\nCategories=\nType=\n",
+        "share1/applications/shadowed.desktop": "[Desktop Entry]\nName=System copy\nExec=sh1\n",
+        "share1/applications/notes.txt": "[Desktop Entry]\nName=Not an entry\n",
+        "share1/applications/sub/inner.desktop": "[Desktop Entry]\nName=Inner\n",
+        "share1/applications/.dot.desktop": "[Desktop Entry]\nName=Dot calculator\nExec=dot\n",
+        "share2/applications/shadowed.desktop": "[Desktop Entry]\nName=User copy disk partition tool\nExec=sh2\nCategories=X-Thing;\n",
+        "share2/applications/a.b.desktop": "[Desktop Entry]\nName=Dots\nExec=ab\nCategories=Settings\n",
+    }
+    base = state(**entries, **{"bin/pacman*": pac})
+    add("desktop-audit", ["desktop-audit"], files=base)
+    add("desktop-audit no pacman", ["desktop-audit"], files=state(**entries))
+    add("desktop-audit pacman failing", ["desktop-audit"], files=state(**entries, **{"bin/pacman*": sh("echo partial; exit 1\n")}))
+    add("desktop-audit pacman -Ql failing", ["desktop-audit"],
+        files=state(**entries, **{"bin/pacman*": sh('case "$1" in -Qi) ' + heredoc(PACMAN_QI) + ';; *) exit 1;; esac\n')}))
+    add("desktop-audit nothing at all", ["desktop-audit"], files=state())
+    add("desktop-audit --include-dependencies --include-libraries", ["desktop-audit", "--include-dependencies", "--include-libraries"],
+        files=base)
+    add("desktop-audit the system folders", ["desktop-audit"], files=state(**{"bin/pacman*": pac}), env={"XDG_DATA_DIRS": None},
+        tmpfs={"/usr/share/applications": {"sys.desktop": "[Desktop Entry]\nName=Sys wireless tool\nExec=syswifi\n"},
+               "/usr/local/share/applications": {"loc.desktop": "[Desktop Entry]\nName=Local\nExec=loc\nCategories=Game;\n"}})
+    add("desktop-audit XDG_DATA_HOME", ["desktop-audit"], files=dict(base, **{"data/applications/u.desktop": "[Desktop Entry]\nName=User text editor\nExec=u\n"}),
+        env={"XDG_DATA_HOME": "{W}/data"})
+    add("desktop-audit the user's folder under HOME", ["desktop-audit"],
+        files=dict(base, **{"home/.local/share/applications/firefox.desktop": "[Desktop Entry]\nName=My Firefox\nExec=firefox\n"}))
+    add("desktop-audit a folder twice and a missing one", ["desktop-audit"], files=base,
+        env={"XDG_DATA_DIRS": "{W}/share1:{W}/share1/:{W}/none::{W}/share2"})
+    add("desktop-audit a folder with glob characters", ["desktop-audit"],
+        files=state(**{"we[i]rd/applications/x.desktop": "[Desktop Entry]\nName=Weird calculator\nExec=wx\n",
+                       "wei/applications/y.desktop": "[Desktop Entry]\nName=Matched by the class\nExec=wy\n",
+                       "b[ad/applications/z.desktop": "[Desktop Entry]\nName=Bad pattern\nExec=wz\n"}),
+        env={"XDG_DATA_DIRS": "{W}/we[i]rd:{W}/b[ad:{W}/we?"})
+    plant = dict(base, **{"share1/applications/0pipe.desktop|": "", "share1/applications/0dev.desktop@": "/dev/zero",
+                          "share1/applications/0link.desktop@": "{W}/real.entry",
+                          "real.entry": "[Desktop Entry]\nName=Linked emulator\nExec=lnk\n",
+                          "share1/applications/0big.desktop": "[Desktop Entry]\nName=Big\nExec=big\n" + "#" * (1 << 20),
+                          "share1/applications/0dir.desktop/": ""})
+    add("desktop-audit planted pipe, device, link, big file, folder", ["desktop-audit"], files=plant)
+    add("desktop-audit an unreadable entry", ["desktop-audit"], files=dict(base, **{"share1/applications/0locked.desktop": "[Desktop Entry]\nName=L\n"}),
+        env={"__chmod": "share1/applications/0locked.desktop=000"})
+    # --apply
+    tgt = ["--target-dir", "{W}/out"]
+    add("desktop-audit --apply", ["desktop-audit", "--apply"] + tgt, files=base)
+    add("desktop-audit --apply default target", ["desktop-audit", "--apply"], files=base)
+    add("desktop-audit --apply XDG_DATA_HOME target", ["desktop-audit", "--apply"], files=base, env={"XDG_DATA_HOME": "{W}/data"})
+    add("desktop-audit --apply --only-category", ["desktop-audit", "--apply", "--only-category", " Security, ,Graphics"] + tgt, files=base)
+    add("desktop-audit --apply --only-category nothing matches", ["desktop-audit", "--apply", "--only-category=Game"] + tgt, files=base)
+    add("desktop-audit --apply --min-confidence", ["desktop-audit", "--apply", "--min-confidence", "1.5"] + tgt, files=base)
+    add("desktop-audit --apply over existing files", ["desktop-audit", "--apply"] + tgt,
+        files=dict(base, **{"out/sarina-nmap.desktop": "old", "out/stranded.desktop": "old user copy"}))
+    add("desktop-audit --apply a link at an entry's name", ["desktop-audit", "--apply"] + tgt,
+        files=dict(base, **{"out/sarina-nmap.desktop@": "{W}/bashrc", "bashrc": "keep\n"}))
+    add("desktop-audit --apply a dangling link at an entry's name", ["desktop-audit", "--apply"] + tgt,
+        files=dict(base, **{"out/sarina-nmap.desktop@": "{W}/made"}))
+    add("desktop-audit --apply a pipe at an entry's name", ["desktop-audit", "--apply"] + tgt,
+        files=dict(base, **{"out/sarina-sqlmap.desktop|": ""}))
+    add("desktop-audit --apply the target a file", ["desktop-audit", "--apply"] + tgt, files=dict(base, out="x"))
+    add("desktop-audit --apply the target read-only", ["desktop-audit", "--apply"] + tgt, files=dict(base, **{"out/": ""}),
+        env={"__chmod": "out=555"})
+    add("desktop-audit --apply a repair whose original is gone", ["desktop-audit", "--apply"] + tgt,
+        files=dict(base, **{"share1/applications/0gone.desktop@": "{W}/gone-soon"}))
+    # --remove-generated
+    gen = dict(base, **{"out/sarina-a.desktop": "[Desktop Entry]\nName=A\nX-Sarina-Generated=sarina\n",
+                        "out/mine.desktop": "[Desktop Entry]\nName=Mine\n",
+                        "out/other.desktop": "[Desktop Entry]\nName=Other\nX-Sarina-Generated=\n",
+                        "out/later.desktop": "[Desktop Entry]\nName=L\n[Second]\nX-Sarina-Generated=sarina\n",
+                        "out/sarina-b.desktop@": "{W}/target.desktop",
+                        "target.desktop": "[Desktop Entry]\nX-Sarina-Generated=yes\n",
+                        "out/sarina-c.desktop|": "",
+                        "out/notes.txt": "X-Sarina-Generated=sarina\n"})
+    add("desktop-audit --remove-generated", ["desktop-audit", "--remove-generated"] + tgt, files=gen)
+    add("desktop-audit --remove-generated default target", ["desktop-audit", "--remove-generated"],
+        files=dict(base, **{"home/.local/share/applications/sarina-x.desktop": "[Desktop Entry]\nX-Sarina-Generated=sarina\n"}))
+    add("desktop-audit --remove-generated no folder", ["desktop-audit", "--remove-generated"] + tgt, files=base)
+    add("desktop-audit --remove-generated the target a file", ["desktop-audit", "--remove-generated"] + tgt, files=dict(base, out="x"))
+    add("desktop-audit --remove-generated read-only folder", ["desktop-audit", "--remove-generated"] + tgt, files=gen,
+        env={"__chmod": "out=555"})
+    # --model-dir: the stand-in helper
+    helper = dict(base, **{"bin/python3*": desktop_helper()})
+    md = ["--model-dir", "{W}/model"]
+    add("desktop-audit --model-dir", ["desktop-audit"] + md, files=helper)
+    add("desktop-audit --model-dir --apply", ["desktop-audit", "--apply"] + md + tgt, files=helper)
+    add("desktop-audit --model-dir threshold", ["desktop-audit", "--similarity-threshold", "0.1"] + md, files=helper)
+    add("desktop-audit --model-dir threshold above all", ["desktop-audit", "--similarity-threshold=0.95"] + md, files=helper)
+    add("desktop-audit --model-dir threshold at a score", ["desktop-audit", "--similarity-threshold", "0.81"] + md, files=helper)
+    add("desktop-audit --model-dir --apply --min-confidence at a score", ["desktop-audit", "--apply", "--min-confidence", "0.81"] + md + tgt,
+        files=helper)
+    add("desktop-audit --model-dir --no-cache", ["desktop-audit", "--no-cache"] + md, files=helper)
+    cache = "home/.sarina/cache/desktop_classify.json"
+    from_cache = json.dumps({"namespace": DESKTOP_FP, "entries": {
+        hashlib.sha256(b"A quantum circuit simulator").hexdigest(): {"label": "Office", "score": 0.99},
+        hashlib.sha256(b"Does a mystery thing").hexdigest(): {"label": None, "score": 0.5},
+        hashlib.sha256(b"Some unknown helper").hexdigest(): {"label": "Graphics", "score": "high"},
+        hashlib.sha256(b"Nothing Here").hexdigest(): {"label": "Development", "score": 0.7}}})
+    add("desktop-audit --model-dir from the cache", ["desktop-audit"] + md, files=dict(helper, **{cache: from_cache}))
+    add("desktop-audit --model-dir a cache of another prototype set", ["desktop-audit"] + md,
+        files=dict(helper, **{cache: json.dumps({"namespace": "old", "entries": {}})}))
+    add("desktop-audit --model-dir a damaged cache", ["desktop-audit"] + md, files=dict(helper, **{cache: "{"}))
+    add("desktop-audit --model-dir a pipe at the cache", ["desktop-audit"] + md, files=dict(helper, **{cache + "|": ""}))
+    add("desktop-audit --model-dir the cache folder a file", ["desktop-audit"] + md, files=dict(helper, **{"home/.sarina/cache": "x"}))
+    add("desktop-audit --model-dir other prototypes", ["desktop-audit"] + md, files=dict(base, **{"bin/python3*": desktop_helper(fp="0" * 64)}))
+    add("desktop-audit --model-dir another protocol", ["desktop-audit"] + md, files=dict(base, **{"bin/python3*": desktop_helper(protocol=2)}))
+    add("desktop-audit --model-dir the helper dies", ["desktop-audit"] + md, files=dict(base, **{"bin/python3*": desktop_helper(die=True)}))
+    add("desktop-audit --model-dir no Python", ["desktop-audit"] + md, files=base)
+    add("desktop-audit --model-dir SARINA_HELPERS_PYTHON", ["desktop-audit"] + md,
+        files=dict(base, **{"py/mypy*": desktop_helper()}), env={"SARINA_HELPERS_PYTHON": "{W}/py/mypy", "SARINA_HELPERS_PATH": "{W}/hp"})
+    for bad in (["-h"], ["--nope"], ["--similarity-threshold", "x"], ["--min-confidence"], ["--apply=2"], ["extra", "--apply"]):
+        add(f"desktop-audit {' '.join(bad)}", ["desktop-audit"] + bad, files=base)
+    return cs
+
+
 # shots are drawn from a clock-seeded generator in both builds: the counts are left out, their total is checked by
 # testdata/parity/quantum.json's fixed seeds (here only the line's shape and the number of shots)
 SHOTS_NORM = [(r"(?: \|[01]+(?:>|\\u003e):\d+)+", " COUNTS")]
@@ -3061,7 +3335,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 
 CASE_GROUPS = ["memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
-               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "quantum_cases", "reverse_cases", "council_cases",
+               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "desktop_cases", "quantum_cases", "reverse_cases", "council_cases",
                "crypto_stego_command_cases", "crypto_stego_chat_cases", "vault_cases", "insight_cases", "forge_cases"]
 
 
