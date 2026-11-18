@@ -101,8 +101,8 @@ impl Env {
 }
 
 /// Commands ported and proving themselves, not moved yet: sarina-rs runs them only when `SARINA_RS_TRY` names them (the
-/// CLI differential, rust/parity) and [`chat::needs_go`] finds no optional tool set the port lacks; otherwise the Go
-/// build answers.
+/// CLI differential, rust/parity); otherwise the Go build answers. Every optional tool set is ported (the forge last, on
+/// 2026-11-17), so no tool set hands a command to the Go build any more.
 pub fn proving(name: &str) -> Option<Command> {
     Some(match name {
         "chat" => chat::chat_command,
@@ -147,6 +147,9 @@ pub fn ported(name: &str) -> Option<Command> {
         "trends" => crate::daily::trends_command,
         "daily-report" => crate::daily::report_command,
         "vault-tidy" => crate::insight::tidy_command,
+        "forge-list" => crate::forge::tool::list_command,
+        "forge-approve" => crate::forge::tool::approve_command,
+        "forge-remove" => crate::forge::tool::remove_command,
         _ => return None,
     })
 }

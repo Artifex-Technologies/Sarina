@@ -16,7 +16,7 @@ equal.
 | 2 | the file formats: session files, config loaders, llm message types, vecindex, trust, policy, analysiscache | **done** (2026-11-12) but skills' discovery: gojson, the session file (and Save, MigrateDir), config's loaders and AccessTierFromEnv with Heimdall's grants cap, llm's types, repair and normaliser, the permission gate and registry, the tool definitions, vecindex, trust, policy, analysiscache, guard's detectors, agents, the skill file format, sessionsearch |
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
-| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego on 2026-11-16 (every part proved against Go fixtures, then wired: `sarina crypto` and `sarina stego` in sarina-rs, the seven tools and both prefetches; `needs_go` no longer names SARINA_CRYPTO), the vault on 2026-11-16 (reading, recall with and without meaning, writing, its tools and commands: `needs_go` no longer names SARINA_VAULT), daily (`sarina trends`, `sarina daily-report`); insight on 2026-11-16 and -17 (`sarina vault-tidy`; `sarina reflect` and `sarina vault-ingest`, which ask the model, under SARINA_RS_TRY); the forge open (`needs_go` names only SARINA_FORGE=on) |
+| 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego on 2026-11-16 (every part proved against Go fixtures, then wired: `sarina crypto` and `sarina stego` in sarina-rs, the seven tools and both prefetches; `needs_go` no longer names SARINA_CRYPTO), the vault on 2026-11-16 (reading, recall with and without meaning, writing, its tools and commands: `needs_go` no longer names SARINA_VAULT), daily (`sarina trends`, `sarina daily-report`); insight on 2026-11-16 and -17 (`sarina vault-tidy`; `sarina reflect` and `sarina vault-ingest`, which ask the model, under SARINA_RS_TRY); the forge on 2026-11-17 (its tools and forge-list, forge-approve, forge-remove): every optional set is ported and `needs_go` is gone |
 | switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **begun** (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
@@ -316,6 +316,9 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   PrivateReference too; a secret file name stays one in any folder and in any case.
 
 ## Differences from Go, on purpose or accepted
+
+- **The forge, a file name that is not UTF-8 in an agent's folder** (it can only be planted: the forge never writes one):
+  Go names it in its refusal with the raw bytes (`%q` shows `\xff`), the port with U+FFFD. Both refuse the agent.
 
 - **The vault, where Go's own order is random** (vault 3): Go removes the notes that left the vault from the index in its
   map's random order (the index moves its last vector into each freed place, so the saved notes.vec differs between two
@@ -772,6 +775,31 @@ many bytes and few letters, bytes that are not UTF-8, names with `<`, `&` and `>
 beside a two-byte letter; nothing in the inbox, Inbox/ a link, no vault, a missing one, `-h`, a bad flag, a game running.
 Mutation run: 15 of 16 caught after the log and the inbox were widened; the other (the state's nanoseconds) cannot be seen,
 since the talk log's times are whole minutes.
+
+### The forge cases (2026-11-17)
+
+The forge (85 cases), its agents and state in the case's own folders (SARINA_FORGE_DIR, SARINA_FORGE_STATE; one case the
+defaults under the made-up home), Limbo the scripted agent socket. forge-list plain and `--json`: no folder, an empty one,
+agents broken every way Load refuses (no manifest, a broken one, one naming another agent, a link inside, a file past the
+bundle, a bad file name, a command no guest runs, a timeout of the wrong type), a capitalised folder and a stray file
+skipped, approvals matching and not, `null`, a named pipe, the folder a file, extra words. forge-approve: no name, two, not
+a terminal, and at a pty: yes (with spaces), no, nothing typed, a missing, badly named or unusable agent, approvals `null`
+or holding others (HTML escaping in the file), the state folder inside the agents folder, the audit log a pipe or a link.
+forge-remove: no name, approved and not, missing, `../outside`, the last approval. In a chat: the tools offered (on and
+off), forge_list, forge_write (a flat file with literal `\n`, a replacement voiding an approval, every refusal Validate
+and Create give, private folders in the files and the command, a file and a folder of one name, purposes too long and
+with direction marks, 30 agents already, no write permission, the state inside the agents), forge_run (the bundle each run
+sends compared byte for byte: names past 100 bytes split into USTAR's prefix and, without a slash to split at or with a
+last part past 100, a PAX record; the manifest's timeout, input.txt, input too large or with NUL, an agent's own
+input.txt, the same run twice in one chat, a missing or unusable agent, no shell permission, another profile, Limbo
+refusing, failing, the agent failing, no Limbo; the hourly limit from an audit log of 20 recent runs, and one of 19 with
+lines Go skips: old, refused, other actions, not JSON, a bad time, a one-digit hour, a number value, a CR; a line of 2 KiB
+counted and one past Go's 1 MiB scanner ending the count; the audit log a pipe, a link, a folder). Mutation run: 18 of 23
+caught after replacing an agent at the 30-agent limit, a single literal `\\n`, the long lines and an honest near-limit log
+were added; the other 5 cannot be reached (names are 120 bytes at most, so neither a cut name ending in a slash nor a
+PAX record crossing a power of ten) or are equivalent (a CR is JSON whitespace; `create(false)` is the default). Found by them, fixed in Rust (Go was right): Go's tar writer, asked for PAX, still writes USTAR
+where it can (a long name split into the prefix field, no PAX record); Go's os.ReadDir fails a file at open. Create's
+temporary folder (`.new-` and a random number) is normalised.
 
 ### The chat cases (2026-11-12)
 
@@ -1263,6 +1291,16 @@ gate is the set, not the tool). Where crypto stands, exactly:
 | wiring 1: `sarina crypto` and `sarina stego` (commands without a model; moved to `cli::ported`) | `cryptotools.go`'s `command`; `stego.go`'s `Inspect` with `helpersReport` (exiftool and binwalk run), `ExtractReport` (os.MkdirTemp), `DiffReport`, `Clean`, `cleanPath`, `command` | `cryptotools/tool.rs`, `stego/tool.rs`; `goos::mkdir_temp`; `run_group`'s `Combined` (a program's output and errors one pipe, as Go's when `Stdout` and `Stderr` are the same writer) | CLI differential: 88 new cases (every subcommand with its usage and errors; PNG with an LSB payload, metadata, a zip after IEND, a lying extension; JPEG, GIF, WAV with a payload, text, folders; stand-in exiftool, binwalk and zsteg on the case's PATH; clean's copies, an existing one and a planted link; lsb into TMPDIR and a missing TMPDIR), Go against Go first, then no difference (the whole differential 849 cases); mutation 11 of 12, the survivor (decode's depth of 3) caught by a three-layer case added after | `dc96e08` |
 | wiring 2: the model's crypto and stego tools and the skills' "crypto" and "stego" prefetches; `needs_go` without SARINA_CRYPTO | `cryptotools.go`'s `input`, `inputAllowingCerts`, `Tools`, `Prefetch` (`lookedAt`, `lettersMostly`, `looksLikeDataNotPath`); `stego.go`'s `readFile`, `folderIn`, `Tools`, `cleanTool`, `Prefetch` | `cryptotools/tool.rs`, `stego/tool.rs`; `cli::chat::per_prompt` (crypto, stego, then trachtenberg, Go's order), `skills::recall`'s contexts | CLI differential: 114 new cases written first and run Go against Go (every tool with text and files: the workspace's guards, files that look like data, links out of the workspace, certificates under a key-like name, bytes that are not UTF-8; every stego action and its errors; stego_clean's copies, without write permission and through a planted link; the sets together and SARINA_CRYPTO=auto; 21 prefetch tasks), then no difference: 963 cases, 4,815 comparisons; mutation 13 of 13 | this part |
 
+Twelfth session (2026-11-17): the owner's package, Labyrinth's voice switch, insight's last part and the forge.
+
+- **For the owner** (`~/Desktop/finish-todo.sh`, not in this repository): step 2 installs sarina-git 1.0.0-157 (built
+  without root from Labyrinth's `sarina-rs-switch` recipe and `ce12da6`, in `~/.cache/labyrinth-switch`; it also carries
+  `/usr/bin/sarina-voiced`), step 3 moves the voice service to it (the new unit in place, the owner's drop-in and home copy
+  removed, keep or undo asked). Labyrinth's `voiced-rust-switch` is merged into its main (`fd58489`, the store's recipe
+  too) and main into `sarina-rs-switch` (`1b1c6b6`); both CI runs green.
+- **insight 2** (`b9861fa`, Go fixes `4de2c11`), **the forge** (Go fixes `9819150`, the port in this part's commit):
+  the tables below. `needs_go` is gone.
+
 Then (2026-11-16, the coordinator's next order): **vault with daily and insight, then the forge**, in the same finished
 pieces; `needs_go` loses SARINA_VAULT when vault, daily and insight are all wired, and SARINA_FORGE with the forge.
 
@@ -1275,6 +1313,7 @@ pieces; `needs_go` loses SARINA_VAULT when vault, daily and insight are all wire
 | daily 2: probing the computer and `sarina daily-report` | `daily.go`'s `Probe` (/proc, statfs, systemctl, coredumpctl, journalctl), `mounts`, `run`, `Status.Render`; `note.go`'s `Fresh`, `SetStatus`, `Path`, `Load`, `Save`; `Note.Print`; sysinfo's `SecurityHeadline` | `daily/mod.rs`, `sysinfo::security::security_headline`; daily-report in `cli::ported` | daily.json: 36 (Render and SetStatus on made-up probes: the numbers a real probe gives move between two runs); CLI differential: 14 new cases written first and run Go against Go (stand-in systemctl, coredumpctl and journalctl on the case's PATH, a stand-in Heimdall and none, a fresh and a stale note, a planted pipe and a planted `.tmp` link; the machine's load, memory, disks and times normalised; 1,055 cases, 5,275 comparisons in all, no difference); mutation 6 of 7, the other equivalent | `d4af09a` |
 | insight 1: `sarina vault-tidy` | `tidy.go` (`SmallTalk`, `Tidy`, the command), `echo.go` (`IsEcho`), `insight.go`'s `Line`, `norm`, `words`, `similar`, `OwnerFromEnv`'s name | `insight/mod.rs`; vault-tidy in `cli::ported` | CLI differential: 14 new cases written first and run Go against Go (a talk log of 31 kinds of line, old and new, her own voice heard back, a date that is not one; dry run, `--yes`, the question answered yes, no and not at all, `--older-than 0`, the owner's name, a planted link and pipe, a stand-in git; 1,069 cases in all, no difference); mutation 5 of 7 after the log was widened, one equivalent (twelve words: no small talk is that long), one not reached (the six-answer window) | `ce12da6` |
 | insight 2: `sarina reflect` and `sarina vault-ingest` (they ask the model: proving, under `SARINA_RS_TRY=reflect,vault-ingest`) | `insight.go` (`OwnerFromEnv`, `ReadTalks`, `ParseNote`, `Render`, `ParseProposals`, `Merge`, `Ask`), `ingest.go` (`Summarize`, `Render`, `NewInboxFiles`, `Related`, `FreeName`), `echo.go`'s `WithoutEchoes`, `command.go` (both commands, the game gate, the state files) | `insight/reflect.rs`, `insight/ingest.rs`, `insight/mod.rs` (the talk files, Go's one-pass `strings.Replacer`, `time.Time`'s JSON); both in `cli::proving` | CLI differential: 68 new cases written first and run Go against Go ("The insight cases"); 1,137 cases in all, no difference; mutation 15 of 16, the other unobservable | this part |
+| forge: the forge whole; `needs_go` gone | `go/forge` (`Validate`, `Create`, `Load` over `filepath.Walk`, `hashOf`, `Bundle` with Go's archive/tar writer, the approvals, the audit log, `allowRun` with `time.Parse`, `RunWithInput`; `tool.go`'s three tools and forge-list, forge-approve, forge-remove) | `forge/mod.rs` (the tar byte for byte: USTAR with the name split into the prefix field where Go splits it, a PAX "path" record where it cannot), `forge/tool.rs`; the commands in `cli::ported`, the tools after sarina_doctor (TestParityToolDefs now records SARINA_FORGE=on); `needs_go` removed from chat and from sarina-rs's main | CLI differential: 85 new cases written first and run Go against Go ("The forge cases"), forge-approve at a pty; 1,222 cases in all, no difference; mutation 18 of 23 after the cases were widened, the other 5 unreachable or equivalent | this part |
 
 **Go fixes found by these parts, in Go and Rust both, each with a Go test that failed before:** crypto_modern panicked
 on "PRIVATE KEY-----" without a whole PEM header, on "-----BEGIN PGP" without its closing dashes, and on a JWT whose alg
@@ -1310,9 +1349,16 @@ name (an append copied the link's target, a key file say, into the vault), wrote
 under that name (the note landed wherever it pointed, outside the vault too), and waited for ever on a named pipe under
 the note's name; now only a regular file is read or replaced and the copy is made anew (TestWriteRefusesPlantedLinksAndPipes).
 
-**Not ported yet** (2026-11-17; insight is whole in Rust):
-1. **the forge** (`go/forge`: its tools and forge-list, forge-approve, forge-remove; runs only inside Limbo guests: a
-   stand-in Limbo socket, never the real store), then `needs_go` goes away (it names only SARINA_FORGE=on now).
+**Every optional tool set is ported** (2026-11-17, the forge last): `needs_go` is gone, so with SARINA_RS_TRY a chat runs in
+Rust whatever sets are on. Found by the forge's port (`9819150`, each with a Go test that failed before:
+forge/planted_test.go): Validate, Create's private-folder check and Create's writing walked the files in Go's random map
+order, so the same call could name another file or fail with another error; approvals.json was read through a named pipe
+for ever and a file of `null` panicked forge-approve; **the audit log was opened through whatever was planted at its name**
+(a pipe held every create, run and approval for ever, a link had the log written elsewhere and the hourly run limit
+counted the file it named: now a regular file of its own or no run at all); Load read a planted sparse file whole (1 GiB
+took 2 GiB). Also fixed this session: Go's `helpers` fixture raced (`cmd.Wait` closed the stdout pipe a reader could still
+use, so a helper that dies at once was "EOF" or "file already closed"; CI failed on it on `9819150`): the client reads a
+pipe of its own now (TestHelperThatDiesReadsAsEOF, which failed before at `-cpu 1,2,8`).
 
 crypto, stego and the vault (all three of its parts) are ported and wired; daily too (`sarina trends`, `sarina daily-report`), and insight
 (`sarina vault-tidy` in `cli::ported`; `sarina reflect` and `sarina vault-ingest` proving under SARINA_RS_TRY, as chat: they ask
@@ -1330,9 +1376,8 @@ Next, in this order:
    1. The owner installs the switch package (Labyrinth's branch `sarina-rs-switch`) and runs with
       `SARINA_RS_TRY=chat,resume,skill,memory-review,gui` in his shell for a few days of normal use.
    2. Then **memory-review and skill** move first: short, bounded, no interactive terminal; skill run is one chat turn.
-   3. Then **chat and resume** (what the owner sees every day). Note: wherever his `sarina.env` turns on an optional set
-      (now only `SARINA_FORGE=on` is left), `needs_go` keeps chat in Go until the forge is ported, so the move changes
-      nothing there yet.
+   3. Then **chat and resume** (what the owner sees every day). Every optional set is ported now (2026-11-17), so the move
+      covers a chat whatever sets the owner's `sarina.env` turns on (the voice's turns on the vault and the forge).
    4. **gui** with them or right after (the owner opens it by hand; the same gate).
    5. **service** last: the always-on unit, and Heimdall's advisory sessions go through it. Before it moves: one
       day with `SARINA_RS_TRY=service` in the unit's environment (a drop-in, the owner's), and a look at the busy
@@ -1341,10 +1386,9 @@ Next, in this order:
    Going back at any step is removing the name from `cli::ported` (or reinstalling the previous package).
 2. **doctor's move**: with the others (it is read-only and quick; `SARINA_RS_TRY=doctor` for the owner's days of use).
 3. **Step 5, the optional tool sets left** (sysinfo and trachtenberg done 2026-11-13, quantum and reverse 2026-11-16), in
-   the owner's order: cryptotools and stego (begun 2026-11-16 in finished parts: the table above says exactly what is
-   done and what is left), then vault with daily and insight (a temporary vault only, never
-   ~/Documents/Obsidian), forge (council done 2026-11-16). Spoken questions stay in Go until vault and forge are ported (the voice's
-   sarina.env sets both). Each with differential cases first, run Go against Go.
+   the owner's order: cryptotools and stego, vault with daily and insight, the forge: **all done** (2026-11-16 and -17;
+   the tables above). Spoken questions can run in Rust once chat moves (the voice's sarina.env sets the vault and the
+   forge, both ported).
 4. The service and GUI differentials do not run in a namespace of their own: their servers take ports from the kernel and
    every address they are given is the scripted server's, so nothing reaches 8899 or 8765 today. If a scenario ever runs
    doctor (or anything that dials a fixed port), give them the CLI differential's `run_case` wrapper first.

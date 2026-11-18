@@ -5,10 +5,9 @@
 //! The agent gets every tool the Go build offers by default (the built-ins, memory, Limbo, and `sarina_doctor`:
 //! `doctor_tool`), the reverse-engineering set with SARINA_REVERSE=on, quantum_sim with SARINA_QUANTUM=on, the system set
 //! (`sysinfo`) with SARINA_SYSTEM=on, the crypto and stego tools with SARINA_CRYPTO=on and the Trachtenberg tool with
-//! SARINA_MATH=on, the vault tools with SARINA_VAULT set. What is not ported yet (the forge) makes [`needs_go`] answer,
-//! and the
-//! command is then handed to the Go build whole. SARINA_CRYPTO=auto and SARINA_MATH=auto are decided from the command
-//! line before that (`sarina-rs`'s main, as Go's `cli.Main`).
+//! SARINA_MATH=on, the vault tools with SARINA_VAULT set, the forge's with SARINA_FORGE=on (the last set ported, 2026-11-17:
+//! the gate that handed a chat with an unported set on to the Go build is gone). SARINA_CRYPTO=auto and SARINA_MATH=auto
+//! are decided from the command line first (`sarina-rs`'s main, as Go's `cli.Main`).
 
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -40,17 +39,6 @@ pub const EXIT_INTERRUPTED: i32 = 130;
 
 /// Go's `DraftWithdrawn`: printed in a streamed reply where a check sent the draft back.
 pub const DRAFT_WITHDRAWN: &str = "\u{1e}draft withdrawn\u{1e}";
-
-// ---- which build answers ----------------------------------------------------------------------------------------------
-
-/// Why this command line needs the Go build: an optional tool set that is not ported is switched on, so the Go build
-/// would offer the model tools the port does not have. None: the port offers exactly the Go build's tools.
-pub fn needs_go(getenv: &dyn Fn(&str) -> String) -> Option<String> {
-    if getenv("SARINA_FORGE") == "on" {
-        return Some("SARINA_FORGE=on".into());
-    }
-    None
-}
 
 // ---- output ------------------------------------------------------------------------------------------------------------
 
@@ -562,7 +550,8 @@ impl Chat {
 
 /// Go's stable built-ins: the default tools and every provider's, in the Go build's order (go/cmd/sarina's
 /// TestParityToolDefs records it): the file, shell, to-do and plan tools, memory, the reverse-engineering set with
-/// SARINA_REVERSE=on and labyrinth-rea, council_ask with a council configured, Limbo, sarina_doctor, quantum_sim with SARINA_QUANTUM=on, the vault tools with
+/// SARINA_REVERSE=on and labyrinth-rea, council_ask with a council configured, Limbo, sarina_doctor, the forge's with
+/// SARINA_FORGE=on, quantum_sim with SARINA_QUANTUM=on, the vault tools with
 /// SARINA_VAULT set, and the system set with SARINA_SYSTEM=on.
 pub fn builtins() -> Vec<Tool> {
     let mut files = crate::tools::files::file_tools();
@@ -584,6 +573,7 @@ pub fn builtins() -> Vec<Tool> {
     out.extend(crate::council::tools());
     out.extend(crate::limbo::tools());
     out.push(doctor_tool());
+    out.extend(crate::forge::tool::tools());
     out.extend(crate::quantum::tools());
     out.extend(crate::vault::tools::tools());
     out.extend(crate::sysinfo::tools());

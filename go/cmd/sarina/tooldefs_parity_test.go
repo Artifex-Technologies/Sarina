@@ -47,7 +47,7 @@ func TestParityToolDefs(t *testing.T) {
 	}
 	for _, env := range []map[string]string{{}, {"SARINA_SYSTEM": "on"},
 		{"SARINA_CRYPTO": "on", "SARINA_MATH": "on", "SARINA_QUANTUM": "on", "SARINA_SYSTEM": "on", "SARINA_REVERSE": "on",
-			"LABYRINTH_REA": "/bin/true", "SARINA_COUNCIL_FILE": councilFile, "SARINA_VAULT": "/made-up/vault"}} {
+			"LABYRINTH_REA": "/bin/true", "SARINA_COUNCIL_FILE": councilFile, "SARINA_VAULT": "/made-up/vault", "SARINA_FORGE": "on"}} {
 		in := map[string]string{}
 		for k, v := range env {
 			in[k] = strings.ReplaceAll(v, councilFile, "{TEMP}/council.json") // the same fixture on every run

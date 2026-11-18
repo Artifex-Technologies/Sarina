@@ -238,6 +238,36 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-17 — Rust port: insight and the forge finished, `needs_go` gone; Labyrinth's voice switch merged; Go fixes
+- **Ported, proved by CLI differential cases written first and run Go against Go:** `sarina reflect` and `sarina
+  vault-ingest` (68 cases; they ask the model, so they run in Rust under SARINA_RS_TRY, as chat), and the whole forge:
+  forge_list, forge_write, forge_run, forge-list, forge-approve (at a pty in the cases), forge-remove (81 cases; the tar
+  each run sends compared byte for byte). Every optional tool set is in Rust now and `needs_go` is gone. **CLI
+  differential 1,222 cases (153 new), no difference;** mutation 15 of 16 (insight) and 18 of 23 (forge), the
+  others unreachable or equivalent.
+- **Go fixes (live code), in Go and Rust both, each with a Go test that failed before** (`4de2c11`, `b9861fa`, `9819150`):
+  a link planted in place of the vault's Talks/ or Inbox/ folder was followed (**vault-tidy rewrote files outside the
+  vault**; reflect and vault-ingest read them); reflect waited for ever on named pipes in Talks/ and at the About note and
+  read the note through a planted link; reflect.json, ingest.json and the forge's approvals.json were read through a pipe
+  for ever and the first two written through a planted link; **the forge's audit log was opened through whatever was
+  planted at its name** (a pipe held every create, run and approval for ever; a link had it written elsewhere and the
+  hourly run limit counted that file: now no run while it is not a regular file of its own); the forge's refusals and
+  Create's errors depended on Go's map order; a state or approvals file of `null` crashed vault-ingest and forge-approve;
+  `reflect --batch 0` never ended; titles and observations were cut inside a letter; an inbox name that is not UTF-8 was
+  summarised again every day; the forge's Load read a planted sparse file whole.
+- **For the owner** (`~/Desktop/finish-todo.sh` steps 2-3): sarina-git 1.0.0-157 (from `ce12da6`: the 11-16 vault, daily
+  and insight fixes, and `/usr/bin/sarina-voiced`), then the voice service moved from his drop-in to the package.
+- **For Labyrinth's board:** `voiced-rust-switch` merged into main (`fd58489`, my answer `voiced-merge = y`): sarina-git
+  (the image's and the store's recipe) builds `/usr/bin/sarina-voiced` and `labyrinth-voiced.service` starts it; the Python
+  service stays one week for a rollback. Main merged into `sarina-rs-switch` (`1b1c6b6`). Both CI green. An installed
+  system needs the new unit file by hand (no package owns it); the to-do does it on my PC.
+- **CI flake fixed in Go:** `helpers` read the helper's output through StdoutPipe, which cmd.Wait closed under the reader
+  (a helper that dies at once was "EOF" or "file already closed"; CI failed on it on `9819150`); now a pipe of its own,
+  with a test that reproduced it.
+
+Signed: Sarina / Claude Opus 5.5
+
+
 ### 2026-11-16 (7) — Rust port: `sarina vault-tidy` in Rust; a Go fix: it rewrote files through planted links
 - **Ported, proved by 14 CLI differential cases written first and run Go against Go:** the talk log's lines, her own voice
   heard back, small talk, and `sarina vault-tidy`. Left (docs/RUST_PORT.md "Resume here"): vault-ingest, reflect, the

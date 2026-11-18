@@ -58,8 +58,7 @@ fn main() {
     let command = args.first().map(Vec::as_slice).unwrap_or_default();
     let name = std::str::from_utf8(command).unwrap_or_default();
     let tried = std::env::var("SARINA_RS_TRY").unwrap_or_default().split(',').any(|c| c == name);
-    let proving = sarina::cli::proving(name)
-        .filter(|_| tried && sarina::cli::chat::needs_go(&|k: &str| std::env::var(k).unwrap_or_default()).is_none());
+    let proving = sarina::cli::proving(name).filter(|_| tried);
     if let Some(run) = std::str::from_utf8(command).ok().and_then(sarina::cli::ported).or(proving) {
         let words: Option<Vec<String>> = args[1..].iter().map(|a| String::from_utf8(a.clone()).ok()).collect();
         if let Some(words) = words {
