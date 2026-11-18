@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Artifex-Technologies/Sarina/go/session"
 	"github.com/Artifex-Technologies/Sarina/go/tools"
 )
 
@@ -116,7 +117,8 @@ func Validate(m Manifest, files map[string]string) error {
 	if len(files) == 0 || len(files) > MaxFiles {
 		return fmt.Errorf("an agent has between 1 and %d files", MaxFiles)
 	}
-	for p, body := range files {
+	for _, p := range sortedKeys(files) { // in name order: the refusal names the same file every time
+		body := files[p]
 		if p == manifestName {
 			return errors.New("manifest.json is written by the forge, not by the agent")
 		}
@@ -142,7 +144,7 @@ func (s *Store) Create(m Manifest, files map[string]string) (string, error) {
 	}
 	// An agent is kept to run later, so code that reads keys, logins or the owner's private folders is refused even without a
 	// network part (the owner's decision, 2026-11-04, after night 2's forged ssh/gpg copier).
-	for _, body := range append([]string{m.Command}, values(files)...) {
+	for _, body := range append([]string{m.Command}, values(files)...) { // the command, then the files in name order
 		if ref := tools.PrivateReference(body); ref != "" {
 			err := fmt.Errorf("refused: this agent would read %s, a credential store or a folder the owner keeps private. Agents never read "+
 				"those, whoever asks; tell the user plainly that you did not write it, and why", ref)
@@ -163,7 +165,8 @@ func (s *Store) Create(m Manifest, files map[string]string) (string, error) {
 		return "", err
 	}
 	defer os.RemoveAll(tmp)
-	for p, body := range files {
+	for _, p := range sortedKeys(files) { // in name order: a file and a folder of one name fail the same way every time
+		body := files[p]
 		full := filepath.Join(tmp, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
 			return "", err
@@ -260,7 +263,8 @@ func (s *Store) Load(name string) (Manifest, map[string]string, error) {
 			return fmt.Errorf("%s is not a plain file", p)
 		}
 		rel, _ := filepath.Rel(root, p)
-		b, err := os.ReadFile(p)
+		// no file is read past the bundle's limit (a planted sparse file of gigabytes is not read into memory)
+		b, err := session.ReadRegular(p, MaxBundle)
 		if err != nil {
 			return err
 		}
@@ -354,8 +358,8 @@ func (s *Store) Remove(name string) error {
 
 func values(m map[string]string) []string {
 	out := make([]string, 0, len(m))
-	for _, v := range m {
-		out = append(out, v)
+	for _, k := range sortedKeys(m) {
+		out = append(out, m[k])
 	}
 	return out
 }

@@ -5,14 +5,20 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 func (s *Store) approvalsPath() string { return filepath.Join(s.StateDir, "approvals.json") }
 
 func (s *Store) readApprovals() map[string]string {
 	m := map[string]string{}
-	if b, err := os.ReadFile(s.approvalsPath()); err == nil {
+	// a regular file of a bounded size: a named pipe planted at the name is not waited on
+	if b, err := session.ReadRegular(s.approvalsPath(), 1<<20); err == nil {
 		_ = json.Unmarshal(b, &m)
+	}
+	if m == nil { // a file of "null"
+		m = map[string]string{}
 	}
 	return m
 }

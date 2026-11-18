@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -93,7 +92,12 @@ func (s *Store) allowRun() error {
 	defer s.mu.Unlock()
 	cut := s.now().Add(-time.Hour)
 	n := 0
-	if f, err := os.Open(filepath.Join(s.StateDir, "forge-audit.jsonl")); err == nil {
+	f, err := openAuditLog(s.StateDir, os.O_RDONLY)
+	if err != nil && !os.IsNotExist(err) {
+		// a link or a pipe in place of the log: runs could not be counted (or recorded), so none is allowed
+		return fmt.Errorf("the forge's audit log cannot be read (%v): no agent runs until the owner looks at it", err)
+	}
+	if err == nil {
 		defer f.Close()
 		sc := bufio.NewScanner(f)
 		sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
