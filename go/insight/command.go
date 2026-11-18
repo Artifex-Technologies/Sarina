@@ -14,6 +14,7 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/config"
 	"github.com/Artifex-Technologies/Sarina/go/guard"
 	"github.com/Artifex-Technologies/Sarina/go/llm"
+	"github.com/Artifex-Technologies/Sarina/go/session"
 	"github.com/Artifex-Technologies/Sarina/go/sysinfo"
 	"github.com/Artifex-Technologies/Sarina/go/vault"
 )
@@ -50,8 +51,11 @@ func ingestCommand(env *cli.Env, args []string) int {
 		return 1
 	}
 	done := map[string]string{}
-	if b, err := os.ReadFile(*statePath); err == nil {
+	if b, err := readState(*statePath); err == nil {
 		_ = json.Unmarshal(b, &done)
+		if done == nil { // a state of "null"
+			done = map[string]string{}
+		}
 	}
 	files, skipped := NewInboxFiles(v.Root, done)
 	for _, s := range skipped {
@@ -128,6 +132,10 @@ func reflectCommand(env *cli.Env, args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if *batch < 1 { // 0 never moved on through the lines; below 0 cut a slice backwards
+		fmt.Fprintln(env.Stderr, "sarina reflect: --batch must be at least 1")
+		return 2
+	}
 	if rc := notWhileGaming(env, "reflect", *force); rc != 0 {
 		return rc
 	}
@@ -141,7 +149,7 @@ func reflectCommand(env *cli.Env, args []string) int {
 		return 1
 	}
 	var st state
-	if b, err := os.ReadFile(*statePath); err == nil {
+	if b, err := readState(*statePath); err == nil {
 		_ = json.Unmarshal(b, &st)
 	}
 	lines, echoes := WithoutEchoes(ReadTalks(v.Root, st.Last))
@@ -167,8 +175,22 @@ func reflectCommand(env *cli.Env, args []string) int {
 	} else {
 		c = llm.NewClient(model)
 	}
+	// the note as it is: only a regular file is read (a link under its name is not followed, a named pipe not waited
+	// on), before the model is asked
 	notePath := filepath.Join(v.Root, filepath.FromSlash(NoteName()))
-	old, readErr := os.ReadFile(notePath)
+	var old []byte
+	exists := false
+	if st, err := os.Lstat(notePath); err == nil {
+		if !st.Mode().IsRegular() {
+			fmt.Fprintf(env.Stderr, "sarina reflect: %s is not a regular file; not read\n", NoteName())
+			return 1
+		}
+		if old, err = session.ReadRegular(notePath, maxNoteBytes); err != nil {
+			fmt.Fprintln(env.Stderr, "sarina reflect:", err)
+			return 1
+		}
+		exists = true
+	}
 	n := ParseNote(string(old))
 	gate := gateAdapter{guard.Memory()}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
@@ -194,7 +216,7 @@ func reflectCommand(env *cli.Env, args []string) int {
 	}
 	if added+refined > 0 {
 		mode := vault.Replace
-		if readErr != nil {
+		if !exists {
 			mode = vault.Create
 		}
 		if _, err := v.Write(guard.Memory(), NoteName(), n.Render(), mode); err != nil {
@@ -227,10 +249,36 @@ func notWhileGaming(env *cli.Env, job string, force bool) int {
 	return 0
 }
 
-// writeState keeps which files were read; never under a test run outside its folders.
+// maxStateBytes bounds a state file as read: ingest.json holds a line per inbox file ever read.
+const maxStateBytes = 4 << 20
+
+// maxNoteBytes bounds the About note as read: the vault reads a note it replaces up to the same size.
+const maxNoteBytes = 4 << 20
+
+// readState reads a state file: a regular file of a bounded size (a named pipe planted at its name is not waited on).
+func readState(path string) ([]byte, error) { return session.ReadRegular(path, maxStateBytes) }
+
+// writeState keeps which files were read; never under a test run outside its folders. It replaces the file through a new
+// one renamed over it: writing into whatever is at the name would follow a link planted there (writing the state
+// wherever it led) and wait for ever on a named pipe.
 func writeState(path string, b []byte) error {
 	if err := testguard.Allow(path); err != nil {
 		return err
 	}
-	return os.WriteFile(path, b, 0o600)
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
+	if err != nil {
+		return err
+	}
+	_, werr := f.Write(b)
+	cerr := f.Close()
+	if werr == nil && cerr == nil {
+		if werr = os.Rename(f.Name(), path); werr == nil {
+			return nil
+		}
+	}
+	os.Remove(f.Name())
+	if werr != nil {
+		return werr
+	}
+	return cerr
 }

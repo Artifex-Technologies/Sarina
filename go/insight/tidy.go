@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -116,21 +115,15 @@ func tidyCommand(env *cli.Env, args []string) int {
 		fmt.Fprintln(env.Stderr, "sarina vault-tidy:", err)
 		return 1
 	}
-	files, _ := filepath.Glob(filepath.Join(v.Root, "Talks", "20*.md"))
-	sort.Strings(files)
 	type change struct {
 		file string
 		text string
 	}
 	var changes []change
 	total := 0
-	for _, f := range files {
-		// only a regular file in Talks/ is tidied: a link there is not followed (it could name any file on the computer),
-		// a named pipe not waited on
-		if st, err := os.Lstat(f); err != nil || !st.Mode().IsRegular() {
-			continue
-		}
-		b, err := session.ReadRegular(f, 4<<20)
+	// only a regular file in Talks/ (a folder of its own) is tidied: see talkFiles
+	for _, f := range talkFiles(v.Root) {
+		b, err := session.ReadRegular(f, maxTalkBytes)
 		if err != nil {
 			continue
 		}

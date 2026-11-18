@@ -23,8 +23,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Artifex-Technologies/Sarina/go/llm"
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // Owner is who the About note is about: SARINA_OWNER_NAME is what to call them (an account name is not what to call them: it may
@@ -60,13 +62,39 @@ type Line struct {
 
 var talkRx = regexp.MustCompile(`^- (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) \| they said: (.*?) \| I said: (.*)$`)
 
+// maxTalkBytes bounds one month of the talk log as read (reflect, vault-tidy): far above a month of talk.
+const maxTalkBytes = 4 << 20
+
+// ownDir says whether dir is a folder of its own, not a link to one: a link planted in place of Talks/ or Inbox/ would
+// have files anywhere on the computer read (and rewritten by vault-tidy).
+func ownDir(dir string) bool {
+	st, err := os.Lstat(dir)
+	return err == nil && st.IsDir()
+}
+
+// talkFiles are the regular files Talks/20*.md, in name order. A link there is not followed (it could name any file on
+// the computer), a named pipe not waited on. The folder is listed, not globbed: a vault's path may hold a glob's
+// special characters ("Notes [old]").
+func talkFiles(vault string) []string {
+	dir := filepath.Join(vault, "Talks")
+	if !ownDir(dir) {
+		return nil
+	}
+	entries, _ := os.ReadDir(dir)
+	var out []string
+	for _, e := range entries {
+		if ok, _ := filepath.Match("20*.md", e.Name()); ok && e.Type().IsRegular() {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	return out
+}
+
 // ReadTalks returns the exchanges in Talks/*.md after `since`, oldest first.
 func ReadTalks(vault string, since time.Time) []Line {
-	files, _ := filepath.Glob(filepath.Join(vault, "Talks", "20*.md"))
-	sort.Strings(files)
 	var out []Line
-	for _, f := range files {
-		b, err := os.ReadFile(f)
+	for _, f := range talkFiles(vault) {
+		b, err := session.ReadRegular(f, maxTalkBytes)
 		if err != nil {
 			continue
 		}
@@ -292,7 +320,7 @@ func (n *Note) Merge(props []Proposal, lines []Line, gate Scanner) (added, refin
 		text := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(p.Observation), "."))
 		text = strings.NewReplacer("—", "-", "\n", " ").Replace(text)
 		if len(text) > 200 {
-			text = text[:200]
+			text = cutBytes(text, 200)
 		}
 		line, ok := grounded(p.Quote, lines)
 		if !ok {
@@ -379,11 +407,24 @@ func prompt() string {
 	return strings.NewReplacer("{name}", capital(o.Name), "{he}", o.Subject, "{him}", o.Object, "{his}", o.Possessive, "{himself}", o.Reflexive).Replace(promptTemplate)
 }
 
+// capital upper-cases the first letter (a whole letter: "émile" is "Émile").
 func capital(s string) string {
 	if s == "" {
 		return s
 	}
-	return strings.ToUpper(s[:1]) + s[1:]
+	_, n := utf8.DecodeRuneInString(s)
+	return strings.ToUpper(s[:n]) + s[n:]
+}
+
+// cutBytes is at most n bytes of s, cut before a letter rather than inside one.
+func cutBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }
 
 // Ask asks the model for proposals about these lines.

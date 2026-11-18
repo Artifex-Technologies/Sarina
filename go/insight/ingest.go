@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/Artifex-Technologies/Sarina/go/llm"
+	"github.com/Artifex-Technologies/Sarina/go/session"
 	"github.com/Artifex-Technologies/Sarina/go/vault"
 )
 
@@ -66,7 +67,7 @@ func noteTitle(t string) string {
 	t = strings.TrimSpace(unsafeName.ReplaceAllString(t, " "))
 	t = strings.Join(strings.Fields(t), " ")
 	if len(t) > 70 {
-		t = strings.TrimSpace(t[:70])
+		t = strings.TrimSpace(cutBytes(t, 70))
 	}
 	if t == "" {
 		t = "Untitled source"
@@ -114,6 +115,9 @@ type InboxFile struct {
 // NewInboxFiles lists the text files in Inbox/ that were not ingested before (or changed since), with why others were skipped.
 func NewInboxFiles(root string, done map[string]string) (files []InboxFile, skipped []string) {
 	dir := filepath.Join(root, "Inbox")
+	if !ownDir(dir) { // a link in place of Inbox/ is not followed: its files are not the owner's inbox
+		return nil, nil
+	}
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
 		name := e.Name()
@@ -133,7 +137,7 @@ func NewInboxFiles(root string, done map[string]string) (files []InboxFile, skip
 			skipped = append(skipped, name+": too large (split it)")
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join(dir, name))
+		raw, err := session.ReadRegular(filepath.Join(dir, name), maxInboxBytes)
 		if err != nil {
 			continue
 		}
@@ -185,7 +189,8 @@ func FreeName(root, title string) string {
 	base := "Sources/" + noteTitle(title)
 	name := base + ".md"
 	for i := 2; i < 100; i++ {
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(name))); os.IsNotExist(err) {
+		// Lstat: a link there (one that leads nowhere too) takes the name, as the vault will not write through it
+		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(name))); os.IsNotExist(err) {
 			return name
 		}
 		name = fmt.Sprintf("%s (%d).md", base, i)
