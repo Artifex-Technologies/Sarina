@@ -6,6 +6,7 @@ pub mod chat;
 pub mod chatopts;
 pub mod doctorcmd;
 pub mod entry;
+pub mod extcmd;
 pub mod guicmd;
 pub mod limbocmd;
 pub mod memorycmd;
@@ -148,6 +149,8 @@ pub fn ported(name: &str) -> Option<Command> {
         "chymaera-analyze" => crate::chymaera::analyze_command,
         "chymaera-device-info" => crate::chymaera::device_info_command,
         "chymaera-merge-report" => crate::chymaera::merge_report_command,
+        "mcp" => extcmd::mcp,
+        "agents" => extcmd::agents,
         // always Rust since 2026-11-18 (the owner's switch; before, only under SARINA_RS_TRY)
         "chat" => chat::chat_command,
         "resume" => chat::resume_command,

@@ -2276,6 +2276,58 @@ def chymaera_cases():
     return cs
 
 
+def ext_cases():
+    """mcp list and agents list: the definitions and profiles the operator's files give (nothing is started), with the
+    policy's trust switch, the workspace files with and without the opt-in, and the owner's signed list (its folder the
+    case's: SARINA_TRUST_DIR)."""
+    cs = []
+    tr = {"SARINA_TRUST_DIR": "{W}/trust"}
+
+    def add(name, args, files=None, env=None, **k):
+        e = dict(tr)
+        e.update(env or {})
+        c = C(name, args, files=files, env=e)
+        c.update(k)
+        cs.append(c)
+    mcp = json.dumps({"mcpServers": {
+        "files": {"command": "/usr/bin/mcp-files", "args": ["--root", "/srv"], "read_only": True, "description": "Files <b>"},
+        "web": {"command": "web-mcp", "args": [], "env": {"TOKEN": "x"}},
+        "bad name!": {"command": "x"},
+        "nocmd": {"args": ["a"]}}})
+    add("mcp list nothing", ["mcp", "list"])
+    add("mcp list", ["mcp", "list"], files=state(**{"home/.sarina/mcp.json": mcp}))
+    add("mcp list SARINA_MCP_FILE", ["mcp", "list"], files=state(**{"m1.json": mcp, "m2.json": "{"}),
+        env={"SARINA_MCP_FILE": "{W}/m1.json:{W}/m2.json:{W}/none.json"})
+    add("mcp list the workspace's file ignored", ["mcp", "list"], files=state(**{"ws/.mcp.json": mcp, "ws/.sarina/mcp.json": mcp}))
+    add("mcp list the workspace's file trusted", ["mcp", "list", "--trust-workspace-mcp"],
+        files=state(**{"ws/.mcp.json": mcp, "ws/.sarina/mcp.json": mcp}))
+    add("mcp list --cwd", ["mcp", "list", "--cwd", "{W}/other", "--trust-workspace-mcp"], files=state(**{"other/.mcp.json": mcp}))
+    add("mcp list policy untrusted", ["mcp", "list"],
+        files=state(**{"home/.sarina/mcp.json": mcp, "home/.sarina/policy.json": json.dumps({"trusted": False})}))
+    add("mcp list policy broken", ["mcp", "list"], files=state(**{"home/.sarina/mcp.json": mcp, "home/.sarina/policy.json": "{"}))
+    add("mcp list a link and a pipe", ["mcp", "list"], files=state(**{"home/.sarina/mcp.json@": "{W}/real.json", "real.json": mcp}))
+    add("mcp list damaged", ["mcp", "list"], files=state(**{"home/.sarina/mcp.json": '{"mcpServers": 5}'}))
+    for bad in ([], ["show"], ["list", "-h"], ["list", "--nope"], ["list", "extra"], ["List"]):
+        add(f"mcp {' '.join(bad)!r}", ["mcp"] + bad)
+    prof = "---\nname: {n}\ndescription: {d}\ntools: [read_file, grep]\nshell: true\n---\nYou review {n}.\n"
+    agents = state(**{"home/.sarina/agents/reviewer.md": prof.format(n="reviewer", d="Reviews code"),
+                      "home/.sarina/agents/explore.md": prof.format(n="explore", d="Replaces the built-in"),
+                      "home/.sarina/agents/broken.md": "no front matter",
+                      "home/.sarina/agents/anytools.md": "---\nname: anytools\ndescription: No tool list\n---\nHelp.\n",
+                      "home/.sarina/agents/notes.txt": "x"})
+    add("agents list built-ins", ["agents", "list"])
+    add("agents list", ["agents", "list"], files=agents)
+    add("agents list SARINA_AGENTS_DIR", ["agents", "list"], files=dict(agents, **{"more/x.md": prof.format(n="xtra", d="More")}),
+        env={"SARINA_AGENTS_DIR": "{W}/more"})
+    add("agents list policy untrusted", ["agents", "list"],
+        files=dict(agents, **{"home/.sarina/policy.json": json.dumps({"trusted": False})}))
+    add("agents list --cwd with a workspace policy", ["agents", "list", "--cwd", "{W}/ws"],
+        files=dict(agents, **{"ws/.sarina-policy.json": json.dumps({"trusted": False})}))
+    for bad in ([], ["show"], ["list", "--help"], ["list", "--cwd"]):
+        add(f"agents {' '.join(bad)!r}", ["agents"] + bad)
+    return cs
+
+
 # shots are drawn from a clock-seeded generator in both builds: the counts are left out, their total is checked by
 # testdata/parity/quantum.json's fixed seeds (here only the line's shape and the number of shots)
 SHOTS_NORM = [(r"(?: \|[01]+(?:>|\\u003e):\d+)+", " COUNTS")]
@@ -3632,7 +3684,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 
 CASE_GROUPS = ["memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
-               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "desktop_cases", "chymaera_cases", "quantum_cases", "reverse_cases", "council_cases",
+               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "desktop_cases", "chymaera_cases", "ext_cases", "quantum_cases", "reverse_cases", "council_cases",
                "crypto_stego_command_cases", "crypto_stego_chat_cases", "vault_cases", "insight_cases", "forge_cases"]
 
 

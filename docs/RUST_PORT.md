@@ -17,7 +17,7 @@ equal.
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego on 2026-11-16 (every part proved against Go fixtures, then wired: `sarina crypto` and `sarina stego` in sarina-rs, the seven tools and both prefetches; `needs_go` no longer names SARINA_CRYPTO), the vault on 2026-11-16 (reading, recall with and without meaning, writing, its tools and commands: `needs_go` no longer names SARINA_VAULT), daily (`sarina trends`, `sarina daily-report`); insight on 2026-11-16 and -17 (`sarina vault-tidy`; `sarina reflect` and `sarina vault-ingest`, which ask the model, under SARINA_RS_TRY); the forge on 2026-11-17 (its tools and forge-list, forge-approve, forge-remove): every optional set is ported and `needs_go` is gone |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), so only `mcp`, `agents`, `version` and the usage (no command, `help`, an unknown one) still reach the Go build and Labyrinth's `sarina-rs-switch` is merged; begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), and `mcp` and `agents` with them, so only `version` and the usage (no command, `help`, an unknown one) still reach the Go build and Labyrinth's `sarina-rs-switch` is merged; begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -906,6 +906,14 @@ uses them). `gojson` gains `UseNumber` reading (`to_any_use_number`) and where t
 Mutation run 11 of 11 after boundary cases were added (the reply bound, port 65536, 13 files over the budget, keys with
 spaces only).
 
+**6. `mcp list` and `agents list`** (25 cases, `ext_cases`; `rust/sarina/src/cli/extcmd.rs`, over loaders ported
+before): not in the list asked for, but they too reached the Go build. MCP definitions from ~/.sarina/mcp.json,
+SARINA_MCP_FILE's list (damaged and missing files), the workspace's files ignored and with `--trust-workspace-mcp`,
+`--cwd`, read-only servers, the policy's trust switch off, a damaged policy, a linked file, a damaged definition; agent
+profiles built in, the operator's (one replacing a built-in, one without a tool list, a broken one, a .txt),
+SARINA_AGENTS_DIR, the trust switch off in the operator's and the workspace's policy; the usage and flags. The owner's
+signed list is the case's own (SARINA_TRUST_DIR). Mutation run 5 of 5 after a profile without a tool list was added.
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them
@@ -1475,12 +1483,12 @@ in every case tried).
 
 Next, in this order:
 
-0. **The Go build's last callers** (2026-11-18): every command the owner asked for is Rust now ("The last Go
-   commands"). What still reaches `/usr/lib/sarina/sarina`: `sarina mcp list` and `sarina agents list` (cli/extcmd.go,
-   over packages already ported), `sarina version` (its answer is the Go build's own VCS stamp: the Rust build needs its
-   own stamp first) and the usage (no command, `help`, `-h`, `--help`, an unknown command: the table's summaries). Those
-   four go before the Go build can be dropped; `rust/sarina/tests/sarina_rs.rs` uses `mcp` and `agents` as its
-   examples of commands still handed over and moves to `version` once they are ported.
+0. **The Go build's last callers** (2026-11-18): every command is Rust now ("The last Go commands") but two things:
+   `sarina version` (its answer is the Go build's own VCS stamp, `debug.ReadBuildInfo`: the Rust build needs a stamp of
+   its own first, from the build script, and the `go` field then names the Rust toolchain, a decision for the owner) and
+   the usage (no command, `help`, `-h`, `--help`, an unknown command: the Rust table needs every command's summary).
+   Those two go before the Go build can be dropped; `rust/sarina/tests/sarina_rs.rs` uses `version` as its example of
+   a command still handed over.
 
 1. **Made 2026-11-18 (the owner's word, all at once): chat, resume, skill, memory-review, service, gui, doctor, council,
    reflect and vault-ingest are always Rust** (`cli::ported`; `cli::proving` and `SARINA_RS_TRY` are gone). The steps below were

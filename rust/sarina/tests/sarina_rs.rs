@@ -125,7 +125,7 @@ fn sarina_rs_starts_as_go_does() {
     check.eq("ported, no Go", &ported(&[b"memory-show"], true), &json!([0, "No curated memory is stored.\n", ""]));
     let away = ported(&[b"memory-show", b"\xff"], false);
     check.eq("not UTF-8 handed over", &json!(away[1].as_str().unwrap().starts_with("arg=memory-show\n")), &json!(true));
-    for c in ["mcp", "agents", "version", "help", "--help", "-h", ""] {
+    for c in ["version", "help", "--help", "-h", ""] {
         let args: Vec<&[u8]> = if c.is_empty() { vec![] } else { vec![c.as_bytes()] };
         check.eq(
             format!("{c:?} with SARINA_RS_NO_GO"),

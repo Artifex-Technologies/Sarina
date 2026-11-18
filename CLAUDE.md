@@ -281,7 +281,8 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   stand-in console in each case's own network: never the real one on 44700). The Argus console protocol is unchanged
   (Argus_App's `docs/SARINA_API.md`); fixed in Go and Rust: a named pipe at Argus App's token file no longer holds the
   commands for ever, and a reply line is read only up to 16 MiB.
-- Still reaching the Go build: `mcp list`, `agents list`, `version` and the usage (`help`, no or an unknown command);
+- Moved too (not on the list, but they also reached Go): `mcp list`, `agents list` (25 cases).
+- Still reaching the Go build: `version` (Go's own VCS stamp) and the usage (`help`, no or an unknown command);
   docs/RUST_PORT.md "Resume here" item 0.
 - **For Labyrinth OS / Yggdrasil:** nothing to change: same names, arguments, output and exit statuses.
 — Signed: Sarina / Claude Opus 5.5
