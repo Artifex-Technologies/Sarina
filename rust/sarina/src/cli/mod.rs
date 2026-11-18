@@ -100,25 +100,6 @@ impl Env {
     }
 }
 
-/// Commands ported and proving themselves, not moved yet: sarina-rs runs them only when `SARINA_RS_TRY` names them (the
-/// CLI differential, rust/parity); otherwise the Go build answers. Every optional tool set is ported (the forge last, on
-/// 2026-11-17), so no tool set hands a command to the Go build any more.
-pub fn proving(name: &str) -> Option<Command> {
-    Some(match name {
-        "chat" => chat::chat_command,
-        "resume" => chat::resume_command,
-        "skill" => chat::skill_command,
-        "memory-review" => chat::memory_review_command,
-        "service" => servicecmd::service,
-        "gui" => guicmd::gui,
-        "doctor" => doctorcmd::doctor,
-        "council" => crate::council::command,
-        "reflect" => crate::insight::reflect::command,
-        "vault-ingest" => crate::insight::ingest::command,
-        _ => return None,
-    })
-}
-
 /// A ported command: the arguments after its name, the exit status back.
 pub type Command = fn(&mut Env, &[String]) -> i32;
 
@@ -150,6 +131,17 @@ pub fn ported(name: &str) -> Option<Command> {
         "forge-list" => crate::forge::tool::list_command,
         "forge-approve" => crate::forge::tool::approve_command,
         "forge-remove" => crate::forge::tool::remove_command,
+        // always Rust since 2026-11-18 (the owner's switch; before, only under SARINA_RS_TRY)
+        "chat" => chat::chat_command,
+        "resume" => chat::resume_command,
+        "skill" => chat::skill_command,
+        "memory-review" => chat::memory_review_command,
+        "service" => servicecmd::service,
+        "gui" => guicmd::gui,
+        "doctor" => doctorcmd::doctor,
+        "council" => crate::council::command,
+        "reflect" => crate::insight::reflect::command,
+        "vault-ingest" => crate::insight::ingest::command,
         _ => return None,
     })
 }

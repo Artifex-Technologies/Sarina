@@ -247,6 +247,18 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-18 (3) — The switch: Sarina's core runs in Rust (the owner's word)
+- `/usr/bin/sarina` (and its `sarina-gui`, `sarina-service` links) is `sarina-rs`; chat, resume, skill, memory-review, service,
+  gui, doctor, council, reflect and vault-ingest always run in Rust (`rust/sarina/src/cli/mod.rs` `ported`; `proving` and
+  `SARINA_RS_TRY` removed). Commands not ported yet (the fleet, desktop-audit, the chymaera-* console tools, voice-chat, ...)
+  are handed unchanged to the Go build at `/usr/lib/sarina/sarina`. Labyrinth's `sarina-rs-switch` is merged into its main.
+- **For Heimdall:** a Go-run Sarina's executable is `/usr/lib/sarina/sarina` (comm `sarina`, as before); Labyrinth's
+  file-integrity template lists it; an existing `/etc/heimdall/config.json` needs it added to `fim_paths` by hand. The service
+  API, `tool_allowlist`, the `tools` count and the session files are unchanged (proved by the service differential).
+- **For Labyrinth OS / Yggdrasil:** nothing to change; the names, units and outputs are the same. Rollback: reinstall the
+  previous sarina-git package.
+— Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-18 (2) — `reverse_engineer similar`: Ghidra BSim against the programs analysed before
 - New static command `similar` (Go `go/reverse`, Rust `reverse.rs`; the owner approved BSim after Heimdall's analysis
   request, 2026-11-17): inside labyrinth-rea's sandbox (no network, the file read-only), Ghidra's headless analyzer imports
