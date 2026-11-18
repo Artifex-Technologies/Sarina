@@ -174,6 +174,33 @@ fn find_fix(name: &str) -> Option<&'static Fix> {
     FIXES.iter().find(|f| f.name == name)
 }
 
+/// Go's `fixCommand`: `sarina system-fix --list | ACTION`, the same table the system_fix tool uses.
+pub fn fix_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    if args.len() == 1 && args[0] == "--list" {
+        for f in FIXES {
+            env.println(&format!("{:<20} {}", f.name, f.what));
+        }
+        return 0;
+    }
+    if args.len() != 1 {
+        let names: Vec<&str> = FIXES.iter().map(|f| f.name).collect();
+        env.eprintln(&format!("usage: sarina system-fix --list | ACTION ({})", names.join(", ")));
+        return 2;
+    }
+    match apply_fix(&Ctx::background(), &args[0]) {
+        Ok(mut out) => {
+            out.push(b'\n');
+            env.stdout.extend_from_slice(&out);
+            env.flush();
+            0
+        }
+        Err(e) => {
+            env.eprintln(&e);
+            2
+        }
+    }
+}
+
 /// Go's `ApplyFix`: one named repair, each command's output and the check afterwards.
 pub fn apply_fix(ctx: &Ctx, name: &str) -> Result<Vec<u8>, String> {
     let Some(f) = find_fix(name) else {

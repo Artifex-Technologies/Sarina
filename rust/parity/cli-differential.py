@@ -1282,6 +1282,105 @@ def math_cases():
     return cs
 
 
+def wrapper_cases():
+    """The commands over tools already ported (2026-11-18): system-status, crash-detail and system-fix (sysinfo, against the
+    system cases' stand-in programs on the case's own PATH: never the real systemctl or bluetoothctl), route (against the
+    stand-in embedder) and trachtenberg."""
+    cs = []
+    now = [(r"(Now: \w{3} \d{4}-\d{2}-\d{2} )\d{2}:\d{2}", r"\1HH:MM")]
+
+    def add(name, args, files=None, env=None, http=(), norm=(), **k):
+        c = C(name, args, files=files, env=env, http=http, norm=list(norm))
+        c.update(k)
+        cs.append(c)
+    full = state(**SYSTEM_BINS, **{"lib/libgame.so": "not really a library", "home/.local/share/Steam/steamapps/common/": ""})
+    for topic in ["performance", "network", "disk", "logs", "services", "crashes", "boot", "audio", "kernel", "hardware",
+                  "gaming", "security"]:
+        add(f"system-status {topic}", ["system-status", topic], files=full, norm=now)
+        add(f"system-status {topic} nothing installed", ["system-status", topic], norm=now)
+    add("system-status capitals and spaces", ["system-status", "  DISK "], files=full, norm=now)
+    add("system-status unknown topic", ["system-status", "rm -rf /"], files=full)
+    add("system-status no topic", ["system-status"], files=full)
+    add("system-status two topics", ["system-status", "disk", "boot"], files=full)
+    add("system-status -h", ["system-status", "-h"], files=full)
+    add("system-status time zone", ["system-status", "disk"], files=full, env={"TZ": "Pacific/Kiritimati"}, norm=now)
+    add("system-status security against Heimdall", ["system-status", "security"], files=full, norm=now,
+        env={"HEIMDALL_REVIEW_URL": "{H}/v1/review"}, routes={"/v1/audit": resp({"packages": [], "kernels": [
+            {"kernel": "k1", "running": True, "count": 2, "fixed_all_in": "k2"}]}), "/v1/quarantine": resp([])})
+    big = dict(full, **bins(uptime='i=0; while [ $i -lt 400 ]; do printf "%s\\n" "ünïcödé line $i"; i=$((i+1)); done\n',
+                            free='printf "\\xff\\xfe not utf-8\\n"\n'))
+    add("system-status long and odd output", ["system-status", "performance"], files=big, norm=now)
+    add("system-status stdout closed", ["system-status", "disk"], files=full, closed_stdout=True)
+    crashfiles = dict(full, **{
+        "bin/addr2line*": sh('case "$*" in *0x1a2b) echo "game_update"; echo "{W}/src/game.c:3";; *) echo "(inlined)"; echo "{W}/src/gone.c:9";; esac\n'),
+        "bin/pacman*": sh('echo "$2 is owned by mygame 1.0-1"\n'),
+        "bin/mygame*": "#!/bin/sh\n",
+        "src/game.c": "int x;\n  render();  \n    update();\n",
+    })
+    add("crash-detail", ["crash-detail", "mygame"], files=crashfiles)
+    add("crash-detail absolute path", ["crash-detail", "{W}/bin/mygame"], files=crashfiles)
+    add("crash-detail absolute path missing", ["crash-detail", "/nowhere/mygame"], files=crashfiles)
+    add("crash-detail not on PATH", ["crash-detail", "othergame"], files=crashfiles)
+    add("crash-detail spaces around", ["crash-detail", "  mygame  "], files=crashfiles)
+    for bad in ["", "-1", "a b", "../x", "$(id)", "x" * 121, "naïve"]:
+        add(f"crash-detail refused {bad[:20]!r}", ["crash-detail", bad], files=crashfiles)
+    add("crash-detail nothing recorded", ["crash-detail", "mygame"],
+        files=dict(crashfiles, **bins(coredumpctl='echo "No coredumps found."; exit 1\n')))
+    add("crash-detail nothing installed", ["crash-detail", "mygame"])
+    add("crash-detail no program", ["crash-detail"], files=crashfiles)
+    add("crash-detail two programs", ["crash-detail", "a", "b"], files=crashfiles)
+    fixfiles = dict(full, **bins(systemctl='echo active; echo active; echo active\n',
+                                 bluetoothctl='case "$1" in show) echo "Controller 00 x"; echo "\tPowered: yes";; esac\n'))
+    add("system-fix --list", ["system-fix", "--list"], files=fixfiles)
+    add("system-fix restart_audio", ["system-fix", "restart_audio"], files=fixfiles)
+    add("system-fix restart_audio in capitals", ["system-fix", " RESTART_AUDIO "], files=fixfiles)
+    add("system-fix restart_bluetooth", ["system-fix", "restart_bluetooth"], files=fixfiles)
+    add("system-fix bluetooth off", ["system-fix", "restart_bluetooth"],
+        files=dict(fixfiles, **bins(bluetoothctl='echo "Powered: no"\n')))
+    add("system-fix nothing installed", ["system-fix", "restart_audio"])
+    add("system-fix check fails", ["system-fix", "restart_audio"],
+        files=dict(fixfiles, **bins(systemctl='case "$*" in *is-active*) echo inactive; exit 3;; *) echo "Failed to restart" ; exit 1;; esac\n')))
+    add("system-fix unknown", ["system-fix", "reboot"], files=fixfiles)
+    add("system-fix a name that is no name", ["system-fix", "x; rm -rf /"], files=fixfiles)
+    add("system-fix no action", ["system-fix"], files=fixfiles)
+    add("system-fix --list and more", ["system-fix", "--list", "restart_audio"], files=fixfiles)
+    add("system-fix two actions", ["system-fix", "restart_audio", "restart_bluetooth"], files=fixfiles)
+    # route: the stand-in embedder (its vectors from the words, no two scores alike); the topics are embedded in Go's map
+    # order, so the requests are compared as a set
+    emb = {"OPENAI_BASE_URL": "{H}/v1"}
+    er = {"/api/embed": embed_answer}
+    for q in [["why", "is", "everything", "so", "laggy"], ["tell me a joke"], ["the wifi and the sound are both broken"],
+              ["steam game crashed"]]:
+        add(f"route {' '.join(q)!r}", ["route"] + q, env=emb, routes=er, unordered=True)
+        add(f"route --scores {' '.join(q)!r}", ["route", "--scores"] + q, env=emb, routes=er, unordered=True)
+    add("route no question", ["route"], env=emb, routes=er)
+    add("route only spaces", ["route", "  ", ""], env=emb, routes=er)
+    add("route --scores alone", ["route", "--scores"], env=emb, routes=er)
+    add("route --scores twice", ["route", "--scores", "--scores", "laggy"], env=emb, routes=er, unordered=True)
+    add("route flag later", ["route", "laggy", "--scores"], env=emb, routes=er, unordered=True)
+    add("route OLLAMA_HOST", ["route", "laggy"], env={"OLLAMA_HOST": "{H_HOSTPORT}"}, routes=er, unordered=True)
+    add("route another model", ["route", "laggy"], env=dict(emb, SARINA_EMBED_MODEL="made-up-embed"), routes=er, unordered=True)
+    add("route cached", ["route", "laggy"], env=emb, routes=er, unordered=True,
+        files=state(**{"home/.local/state/sarina/route-nomic-embed-text.json": route_cache()}))
+    add("route stale cache", ["route", "laggy"], env=emb, routes=er, unordered=True,
+        files=state(**{"home/.local/state/sarina/route-nomic-embed-text.json": '{"sig":"old","vecs":{}}'}))
+    add("route planted pipe", ["route", "laggy"], env=emb, routes=er, unordered=True,
+        files=state(**{"home/.local/state/sarina/route-nomic-embed-text.json|": ""}))
+    add("route state home", ["route", "--scores", "laggy"], env=dict(emb, XDG_STATE_HOME="{W}/state"), routes=er, unordered=True)
+    add("route embedder failing", ["route", "laggy"], env=emb, routes={"/api/embed": resp({"error": "no model"})},
+        norm=[(r'\[\\"search_query: [^\]]*\]', "[EXAMPLES]")])
+    add("route --scores embedder failing", ["route", "--scores", "laggy"], env=emb, routes={"/api/embed": resp({"error": "no model"})},
+        norm=[(r'\[\\"search_query: [^\]]*\]', "[EXAMPLES]")])
+    add("route embedder not answering", ["route", "laggy"], env={"OLLAMA_HOST": "http://127.0.0.1:9"})
+    # trachtenberg
+    for args in [["4632", "11"], ["4632", "12"], ["57", "3"], ["3459", "7"], ["123", "456"], ["123", "456", "56088"],
+                 ["123", "456", "56078"], ["123", "456", "abc"], ["57", "9", "531"], ["1,234", "5_6"], ["9" * 40, "9" * 40],
+                 ["", "5"], ["12a", "5"], ["1" * 41, "2"], ["-3", "4"], ["12", str(9 + (1 << 64) * 10 ** 20)],
+                 ["12", "3", "36", "extra"], ["12"], [], ["-h", "3"]]:
+        add(f"trachtenberg command {[x[:12] for x in args]}", ["trachtenberg"] + args)
+    return cs
+
+
 # shots are drawn from a clock-seeded generator in both builds: the counts are left out, their total is checked by
 # testdata/parity/quantum.json's fixed seeds (here only the line's shape and the number of shots)
 SHOTS_NORM = [(r"(?: \|[01]+(?:>|\\u003e):\d+)+", " COUNTS")]
@@ -2606,10 +2705,18 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
     return res
 
 
-def cases():
-    return (memory_cases() + search_cases() + migrate_cases() + limbo_cases() + tiers_cases() + chat_cases() + other_cases()
-            + doctor_cases() + system_cases() + math_cases() + quantum_cases() + reverse_cases() + council_cases()
-            + crypto_stego_command_cases() + crypto_stego_chat_cases() + vault_cases() + insight_cases() + forge_cases())
+CASE_GROUPS = ["memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
+               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "quantum_cases", "reverse_cases", "council_cases",
+               "crypto_stego_command_cases", "crypto_stego_chat_cases", "vault_cases", "insight_cases", "forge_cases"]
+
+
+def cases(groups=()):
+    """Every case, or only those of the named groups (the functions above, `--group`)."""
+    out = []
+    for g in CASE_GROUPS:
+        if not groups or g in groups:
+            out.extend(globals()[g]())
+    return out
 
 
 def main():
@@ -2618,6 +2725,7 @@ def main():
     ap.add_argument("--rs", required=True)
     ap.add_argument("--out", help="scratch folder (short: a socket lives in it); default a new one in the temp folder")
     ap.add_argument("--only", default="", help="run only the cases whose name contains this")
+    ap.add_argument("--group", action="append", default=[], help="run only this group of cases (a *_cases function; repeatable)")
     ap.add_argument("--show", action="store_true", help="print each case's Go result (and sarina-rs's when they differ)")
     o = ap.parse_args()
     go, rs = os.path.abspath(o.go), os.path.abspath(o.rs)
@@ -2627,7 +2735,7 @@ def main():
         sys.exit(f"{base}: too long for a socket path")
     os.umask(0o022)
     sockp = os.path.join(base, "agent.sock")
-    cs = [c for c in cases() if o.only in c["name"]]
+    cs = [c for c in cases(o.group) if o.only in c["name"]]
     bad = 0
     for c in cs:
         g, r = run_case(c, go, rs, base)

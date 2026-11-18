@@ -418,6 +418,26 @@ pub fn work_out(a: &str, b: &str) -> Result<Work, String> {
     general(a, b)
 }
 
+/// Go's `command`: `sarina trachtenberg A B [ANSWER-TO-CHECK]`.
+pub fn command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    if args.len() < 2 {
+        env.eprintln("usage: sarina trachtenberg A B [ANSWER-TO-CHECK]");
+        return 2;
+    }
+    let w = match work_out(&args[0], &args[1]) {
+        Ok(w) => w,
+        Err(e) => {
+            env.eprintln(&format!("sarina trachtenberg: {e}"));
+            return 1;
+        }
+    };
+    env.println(&report(&w));
+    if args.len() > 2 {
+        env.println(&grade(&w, &args[2]));
+    }
+    0
+}
+
 /// Go's `Tools`: the trachtenberg tool when SARINA_MATH=on (read when the registry is built).
 pub fn tools() -> Vec<Tool> {
     if std::env::var("SARINA_MATH").unwrap_or_default() != "on" {

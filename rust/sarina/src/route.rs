@@ -249,6 +249,49 @@ pub fn route(question: &str, emb: &dyn Embedder) -> Result<Vec<String>, String> 
     Ok(pick(&scores(question, emb)?))
 }
 
+/// Go's `routeCommand`: `sarina route [--scores] QUESTION`, the topics comma-separated (or nothing), or every topic's
+/// score.
+pub fn command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    let mut args = args;
+    let mut with_scores = false;
+    if args.first().is_some_and(|a| a == "--scores") {
+        with_scores = true;
+        args = &args[1..];
+    }
+    let q = crate::gotext::trim_space(&args.join(" ")).to_string();
+    if q.is_empty() {
+        env.eprintln("usage: sarina route [--scores] QUESTION");
+        return 2;
+    }
+    let emb = crate::embed::default_embedder(&env.getenv_fn());
+    if with_scores {
+        match scores(&q, &emb) {
+            Ok(s) => {
+                for (t, v) in s {
+                    env.stdout.extend_from_slice(format!("{v:.3} {t}\n").as_bytes());
+                }
+                env.flush();
+                0
+            }
+            Err(e) => {
+                env.eprintln(&e);
+                1
+            }
+        }
+    } else {
+        match route(&q, &emb) {
+            Ok(t) => {
+                env.println(&t.join(","));
+                0
+            }
+            Err(e) => {
+                env.eprintln(&e);
+                1
+            }
+        }
+    }
+}
+
 fn pick(scores: &[(String, f64)]) -> Vec<String> {
     if scores.is_empty() || scores[0].1 < FLOOR {
         return Vec::new();

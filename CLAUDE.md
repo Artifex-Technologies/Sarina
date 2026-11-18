@@ -247,6 +247,14 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-18 (4) — The last Go-only commands move to Rust
+- Goal: nothing reaches the Go build at `/usr/lib/sarina/sarina` any more, so it can be dropped after a week without a
+  rollback. Each group is proved by `rust/parity/cli-differential.py` (cases first, Go against Go, then Go against Rust
+  with no difference; `--group NAME` runs one group) before it enters `cli::ported`; docs/RUST_PORT.md "The last Go commands".
+- Moved: `system-status`, `crash-detail`, `system-fix`, `route`, `trachtenberg` (103 cases; the tools were Rust already).
+- **For Labyrinth OS / Yggdrasil:** nothing to change: same names, arguments, output and exit statuses.
+— Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-18 (3) — The switch: Sarina's core runs in Rust (the owner's word)
 - `/usr/bin/sarina` (and its `sarina-gui`, `sarina-service` links) is `sarina-rs`; chat, resume, skill, memory-review, service,
   gui, doctor, council, reflect and vault-ingest always run in Rust (`rust/sarina/src/cli/mod.rs` `ported`; `proving` and

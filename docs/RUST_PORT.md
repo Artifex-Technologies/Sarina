@@ -801,6 +801,24 @@ PAX record crossing a power of ten) or are equivalent (a CR is JSON whitespace; 
 where it can (a long name split into the prefix field, no PAX record); Go's os.ReadDir fails a file at open. Create's
 temporary folder (`.new-` and a random number) is normalised.
 
+### The last Go commands (2026-11-18)
+
+After the switch the Go build answered only the commands nothing had ported yet; each group below was written as cases
+first (`wrapper_cases` ...; `--group NAME` runs one group), run Go against Go, then ported, then run Go against Rust
+with no difference, and only then moved into `cli::ported`.
+
+**1. The wrappers** (103 cases, `wrapper_cases`): `system-status` for each of the twelve topics with the system cases'
+stand-in programs and with none, capitals and spaces, an unknown topic, none, two, `-h`, a time zone, Heimdall's audit
+from the stand-in, long and odd output, standard output closed; `crash-detail` with the stand-in coredumpctl, addr2line
+and pacman, an absolute path there and missing, a name not on PATH, spaces around, the seven refused names, nothing
+recorded, nothing installed, no and two programs; `system-fix --list`, each repair against stand-in systemctl and
+bluetoothctl (never the real ones: the case's PATH is its own folder), capitals, Bluetooth off, nothing installed, a
+failing check, an unknown name, a name that is no name, no action, `--list` with more, two actions; `route` and
+`route --scores` on four questions against the stand-in embedder (the topics embedded in Go's map order: compared as a
+set), no question, only spaces, `--scores` alone, twice, after the question, OLLAMA_HOST, another model, the cache
+fresh, stale and a planted pipe, XDG_STATE_HOME, the embedder failing and not answering; `trachtenberg` on every rule,
+a learner's answer right and wrong, bad numbers, the 40-digit wrap, an extra argument, too few. Mutation run 7 of 7.
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them

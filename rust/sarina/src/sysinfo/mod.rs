@@ -413,6 +413,48 @@ pub fn tools() -> Vec<Tool> {
     vec![crash, fix, status]
 }
 
+// ---- the commands ------------------------------------------------------------------------------------------------
+
+/// Go's `statusCommand`: `sarina system-status TOPIC`, one topic's report on standard output.
+pub fn status_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    if args.len() != 1 {
+        env.eprintln(&format!("usage: sarina system-status TOPIC ({})", names().join(", ")));
+        return 2;
+    }
+    match report(&Ctx::background(), &args[0]) {
+        Ok(mut out) => {
+            out.push(b'\n');
+            env.stdout.extend_from_slice(&out);
+            env.flush();
+            0
+        }
+        Err(e) => {
+            env.eprintln(&e);
+            2
+        }
+    }
+}
+
+/// Go's `crashCommand`: `sarina crash-detail PROGRAM`.
+pub fn crash_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    if args.len() != 1 {
+        env.eprintln("usage: sarina crash-detail PROGRAM");
+        return 2;
+    }
+    match crash::crash_detail(&Ctx::background(), &args[0]) {
+        Ok(mut out) => {
+            out.push(b'\n');
+            env.stdout.extend_from_slice(&out);
+            env.flush();
+            0
+        }
+        Err(e) => {
+            env.eprintln(&e);
+            2
+        }
+    }
+}
+
 // ---- the skills' prefetches -------------------------------------------------------------------------------------------
 
 static KEYWORD_TOPICS: LazyLock<Vec<(regex::Regex, &'static str)>> = LazyLock::new(|| {

@@ -131,6 +131,12 @@ pub fn ported(name: &str) -> Option<Command> {
         "forge-list" => crate::forge::tool::list_command,
         "forge-approve" => crate::forge::tool::approve_command,
         "forge-remove" => crate::forge::tool::remove_command,
+        // the last Go-only commands (2026-11-18): wrappers over tools ported before
+        "system-status" => crate::sysinfo::status_command,
+        "crash-detail" => crate::sysinfo::crash_command,
+        "system-fix" => crate::sysinfo::gaming::fix_command,
+        "route" => crate::route::command,
+        "trachtenberg" => crate::trachtenberg::command,
         // always Rust since 2026-11-18 (the owner's switch; before, only under SARINA_RS_TRY)
         "chat" => chat::chat_command,
         "resume" => chat::resume_command,
