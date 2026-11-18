@@ -73,3 +73,14 @@ func TestReflectBatchBelowOneIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// An inbox file whose name is not UTF-8 was summarised again every day: its name went into ingest.json with U+FFFD in place of
+// the bad byte, so it never matched, and each run wrote another Sources/ note ("(2)", "(3)", ...). Now it is skipped, with why.
+func TestInboxNameThatIsNotUTF8IsSkipped(t *testing.T) {
+	vault := t.TempDir()
+	write(t, filepath.Join(vault, "Inbox", "bad\xff.md"), "Something to summarise.\n")
+	files, skipped := NewInboxFiles(vault, map[string]string{})
+	if len(files) != 0 || len(skipped) != 1 || !strings.Contains(skipped[0], "not valid UTF-8") {
+		t.Fatalf("files %d, skipped %q", len(files), skipped)
+	}
+}

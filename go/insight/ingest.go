@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Artifex-Technologies/Sarina/go/llm"
 	"github.com/Artifex-Technologies/Sarina/go/session"
@@ -122,6 +123,10 @@ func NewInboxFiles(root string, done map[string]string) (files []InboxFile, skip
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || strings.HasPrefix(name, ".") {
+			continue
+		}
+		if !utf8.ValidString(name) { // ingest.json could never name it, so it was read again every day
+			skipped = append(skipped, name+": its name is not valid UTF-8 (rename it)")
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(name))

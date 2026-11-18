@@ -1,10 +1,14 @@
 //! Go: `go/insight`: what Sarina learns about the person she talks with, from the talk log (Talks/YYYY-MM.md in the
 //! vault). Ported part by part, each proved against Go (the CLI differential): the talk log's lines, telling her own voice
-//! heard back ([`is_echo`]) and small talk ([`small_talk`]) apart, and `sarina vault-tidy` ([`tidy`], [`tidy_command`]).
-//! `vault-ingest` and `reflect` are next.
+//! heard back ([`is_echo`]) and small talk ([`small_talk`]) apart, `sarina vault-tidy` ([`tidy`], [`tidy_command`]),
+//! `sarina vault-ingest` ([`ingest`]) and `sarina reflect` ([`reflect`]).
+
+pub mod ingest;
+pub mod reflect;
 
 use crate::gopath;
 use crate::gotext::{self, lossy};
+use crate::gotime::Time;
 use std::sync::LazyLock;
 
 /// Go's `Line`: one exchange of the talk log.
@@ -56,6 +60,71 @@ static STATUS_ANSWER_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
         r"(?i)^(your (network|audio|system|computer)|everything('s| is) (looking good|fine|stable)|all (good|fine)|no (hiccups|issues|problems))",
     )
 });
+
+/// Go's `Owner`: what to call the owner and how to refer to them.
+pub struct Owner {
+    pub name: String,
+    pub subject: &'static str,
+    pub object: &'static str,
+    pub possessive: &'static str,
+    pub reflexive: &'static str,
+}
+
+/// Go's `OwnerFromEnv`: SARINA_OWNER_NAME and SARINA_OWNER_PRONOUNS (they/them by default).
+pub fn owner_from_env() -> Owner {
+    let p = gotext::to_lower(&std::env::var("SARINA_OWNER_PRONOUNS").unwrap_or_default().replace(' ', ""));
+    let (subject, object, possessive, reflexive) = match p.as_str() {
+        "he/him" | "he/him/his" | "he" => ("he", "him", "his", "himself"),
+        "she/her" | "she/her/hers" | "she" => ("she", "her", "her", "herself"),
+        _ => ("they", "them", "their", "themselves"),
+    };
+    Owner { name: owner_name(), subject, object, possessive, reflexive }
+}
+
+/// Go's `NoteName`: the note she keeps about the owner.
+pub fn note_name() -> String {
+    format!("Entities/About {}.md", owner_name())
+}
+
+/// Go's `capital`: the first letter upper-cased (Go's simple case mapping: a letter whose upper case is several stays).
+pub fn capital(s: &str) -> String {
+    let mut it = s.chars();
+    let Some(c) = it.next() else { return String::new() };
+    let mut up = c.to_uppercase();
+    let u = if up.len() == 1 { up.next().unwrap_or(c) } else { c };
+    format!("{u}{}", it.as_str())
+}
+
+/// Go's `cutBytes`: at most `n` bytes of `s`, cut before a letter rather than inside one.
+pub fn cut_bytes(s: &str, mut n: usize) -> &str {
+    if s.len() <= n {
+        return s;
+    }
+    while n > 0 && !s.is_char_boundary(n) {
+        n -= 1;
+    }
+    &s[..n]
+}
+
+/// Go's `strings.NewReplacer(old1, new1, ...).Replace(s)`: one pass from the left, at each place the first old string
+/// (in the order given) that starts there; what was put in is not looked at again.
+pub fn replace_once(s: &str, pairs: &[(&str, &str)]) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    'outer: while i < s.len() {
+        for (old, new) in pairs {
+            if !old.is_empty() && s[i..].starts_with(old) {
+                out.push_str(new);
+                i += old.len();
+                continue 'outer;
+            }
+        }
+        let c = s[i..].chars().next().unwrap_or_default();
+        out.push(c);
+        i += c.len_utf8();
+    }
+    out
+}
 
 /// Go's `OwnerFromEnv().Name`: SARINA_OWNER_NAME, or "the owner" when it is unset or looks like a path.
 fn owner_name() -> String {
@@ -196,6 +265,103 @@ pub fn tidy(text: &str, now_ns: i128, older_than_ns: i64) -> (Vec<String>, Vec<S
     (kept, dropped, why)
 }
 
+/// Go's `maxTalkBytes`: one month of the talk log as read.
+const MAX_TALK_BYTES: u64 = 4 << 20;
+
+/// Go's `ownDir`: a folder of its own, not a link to one.
+fn own_dir(dir: &[u8]) -> bool {
+    std::fs::symlink_metadata(gopath::os_path(dir)).is_ok_and(|m| m.is_dir())
+}
+
+/// Go's `talkFiles`: the regular files Talks/20*.md in name order (no link followed, no named pipe waited on; the
+/// folder listed, not globbed).
+fn talk_files(root: &[u8]) -> Vec<Vec<u8>> {
+    let dir = gopath::join(&[root, b"Talks"]);
+    if !own_dir(&dir) {
+        return Vec::new();
+    }
+    gopath::read_dir(&dir)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|e| e.kind == gopath::Kind::Regular && gopath::path_match(b"20*.md", &e.name).unwrap_or(false))
+        .map(|e| gopath::join(&[&dir, &e.name]))
+        .collect()
+}
+
+/// A talk line's time as Go's `time.ParseInLocation(..., time.Local)` gives it.
+pub fn local_time(unix: i64) -> Time {
+    Time::from_unix(unix, 0).local()
+}
+
+/// Go's `ReadTalks`: the exchanges in Talks/20*.md after `since`, oldest first.
+pub fn read_talks(root: &[u8], since: &Time) -> Vec<Line> {
+    let mut out = Vec::new();
+    for f in talk_files(root) {
+        let Ok(b) = crate::session::readfile::read_regular(&f, MAX_TALK_BYTES) else { continue };
+        for l in lossy(&b).split('\n') {
+            let Some(m) = TALK_RE.captures(gotext::trim_space(l)) else { continue };
+            let Some(t) = parse_local(&m[1]) else { continue };
+            if Time::from_unix(t, 0) <= *since {
+                continue;
+            }
+            out.push(Line { when: Some(t), said: m[2].to_string(), me: m[3].to_string() });
+        }
+    }
+    out
+}
+
+/// Go's `WithoutEchoes`: the lines that are her own voice heard back taken out, and returned apart.
+pub fn without_echoes(lines: Vec<Line>) -> (Vec<Line>, Vec<Line>) {
+    let (mut kept, mut echoes) = (Vec::new(), Vec::new());
+    for (i, l) in lines.iter().enumerate() {
+        if is_echo(&l.said, &lines[..i]) {
+            echoes.push(l.clone());
+        } else {
+            kept.push(l.clone());
+        }
+    }
+    (kept, echoes)
+}
+
+/// Go's `notWhileGaming`: exit 75 while a game runs, unless forced.
+fn not_while_gaming(env: &mut crate::cli::Env, job: &str, force: bool) -> i32 {
+    if force {
+        return 0;
+    }
+    match crate::sysinfo::gaming::game_running(&crate::goctx::Ctx::background()) {
+        Some(why) => {
+            env.println(&format!(
+                "sarina {job}: a game is running ({why}); not now, so the game keeps the graphics card (--force overrides)"
+            ));
+            75
+        }
+        None => 0,
+    }
+}
+
+/// Go's `maxStateBytes`.
+const MAX_STATE_BYTES: u64 = 4 << 20;
+
+/// Go's `readState`: a regular file of a bounded size.
+fn read_state(path: &[u8]) -> Result<Vec<u8>, String> {
+    crate::session::readfile::read_regular(path, MAX_STATE_BYTES)
+}
+
+/// Go's `writeState`: a new file renamed over the name (never written through a link or into a pipe there), after the
+/// test guard; the state folder made first (0700) as Go's callers do.
+fn write_state(path: &[u8], b: &[u8]) {
+    if crate::goos::mkdir_all_mode(&gopath::dir(path), 0o700).is_err() || crate::testguard::allow(path).is_err() {
+        return;
+    }
+    let pattern = format!(".{}-*", lossy(&gopath::base(path)));
+    let Ok((mut f, name)) = crate::goos::create_temp(&gopath::dir(path), &pattern) else { return };
+    let ok = std::io::Write::write_all(&mut f, b).is_ok();
+    drop(f);
+    if !ok || std::fs::rename(gopath::os_path(&name), gopath::os_path(path)).is_err() {
+        let _ = std::fs::remove_file(gopath::os_path(&name));
+    }
+}
+
 /// `sarina vault-tidy [--path VAULT] [--older-than DAYS] [--yes] [--dry-run]`.
 pub fn tidy_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
     let mut fs = crate::goflag::FlagSet::new("vault-tidy");
@@ -219,26 +385,14 @@ pub fn tidy_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
             return 1;
         }
     };
-    let dir = gopath::join(&[v.root.as_bytes(), b"Talks"]);
-    let mut names: Vec<Vec<u8>> = gopath::read_dir(&dir)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|e| e.name)
-        .filter(|n| gopath::path_match(b"20*.md", n).unwrap_or(false))
-        .collect();
-    names.sort();
     // Go's time.Duration(days) * 24 * time.Hour, wrapping as Go's does
     let older = fs.num("older-than").wrapping_mul(24).wrapping_mul(3_600_000_000_000);
     let now_ns = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as i128);
     let mut changes: Vec<(Vec<u8>, String)> = Vec::new();
     let mut total = 0;
-    for name in names {
-        let f = gopath::join(&[&dir, &name]);
-        // only a regular file in Talks/ is tidied: a link there is not followed, a named pipe not waited on
-        if !std::fs::symlink_metadata(gopath::os_path(&f)).is_ok_and(|m| m.file_type().is_file()) {
-            continue;
-        }
-        let Ok(b) = crate::session::readfile::read_regular(&f, 4 << 20) else { continue };
+    // only a regular file in Talks/ (a folder of its own) is tidied: see talk_files
+    for f in talk_files(v.root.as_bytes()) {
+        let Ok(b) = crate::session::readfile::read_regular(&f, MAX_TALK_BYTES) else { continue };
         let (kept, dropped, why) = tidy(&lossy(&b), now_ns, older);
         if dropped.is_empty() {
             continue;

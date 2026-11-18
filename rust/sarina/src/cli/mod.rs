@@ -113,6 +113,8 @@ pub fn proving(name: &str) -> Option<Command> {
         "gui" => guicmd::gui,
         "doctor" => doctorcmd::doctor,
         "council" => crate::council::command,
+        "reflect" => crate::insight::reflect::command,
+        "vault-ingest" => crate::insight::ingest::command,
         _ => return None,
     })
 }

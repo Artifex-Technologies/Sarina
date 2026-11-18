@@ -20,7 +20,7 @@ Sarina's repository, next to `packaging/voice` (`sarina-voice`, the client `spea
 programs), because the voice belongs to Sarina and not to Labyrinth's image: LykanOS uses Sarina too
 (`docs/VOICE_PACKAGE_PLAN.md`). It shares `packaging/voice`'s Python-compatible pieces (JSON as Python writes it,
 `str.isspace`, `str.lower`, `os.path.expanduser`) as a path dependency, so both sides of the socket write and read the same
-bytes. Labyrinth's `sarina-git` package builds it (branch `voiced-rust-switch`, not merged).
+bytes. Labyrinth's `sarina-git` package builds it (on Labyrinth's main since 2026-11-17, `fd58489`: the switch below).
 
 ## Design
 
@@ -192,9 +192,11 @@ Different in rare cases:
 
 ## The switch, the check on the card, and the way back
 
-On Labyrinth_OS's branch `voiced-rust-switch` (pushed, not merged): `sarina-git` also builds and installs
-`/usr/bin/sarina-voiced`, and the image's `labyrinth-voiced.service` starts it; the Python files stay in the image for a
-rollback. Nothing on my PC changes until I do the steps below.
+**Merged into Labyrinth_OS's main on 2026-11-17** (`fd58489`, after a week of the drop-in below; my answer
+`voiced-merge = y`): `sarina-git` (the image's recipe and the store's) builds and installs `/usr/bin/sarina-voiced`, and the
+image's `labyrinth-voiced.service` starts it; the Python files stay in the image one week after the switched package runs
+on my PC, for a rollback. An installed system gets the new unit with the next image (no package owns it): on my PC the
+to-do's step puts it in place, removes the drop-in and the home copy. What follows is how it was checked before the merge.
 
 **What the card needs:** nothing new. The Rust service loads the voice venv's own `libonnxruntime.so.1.31.0` (onnxruntime-gpu
 1.31.0; `libonnxruntime_providers_cuda.so` and `_shared.so` beside it) and, before the first session, the venv's CUDA 13 and
@@ -241,7 +243,7 @@ systemctl --user daemon-reload && systemctl --user restart labyrinth-voiced
 ```
 
 After a week without trouble: merge `voiced-rust-switch`, rebuild `sarina-git`, remove the drop-in and
-`~/.local/lib/sarina-voiced`. Later, once the Python is gone, the venv only needs onnxruntime and the NVIDIA packages:
+`~/.local/lib/sarina-voiced` (done 2026-11-17: merged; the package and the unit wait in my to-do). Later, once the Python is gone, the venv only needs onnxruntime and the NVIDIA packages:
 numpy, SciPy, soundfile and tokenizers (about 225 MB of it) are the Python's alone.
 
 ## Resume here
