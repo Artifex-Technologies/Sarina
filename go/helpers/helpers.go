@@ -126,6 +126,7 @@ type Server struct {
 	cmd     *exec.Cmd
 	in      io.WriteCloser
 	out     *bufio.Reader
+	outFile *os.File // the reading end of the helper's output, closed by Close
 	stderr  *tail
 	maxLine int           // answer line limit; 0 = MaxAnswerBytes (tests set it lower)
 	done    chan struct{} // closed when the helper has exited and its output has been copied
@@ -163,12 +164,19 @@ func startServer(modelDir string, maxLine int) (*Server, error) {
 	if s.in, err = cmd.StdinPipe(); err != nil {
 		return nil, err
 	}
-	stdout, err := cmd.StdoutPipe()
+	// a pipe of the client's own, not StdoutPipe: cmd.Wait (run as soon as the helper exits) closes StdoutPipe's reading
+	// end, so a read still under way failed "file already closed" instead of reaching EOF
+	pr, pw, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
-	s.out = bufio.NewReaderSize(stdout, 1<<20)
-	if err := cmd.Start(); err != nil {
+	cmd.Stdout = pw
+	s.outFile = pr
+	s.out = bufio.NewReaderSize(pr, 1<<20)
+	err = cmd.Start()
+	pw.Close()
+	if err != nil {
+		pr.Close()
 		return nil, err
 	}
 	s.done = make(chan struct{})
@@ -260,6 +268,7 @@ func (s *Server) Group(captures []map[string]any, threshold float64) ([][]string
 func (s *Server) Close() error {
 	s.in.Close()
 	<-s.done
+	s.outFile.Close()
 	return s.waitErr
 }
 
