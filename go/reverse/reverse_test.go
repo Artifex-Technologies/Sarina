@@ -35,6 +35,40 @@ func TestPathsMapIntoTheSandboxOrAreRefused(t *testing.T) {
 	}
 }
 
+// Heimdall names a held file it lent her by where her sandbox sees it (/quarantine/<sha256>.sample): such a path is read as
+// the folder it shows and checked like any other, so it cannot reach anything the folders do not hold.
+func TestSandboxPathsAreReadAsTheirFoldersAndNothingElse(t *testing.T) {
+	d := t.TempDir()
+	t.Setenv("LABYRINTH_REA_SAMPLES", d)
+	t.Setenv("HOME", t.TempDir())
+	q := QuarantineDir()
+	_ = os.MkdirAll(q, 0o755)
+	_ = os.WriteFile(filepath.Join(q, "abc.sample"), []byte("x"), 0o440)
+	_ = os.WriteFile(filepath.Join(d, "a.bin"), []byte("x"), 0o644)
+	for in, want := range map[string]string{
+		"/quarantine/abc.sample":            "/quarantine/abc.sample",
+		"/quarantine//./abc.sample":         "/quarantine/abc.sample",
+		"/samples/a.bin":                    "/samples/a.bin",
+		"/samples/sub/../a.bin":             "/samples/a.bin",
+		"/quarantine/x/../../samples/a.bin": "/samples/a.bin",
+	} {
+		if got, err := SandboxPath(in); err != nil || got != want {
+			t.Errorf("%q: %q %v, want %q", in, got, err, want)
+		}
+	}
+	_ = os.Symlink("/etc/passwd", filepath.Join(q, "link"))
+	for _, bad := range []string{"/quarantine/../etc/passwd", "/quarantine/../../etc/shadow", "/samples/../x", "/quarantine/link",
+		"/quarantinex/abc.sample", "/etc/passwd", "/proc/self/environ", filepath.Join(os.Getenv("HOME"), ".ssh", "id_ed25519")} {
+		if got, err := SandboxPath(bad); err == nil {
+			t.Errorf("%q was accepted as %q", bad, got)
+		}
+	}
+	// the arguments labyrinth-rea gets name the folder inside the sandbox
+	if a, err := Args("analyze", "/quarantine/abc.sample", "", 0); err != nil || a[1] != "/quarantine/abc.sample" {
+		t.Fatal(a, err)
+	}
+}
+
 func TestArgsAreChecked(t *testing.T) {
 	d := t.TempDir()
 	t.Setenv("LABYRINTH_REA_SAMPLES", d)

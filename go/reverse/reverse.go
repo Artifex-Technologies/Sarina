@@ -55,8 +55,11 @@ func QuarantineDir() string {
 	return filepath.Join(h, ".local", "share", "labyrinth", "quarantine")
 }
 
-// SandboxPath maps a path on the computer to the path the sandbox sees, or says why it is refused.
+// SandboxPath maps a path on the computer to the path the sandbox sees, or says why it is refused. A path as the sandbox
+// shows it (/samples/..., /quarantine/...) is read as that folder on the computer first (Heimdall names a held file it lent
+// her that way), then checked like any other: ".." is resolved before the folder is chosen, and a link out of it is refused.
 func SandboxPath(p string) (string, error) {
+	p = fromSandbox(p)
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return "", err
@@ -74,6 +77,20 @@ func SandboxPath(p string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%s is not in the analysis folder: only files in %s (or the quarantine) can be examined; ask the owner to put a copy there", p, SamplesDir())
+}
+
+// fromSandbox turns /samples/X and /quarantine/X into the folders' places on the computer; any other path is unchanged.
+func fromSandbox(p string) string {
+	if !strings.HasPrefix(p, "/") {
+		return p
+	}
+	c := filepath.Clean(p)
+	for _, m := range []struct{ inside, host string }{{"/samples", SamplesDir()}, {"/quarantine", QuarantineDir()}} {
+		if c == m.inside || strings.HasPrefix(c, m.inside+"/") {
+			return filepath.Join(m.host, strings.TrimPrefix(c, m.inside))
+		}
+	}
+	return p
 }
 
 var targetRE = regexp.MustCompile(`^[A-Za-z0-9_.:+$@/\- ]{1,200}$`)

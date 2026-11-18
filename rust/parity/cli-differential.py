@@ -2152,7 +2152,9 @@ def reverse_cases():
         add(f"reverse_engineer {cmd} {target!r:.30}", ["chat", "read it"], files=base, http=call("reverse_engineer", a))
     for path in ["{W}/" + samples + "sub/inner.bin", "{W}/home/.local/share/labyrinth/quarantine/held.bin", "{W}/ws/outside.bin",
                  "{W}/ws/link.bin", "outside.bin", "../home/Documents/Samples/demo.bin", "{W}/" + samples + "../escape.bin",
-                 "{W}/" + samples + "missing.bin", "/etc/passwd", ""]:
+                 "{W}/" + samples + "missing.bin", "/etc/passwd", "", "/quarantine/held.bin", "/samples/demo.bin",
+                 "/samples/sub/../demo.bin", "/quarantine/../etc/passwd", "/samples/../../etc/passwd", "/quarantinex/held.bin",
+                 "/quarantine/missing.bin"]:
         add(f"reverse_engineer path {path!r:.50}", ["chat", "read it"], files=base,
             http=call("reverse_engineer", {"command": "search", "path": path, "target": "x"}))
     add("reverse_engineer samples folder from the environment", ["chat", "x"], files=base,

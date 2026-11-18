@@ -225,6 +225,14 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   a human reads; it cannot change anything. **Keep `tool_allowlist` and the
   `tools` count in the session response: Heimdall depends on them.**
   `docs/ECOSYSTEM.md` section 4c.
+- **Heimdall → Sarina (analysis of a held file):** **live 2026-11-17, needs setting up.**
+  Root's `heimdalld immunity analyze --sarina` opens a service session with
+  `tool_allowlist: ["reverse_engineer"]` and sends nothing unless `tools` is 1; it names
+  the file it lent as the sandbox sees it, `/quarantine/<sha256>.sample`, which
+  `go/reverse` reads as the quarantine folder. The answer is untrusted text Heimdall
+  keeps with the held file; it changes nothing. **Keep the allowlist's exact names, the
+  `tools` count, `reverse_engineer`'s name and the `/quarantine` reading.**
+  `docs/ECOSYSTEM.md` section 4d.
 - **Model council (`sarina council`, `council_ask`):** **live, internal.** Asks
   several models (local, and online ones such as Claude, Gemini, ChatGPT) the same
   question and compares the answers; for research when Sarina is stuck. Members get
@@ -237,6 +245,18 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-11-17 (2) — Heimdall asks Sarina to analyse a held file: `/quarantine/...` paths
+- `reverse_engineer` (Go `go/reverse`, Rust `reverse.rs`) reads a path written as its sandbox shows it, `/quarantine/X` or
+  `/samples/X`, as that folder on the computer, then checks it like any other path (`..` resolved first, links out of the
+  folder and everything else refused as before). Heimdall names the held file it lends her that way. Tests: Go
+  `TestSandboxPathsAreReadAsTheirFoldersAndNothingElse`, Rust `tests/reverse_paths.rs`, and 7 new CLI differential cases
+  (`--only "reverse_engineer path"`: 17 cases, no difference).
+- No service change was needed: the service already takes a non-empty `tool_allowlist` and reports the real `tools` count.
+  For Heimdall's analysis the service needs `SARINA_REVERSE=on` and REA visible to the `sarina` account (`docs/ECOSYSTEM.md`
+  §4d); with it on, sessions that do not narrow their tools also get the three reverse tools.
+- **CONTRACT (Heimdall):** §4d, and the contract above. Heimdall's side: its `CLAUDE.md` log 2026-11-17 (3).
+— Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-17 — Rust port: insight and the forge finished, `needs_go` gone; Labyrinth's voice switch merged; Go fixes
 - **Ported, proved by CLI differential cases written first and run Go against Go:** `sarina reflect` and `sarina

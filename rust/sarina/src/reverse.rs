@@ -59,9 +59,12 @@ pub fn quarantine_dir() -> Vec<u8> {
     gopath::join(&[&env_bytes("HOME"), b".local", b"share", b"labyrinth", b"quarantine"])
 }
 
-/// Go's `SandboxPath`: a path on the computer as the sandbox sees it, or why it is refused.
+/// Go's `SandboxPath`: a path on the computer as the sandbox sees it, or why it is refused. A path as the sandbox shows it
+/// (/samples/..., /quarantine/...) is read as that folder on the computer first (Heimdall names a held file it lent her that
+/// way), then checked like any other.
 pub fn sandbox_path(p: &str) -> Result<Vec<u8>, String> {
-    let mut abs = gopath::abs(p.as_bytes()).map_err(|e| crate::goerr::text(&e))?;
+    let host_path = from_sandbox(p.as_bytes());
+    let mut abs = gopath::abs(&host_path).map_err(|e| crate::goerr::text(&e))?;
     if let Ok(r) = gopath::eval_symlinks(&abs) {
         abs = r;
     }
@@ -77,6 +80,20 @@ pub fn sandbox_path(p: &str) -> Result<Vec<u8>, String> {
         "{p} is not in the analysis folder: only files in {} (or the quarantine) can be examined; ask the owner to put a copy there",
         lossy(&samples_dir())
     ))
+}
+
+/// Go's `fromSandbox`: /samples/X and /quarantine/X as the folders' places on the computer; any other path unchanged.
+fn from_sandbox(p: &[u8]) -> Vec<u8> {
+    if !p.starts_with(b"/") {
+        return p.to_vec();
+    }
+    let c = gopath::clean(p);
+    for (inside, host) in [(&b"/samples"[..], samples_dir()), (&b"/quarantine"[..], quarantine_dir())] {
+        if c == inside || (c.starts_with(inside) && c.get(inside.len()) == Some(&b'/')) {
+            return gopath::join(&[&host, &c[inside.len()..]]);
+        }
+    }
+    p.to_vec()
 }
 
 /// Go's `targetRE`: `^[A-Za-z0-9_.:+$@/\- ]{1,200}$`.

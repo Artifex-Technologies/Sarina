@@ -476,6 +476,42 @@ This is Heimdall initiating contact with Sarina, which Heimdall's contract had n
 allowed before; recorded in both repos. It needed one additive Sarina change,
 the `tool_allowlist` field and `tools` count described above.
 
+### 4d. Heimdall asks Sarina to analyse a held file — **live (2026-11-17), needs setting up**
+
+I approved this on 2026-11-17 (Ghidra BSim comes later). When Heimdall holds a file
+(its immunity quarantine, Heimdall `docs/IMMUNITY.md` "Sarina's analysis"), root's
+`heimdalld immunity analyze --sarina SHA256` asks Sarina for a static analysis with
+`reverse_engineer`. Same service API as 4c, with `tool_allowlist: ["reverse_engineer"]`,
+no shell, no writing, `max_turns` 12, `max_tool_calls` 10, `timeout_seconds` 300.
+Heimdall sends the file only if the create answer reports `tools: 1` (an older service
+that ignores the allowlist reports every tool; a service without the tool on reports
+0) and closes the session on every path.
+
+- **The file.** Heimdall lends an uncompressed, read-only copy at
+  `/var/lib/heimdall-sarina-share/<sha256>.sample` (root:sarina 0440) only while it asks.
+  The service account's labyrinth quarantine folder
+  (`/var/lib/sarina/.local/share/labyrinth/quarantine`) is a link to that folder, so
+  labyrinth-rea shows it as `/quarantine/<sha256>.sample`, and that is the path Heimdall
+  names. `go/reverse` (and the Rust port) read a path written as the sandbox shows it
+  (`/quarantine/...`, `/samples/...`) as that folder, then check it like any other:
+  `..` is resolved first, a link out of the folder and anything outside the two folders
+  are refused as before.
+- **What the service needs.** `SARINA_REVERSE=on` in `/etc/sarina/service.env`, and REA
+  and Ghidra readable by the `sarina` account (`LABYRINTH_APPS`). With that on, a service
+  session that does not narrow its tools is also offered `reverse_engineer`,
+  `stage_binary` and `draft_yara_rule`.
+- **The answer is untrusted text.** Heimdall keeps it (32 KiB at most) with the held file
+  as `sarina_analysis`, shows it labelled as hers, and turns a YARA block in it into a
+  rule draft only (root tests it, I approve it). It cannot release, delete or run
+  anything. The session is in the session folder like any other, so Heimdall's watch
+  reads it.
+- **When.** Heimdall's switch `sarina_analysis`: `ask` (default, only when I ask), `auto`
+  (every new held file ClamAV does not know), `off`. Never while Sarina is contained; one
+  at a time; 20 minutes at most.
+
+Keep the exact-name `tool_allowlist` filter, the `tools` count, the tool's name and the
+`/quarantine` reading: Heimdall depends on them.
+
 ---
 
 ## 5. Firmware ↔ App
