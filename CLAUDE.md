@@ -252,6 +252,8 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   rollback. Each group is proved by `rust/parity/cli-differential.py` (cases first, Go against Go, then Go against Rust
   with no difference; `--group NAME` runs one group) before it enters `cli::ported`; docs/RUST_PORT.md "The last Go commands".
 - Moved: `system-status`, `crash-detail`, `system-fix`, `route`, `trachtenberg` (103 cases; the tools were Rust already).
+- Moved: `memory-search`, `voice-chat` (40 cases). voice-chat now names sarina-rs (`/usr/bin/sarina`) as the binary for
+  each spoken turn, where the Go build named itself; the helper still gets the terminal as it is.
 - **For Labyrinth OS / Yggdrasil:** nothing to change: same names, arguments, output and exit statuses.
 — Signed: Sarina / Claude Opus 5.5
 

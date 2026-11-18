@@ -1381,6 +1381,63 @@ def wrapper_cases():
     return cs
 
 
+HELPER_PY = r"""#!/bin/sh
+# a stand-in Python with the helper package: its usage when run bare, else it logs how it was called and answers
+printf '%s|%s\n' "$*" "$PYTHONPATH" >> {W}/helper.log
+if [ "$*" = "-P -m sarina_helpers" ]; then echo "usage: python -m sarina_helpers {serve,memory-search,voice-chat,...}" >&2; exit 2; fi
+shift 3
+if [ -t 0 ]; then echo "standard input is a terminal"; fi
+case "$1" in
+  memory-search) shift; echo "memory-search for: $*"; while IFS= read -r l; do echo "stdin: $l"; done; echo "a warning" >&2;;
+  voice-chat) shift; echo "voice-chat with: $*"; while IFS= read -r l; do echo "heard: $l"; done;;
+esac
+case "$*" in *--fail*) echo "helper failed" >&2; exit 3;; *--die*) kill -9 $$;; *--big*) i=0; while [ $i -lt 3000 ]; do echo "line $i of a long answer"; i=$((i+1)); done;; esac
+exit 0
+"""
+
+
+def helper_cases():
+    """memory-search and voice-chat: the Python helper run with the caller's own standard streams, against a stand-in
+    interpreter on the case's PATH (never a real Python). voice-chat names the binary to run per turn (--sarina-bin): the
+    build's own file, which differs between the two builds by design and is normalised."""
+    cs = []
+    binnorm = [(r"/[^\s|]*/sarina-(?:go|rs)\b", "SARINA_BIN")]
+
+    def add(name, args, files=None, env=None, stdin=None, **k):
+        c = C(name, args, files=files, env=env, stdin=stdin, norm=binnorm)
+        c.update(k)
+        cs.append(c)
+    py = state(**{"bin/python3*": HELPER_PY})
+    for cmd in ["memory-search", "voice-chat"]:
+        add(f"{cmd} no Python", [cmd, "--model-dir", "m", "q"])
+        add(f"{cmd} usual", [cmd, "--model-dir", "{W}/m", "where", "is", "the", "widget"], files=py, stdin=b"one\ntwo\n")
+        add(f"{cmd} no arguments", [cmd], files=py)
+        add(f"{cmd} helper fails", [cmd, "--fail"], files=py)
+        add(f"{cmd} helper killed", [cmd, "--die"], files=py)
+        add(f"{cmd} long answer", [cmd, "--big"], files=py)
+        add(f"{cmd} not importable", [cmd, "q"], files=state(**{"bin/python3*": sh(
+            'echo "Traceback (most recent call last):" >&2; echo "ModuleNotFoundError: No module named \'sarina_helpers\'" >&2; exit 1\n')}))
+        add(f"{cmd} not importable, nothing said", [cmd, "q"], files=state(**{"bin/python3*": sh("exit 1\n")}))
+        add(f"{cmd} only python", [cmd, "q"], files=state(**{"bin/python*": HELPER_PY}))
+        add(f"{cmd} SARINA_HELPERS_PYTHON", [cmd, "q"], files=state(**{"py/mypy*": HELPER_PY}),
+            env={"SARINA_HELPERS_PYTHON": "{W}/py/mypy"})
+        add(f"{cmd} SARINA_HELPERS_PYTHON missing", [cmd, "q"], files=py, env={"SARINA_HELPERS_PYTHON": "{W}/py/none"})
+        add(f"{cmd} SARINA_HELPERS_PYTHON a bare name", [cmd, "q"], files=py, env={"SARINA_HELPERS_PYTHON": "python3"})
+        add(f"{cmd} SARINA_HELPERS_PATH", [cmd, "q"], files=py, env={"SARINA_HELPERS_PATH": "{W}/helpers"})
+        add(f"{cmd} SARINA_HELPERS_PATH and PYTHONPATH", [cmd, "q"], files=py,
+            env={"SARINA_HELPERS_PATH": "{W}/helpers", "PYTHONPATH": "/old/a:/old/b"})
+        add(f"{cmd} PYTHONPATH alone", [cmd, "q"], files=py, env={"PYTHONPATH": "/old"})
+        add(f"{cmd} -h", [cmd, "-h"], files=py)
+        add(f"{cmd} stdout closed", [cmd, "--big"], files=py, closed_stdout=True)
+        # push-to-talk reads the terminal: the helper is given the caller's own standard input, not a pipe
+        add(f"{cmd} at a terminal", [cmd, "q"], files=py, stdin=b"spoken\n\x04", tty=True)
+    add("voice-chat --sarina-bin given", ["voice-chat", "--sarina-bin", "/opt/other", "--tts-model", "v.onnx"], files=py)
+    add("voice-chat --sarina-bin= given", ["voice-chat", "--tts-model", "v.onnx", "--sarina-bin=/opt/other"], files=py)
+    add("voice-chat --sarina-bin= empty", ["voice-chat", "--sarina-bin="], files=py)
+    add("voice-chat --sarina-binary is not it", ["voice-chat", "--sarina-binary", "x"], files=py)
+    return cs
+
+
 # shots are drawn from a clock-seeded generator in both builds: the counts are left out, their total is checked by
 # testdata/parity/quantum.json's fixed seeds (here only the line's shape and the number of shots)
 SHOTS_NORM = [(r"(?: \|[01]+(?:>|\\u003e):\d+)+", " COUNTS")]
@@ -2706,7 +2763,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 
 CASE_GROUPS = ["memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
-               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "quantum_cases", "reverse_cases", "council_cases",
+               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "quantum_cases", "reverse_cases", "council_cases",
                "crypto_stego_command_cases", "crypto_stego_chat_cases", "vault_cases", "insight_cases", "forge_cases"]
 
 

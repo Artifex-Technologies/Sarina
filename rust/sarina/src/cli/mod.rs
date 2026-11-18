@@ -137,6 +137,8 @@ pub fn ported(name: &str) -> Option<Command> {
         "system-fix" => crate::sysinfo::gaming::fix_command,
         "route" => crate::route::command,
         "trachtenberg" => crate::trachtenberg::command,
+        "memory-search" => crate::helpers::memory_search_command,
+        "voice-chat" => crate::helpers::voice_chat_command,
         // always Rust since 2026-11-18 (the owner's switch; before, only under SARINA_RS_TRY)
         "chat" => chat::chat_command,
         "resume" => chat::resume_command,

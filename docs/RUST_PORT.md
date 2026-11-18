@@ -819,6 +819,17 @@ set), no question, only spaces, `--scores` alone, twice, after the question, OLL
 fresh, stale and a planted pipe, XDG_STATE_HOME, the embedder failing and not answering; `trachtenberg` on every rule,
 a learner's answer right and wrong, bad numbers, the 40-digit wrap, an extra argument, too few. Mutation run 7 of 7.
 
+**2. The helper's commands** (40 cases, `helper_cases`): `memory-search` and `voice-chat` against a stand-in
+interpreter on the case's PATH (it prints the helper's usage when run bare, else logs its arguments and PYTHONPATH and
+answers): no Python, the usual call with standard input passed on, no arguments, the helper failing (exit 3) and killed
+(Go's -1, exit 255), a long answer, the module not importable with and without a reason, only `python` on PATH,
+SARINA_HELPERS_PYTHON absolute, missing and a bare name, SARINA_HELPERS_PATH with and without PYTHONPATH, `-h`, standard
+output closed, and **standard input a terminal**: Go's commands give the helper the process's own files (`env.Stdin` is
+`os.Stdin`), so push-to-talk reads the terminal; the Rust commands do the same (`helpers::passthrough_inherit`), not the
+pipes of `passthrough`. voice-chat's `--sarina-bin` given as two words, as `--sarina-bin=`, empty, and a longer flag that
+is not it. On purpose: the binary voice-chat names for each turn is the build's own file, so it is now sarina-rs (the
+turns' chats run in Rust) where it was the Go build; the cases normalise it. Mutation run 5 of 5.
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them

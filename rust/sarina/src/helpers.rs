@@ -208,6 +208,59 @@ pub fn passthrough(
     }
 }
 
+/// Go's `Passthrough` as the commands run it: Go's `env.Stdin`, `Stdout` and `Stderr` are the process's own files there, so
+/// the helper gets them as they are (a terminal stays a terminal for voice-chat's push-to-talk), not pipes.
+pub fn passthrough_inherit(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    env.flush();
+    let getenv = |k: &str| env.getenv(k);
+    if let Err(e) = available(&getenv) {
+        env.stderr.extend_from_slice(format!("sarina: {e}\n  install: {INSTALL_HINT}\n").as_bytes());
+        env.flush();
+        return 1;
+    }
+    let mut cmd = match command(&getenv, args) {
+        Ok(c) => c,
+        Err(e) => {
+            env.eprintln(&format!("sarina: {e}"));
+            return 1;
+        }
+    };
+    let program = cmd.get_program().to_owned();
+    let st = cmd.stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn().and_then(|mut c| c.wait());
+    match st {
+        // Go's `ExitError.ExitCode()`: -1 for a helper ended by a signal
+        Ok(st) => st.code().unwrap_or(-1),
+        Err(e) => {
+            env.eprintln(&format!("sarina: {}", crate::goerr::path("fork/exec", program.as_encoded_bytes(), &e)));
+            1
+        }
+    }
+}
+
+/// Go's `memory-search` command: the helper's semantic search over saved sessions.
+pub fn memory_search_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    let mut a = vec!["memory-search".to_string()];
+    a.extend_from_slice(args);
+    passthrough_inherit(env, &a)
+}
+
+/// Go's `voiceChat`: the helper's audio loop, told which binary to run per turn (this one, unless `--sarina-bin` is
+/// given). This one is sarina-rs where Go named its own build, so each turn's chat runs in Rust.
+pub fn voice_chat_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
+    let have = args.iter().any(|a| a == "--sarina-bin" || a.starts_with("--sarina-bin="));
+    let mut a = vec!["voice-chat".to_string()];
+    if !have {
+        // Go's os.Executable: /proc/self/exe, without the " (deleted)" of a replaced file
+        if let Ok(p) = std::fs::read_link("/proc/self/exe") {
+            let p = p.into_os_string().into_string().unwrap_or_else(|p| crate::gotext::lossy(p.as_encoded_bytes()));
+            a.push("--sarina-bin".into());
+            a.push(p.strip_suffix(" (deleted)").unwrap_or(&p).to_string());
+        }
+    }
+    a.extend_from_slice(args);
+    passthrough_inherit(env, &a)
+}
+
 static RESPONSE: Ty = Ty::Struct(
     "helpers.response",
     "response",
