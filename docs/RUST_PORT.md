@@ -1293,13 +1293,14 @@ gate is the set, not the tool). Where crypto stands, exactly:
 
 Twelfth session (2026-11-17): the owner's package, Labyrinth's voice switch, insight's last part and the forge.
 
-- **For the owner** (`~/Desktop/finish-todo.sh`, not in this repository): step 2 installs sarina-git 1.0.0-157 (built
-  without root from Labyrinth's `sarina-rs-switch` recipe and `ce12da6`, in `~/.cache/labyrinth-switch`; it also carries
+- **For the owner** (`~/Desktop/finish-todo.sh`, not in this repository): step 2 installs sarina-git 1.0.0-163 (built
+  without root from Labyrinth's `sarina-rs-switch` recipe and `5cfa271`, in `~/.cache/labyrinth-switch`; it also carries
   `/usr/bin/sarina-voiced`), step 3 moves the voice service to it (the new unit in place, the owner's drop-in and home copy
   removed, keep or undo asked). Labyrinth's `voiced-rust-switch` is merged into its main (`fd58489`, the store's recipe
   too) and main into `sarina-rs-switch` (`1b1c6b6`); both CI runs green.
-- **insight 2** (`b9861fa`, Go fixes `4de2c11`), **the forge** (Go fixes `9819150`, the port in this part's commit):
-  the tables below. `needs_go` is gone.
+- **insight 2** (`b9861fa`, Go fixes `4de2c11`), **the forge** (Go fixes `9819150`, the port `0011a9e`): the tables
+  below. `needs_go` is gone. Two CI flakes fixed in Go, each reproduced by a test first: `helpers` (`af1b76f`, a pipe
+  closed under its reader) and `agents` (`5cfa271`, two bad switches named in a map's order).
 
 Then (2026-11-16, the coordinator's next order): **vault with daily and insight, then the forge**, in the same finished
 pieces; `needs_go` loses SARINA_VAULT when vault, daily and insight are all wired, and SARINA_FORGE with the forge.

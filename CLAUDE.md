@@ -255,8 +255,11 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   Create's errors depended on Go's map order; a state or approvals file of `null` crashed vault-ingest and forge-approve;
   `reflect --batch 0` never ended; titles and observations were cut inside a letter; an inbox name that is not UTF-8 was
   summarised again every day; the forge's Load read a planted sparse file whole.
-- **For the owner** (`~/Desktop/finish-todo.sh` steps 2-3): sarina-git 1.0.0-157 (from `ce12da6`: the 11-16 vault, daily
-  and insight fixes, and `/usr/bin/sarina-voiced`), then the voice service moved from his drop-in to the package.
+- **For the owner** (`~/Desktop/finish-todo.sh` steps 2-3): sarina-git 1.0.0-163 (from `5cfa271`: every fix above and the
+  11-16 ones, the whole port so far, and `/usr/bin/sarina-voiced`), then the voice service moved from his drop-in to the
+  package.
+- **Two more CI flakes fixed in Go** (both Go's map or pipe races, each reproduced by a test first): `agents` named either
+  of two bad switches (`5cfa271`; CI failed on `0011a9e`), and the one below.
 - **For Labyrinth's board:** `voiced-rust-switch` merged into main (`fd58489`, my answer `voiced-merge = y`): sarina-git
   (the image's and the store's recipe) builds `/usr/bin/sarina-voiced` and `labyrinth-voiced.service` starts it; the Python
   service stays one week for a rollback. Main merged into `sarina-rs-switch` (`1b1c6b6`). Both CI green. An installed
