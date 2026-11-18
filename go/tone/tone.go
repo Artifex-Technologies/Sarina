@@ -253,6 +253,9 @@ func (f Features) vec() map[string]float64 {
 func (b *Baseline) Update(f Features) {
 	if b.Mean == nil {
 		b.Mean, b.Var = map[string]float64{}, map[string]float64{}
+	} else if b.Var == nil {
+		// a file with means but no variances: start them at zero (writing into the nil map stopped the program)
+		b.Var = map[string]float64{}
 	}
 	b.fillCount()
 	b.N++

@@ -257,3 +257,17 @@ func TestBrightnessIsMeasuredAndJoinsAnOldBaselineGently(t *testing.T) {
 		t.Errorf("counts after one update: %v mean %v", old.Count, old.Mean["bright"])
 	}
 }
+
+// A baseline file with running means but no variances (written by hand or by another tool) used to stop every spoken
+// question's measurement: Update wrote into the nil map and the program panicked, every time, without repairing the file.
+func TestABaselineWithMeansButNoVariancesIsStillUpdated(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "b.json")
+	if err := os.WriteFile(p, []byte(`{"n":3,"mean":{"loud":-30}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b := Load(p)
+	b.Update(Features{LoudDB: -24, F0Median: 130, F0RangeSt: 5, Rate: 4.5, PauseRatio: 0.2, Bright: 1800})
+	if b.N != 4 || b.Count["loud"] != 4 || b.Mean["loud"] != -30+0.25*6 || b.Var["loud"] != 0.75*(0.25*36) || b.Var["f0"] != 0 {
+		t.Errorf("after one update: n %d count %v mean %v var %v", b.N, b.Count, b.Mean, b.Var)
+	}
+}
