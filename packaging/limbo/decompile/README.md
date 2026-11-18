@@ -39,8 +39,26 @@ through this order.
 1. **Build the guest image** the way your validation image is built, then, in a
    setup guest that has network, install the tools and the two files above:
    `radare2 ghidra file binutils` (Ghidra pulls in a JDK) and, optionally,
-   `yara` and `capa`. **Check the package names with `pacman -Si` first**: this was
-   not verified here. Rules for yara go in `/usr/share/limbo-decompile/rules.yar`.
+   `capa`. **Check the package names with `pacman -Si` first**: this was
+   not verified here. YARA is YARA-X's `yr` (below), not C YARA: leave the `yara`
+   package out. Rules go in `/usr/share/limbo-decompile/rules.yar`; without that
+   file `triage` has no yara section.
+   - **`yr`**: it is not in Arch's repositories; Labyrinth's package repository
+     builds it (`yara-x`, from VirusTotal's source). On the host, as root, download
+     it with pacman, which checks its signature with the Labyrinth key as for any
+     install, then copy that one file into the setup guest the same way as the two
+     files above and install it there:
+     ```
+     pacman -Sw --noconfirm --cachedir /root/limbo-image yara-x     # on the host
+     pacman -U --noconfirm ./yara-x-1.23.0-1-x86_64.pkg.tar.zst     # in the setup guest
+     yr --version                                                   # in the setup guest: yara-x 1.23.0
+     ```
+     Why a copied package and not Labyrinth's repository in the guest's
+     `pacman.conf`: the guest's pacman then trusts only Arch's keys and
+     repositories, no Labyrinth key has to be put in it (the key's own package
+     comes from that repository), and the image is frozen anyway (its `sha256` is
+     in the profile), so it would never update from the repository. The signature
+     is checked once, on the host.
 2. In the image, create the mount point and a read-only, no-exec mount of the
    exchange share (the tag is fixed by Limbo):
    `mkdir /mnt/exchange` and add to `/etc/fstab`:
@@ -67,11 +85,13 @@ through this order.
 
 ## What is tested, and what is not
 
-Tested (`test_limbo_decompile.sh`, 51 checks, passing on Arch under WSL with
-shellcheck): argument and path rejection (traversal, symlinks, metacharacters,
-oversize, empty), the sample never being executed, exactly which tool commands are
-built, output capping, escape stripping, clean errors for missing tools or a failed
-Ghidra run. The tools are stubs.
+Tested (`test_limbo_decompile.sh`, 72 checks, passing on Arch with shellcheck):
+argument and path rejection (traversal, symlinks, metacharacters, oversize, empty),
+the sample never being executed, exactly which tool commands are built (`yr scan`,
+never C YARA's `yara`), output capping, escape stripping (and yr's colour codes),
+clean errors for missing tools, a failed Ghidra run or a failed `yr`. The tools are
+stubs. `yr scan` itself was also run by hand against the real `yr` 1.23.0 from the
+package: the same `RULE PATH` lines as before.
 
 **Not tested:** that the radare2 flags and the Ghidra post-script behave as written
 against real tools (`rabin2 -I/-e/-S/-l/-i/-z`, `r2 -N -q -A -c afl|pdf`,

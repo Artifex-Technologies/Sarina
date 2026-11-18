@@ -69,12 +69,24 @@ done
 if [ "\${STUB_GHIDRA:-}" = "fail" ]; then echo "ERROR something broke"; exit 1; fi
 printf '=== stub ===\nint main(void) { return 0; }\n' >"\$out"
 EOF
-chmod +x "$BIN/rabin2" "$BIN/r2" "$GH/support/analyzeHeadless"
+# A stub YARA-X yr that colours its rule name (the real one does on a terminal); C YARA's yara must never be called again.
+cat >"$BIN/yr" <<EOF
+#!/bin/bash
+echo "yr \$*" >>"$CALLS"
+if [ "\${STUB_YR:-}" = "broken" ]; then echo "error: syntax error in rules"; exit 1; fi
+printf '\\033[1;36mdemo_rule\\033[0m %s\\n' "\${@: -1}"
+EOF
+cat >"$BIN/yara" <<EOF
+#!/bin/bash
+echo "yara \$*" >>"$CALLS"
+EOF
+chmod +x "$BIN/rabin2" "$BIN/r2" "$GH/support/analyzeHeadless" "$BIN/yr" "$BIN/yara"
+printf 'rule demo_rule { strings: $a = "MZ" condition: $a }\n' >"$T/rules.yar"
 
 run() { # run ARGS... ; sets OUTTXT, RC
 	: >"$CALLS"
 	OUTTXT=$(PATH="$BIN:$PATH" LIMBO_SAMPLE_DIR="$SAMPLES" GHIDRA_HOME="$GH" LIMBO_DECOMPILE_SCRIPTS="$T/scripts" \
-		LIMBO_YARA_RULES="$T/none.yar" "$TOOL" "$@" 2>&1)
+		LIMBO_YARA_RULES="${RULES:-$T/none.yar}" "$TOOL" "$@" 2>&1)
 	RC=$?
 }
 rejects() { # rejects DESC ARGS... : exit status 2 and no tool was called
@@ -131,6 +143,32 @@ expect "rule strings: a shell command" contains '/bin/sh -c'
 expect "rule strings: a mining pool" contains "stratum+tcp://pool.example:3333"
 expect "rule strings: a cron file" contains "/etc/cron.d/updater"
 expect "rule strings: ordinary text is not listed" test "$(printf '%s' "$OUTTXT" | sed -n '/strings worth a rule/,$p' | grep -c 'hello world')" -eq 0
+
+# ---- YARA rules: YARA-X's yr, never C YARA --------------------------------------
+run triage small.bin
+expect "no rules file: no yara section" test "$(printf '%s\n' "$OUTTXT" | grep -c -x -- '-- yara')" -eq 0
+expect "no rules file: yr is not called" test "$(grep -c '^yr ' "$CALLS")" -eq 0
+RULES=$T/rules.yar run triage small.bin
+expect "rules: triage exits 0" test "$RC" -eq 0
+expect "rules: yr scan, C YARA's -w as --disable-warnings" grep -qx -- "yr scan --disable-console-logs --disable-warnings --relaxed-re-syntax $T/rules.yar $SAMPLES/small.bin" "$CALLS"
+expect "rules: C YARA is never called" test "$(grep -c '^yara ' "$CALLS")" -eq 0
+expect "rules: a yara section" test "$(printf '%s\n' "$OUTTXT" | grep -c -x -- '-- yara')" -eq 1
+expect "rules: a match is RULE PATH, as C YARA printed it" test "$(printf '%s\n' "$OUTTXT" | grep -c -x -- "demo_rule $SAMPLES/small.bin")" -eq 1
+expect "rules: no colour codes left" test "$(printf '%s\n' "$OUTTXT" | grep -c -e '\[1;36m' -e '\[0m')" -eq 0
+RULES=$T/rules.yar STUB_YR=broken run triage small.bin
+expect "rules: a yr failure is not fatal" test "$RC" -eq 0
+expect "rules: a yr failure shows its message" contains "syntax error in rules"
+expect "rules: a yr failure shows its exit status" contains "(exit status 1)"
+mkdir -p "$T/bin-noyr"
+ln -s "$BIN/rabin2" "$T/bin-noyr/rabin2"
+if PATH=/usr/bin:/bin command -v yr >/dev/null 2>&1; then
+	echo "note: a real yr is installed in /usr/bin; the missing-yr check is skipped"
+else
+	OUTTXT=$(PATH="$T/bin-noyr:/usr/bin:/bin" LIMBO_SAMPLE_DIR="$SAMPLES" LIMBO_YARA_RULES="$T/rules.yar" "$TOOL" triage small.bin 2>&1)
+	RC=$?
+	expect "rules without yr: triage still exits 0" test "$RC" -eq 0
+	expect "rules without yr: says yr is missing" contains "yr (YARA-X) is not installed in this guest image"
+fi
 
 run functions small.bin
 expect "functions runs r2 afl with no user settings (-N)" grep -q "r2 -N -q -e scr.color=0 -A -c afl $SAMPLES/small.bin" "$CALLS"

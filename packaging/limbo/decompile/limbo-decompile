@@ -126,12 +126,23 @@ cmd_triage() {
 	section "strings from data sections (rabin2 -z, first 200)"
 	timeout "$R2_TIMEOUT" rabin2 -z "$SAMPLE" 2>&1 | head -n 200 >>"$OUT"
 	rule_strings
-	if command -v yara >/dev/null 2>&1 && [ -f "$YARA_RULES" ]; then
-		run_into "yara" timeout "$R2_TIMEOUT" yara -w "$YARA_RULES" "$SAMPLE"
+	if [ -f "$YARA_RULES" ]; then
+		run_into "yara" yara_scan
 	fi
 	if command -v capa >/dev/null 2>&1; then
 		run_into "capa (best effort)" timeout "$R2_TIMEOUT" capa -q "$SAMPLE"
 	fi
+}
+
+# The image's YARA rules against the sample, with YARA-X's `yr` (C YARA's successor; the image has no C YARA since
+# 2026-11-18). One line per matching rule, "RULE PATH", as C YARA's `yara -w` printed it; a rules error is yr's own
+# message and the exit status. yr colours only on a terminal; colour codes are taken out anyway, should any come
+# (finish() would leave their printable half). --disable-warnings: as C YARA's -w; --relaxed-re-syntax: regular
+# expressions C YARA accepted still compile; --disable-console-logs: no console() module output.
+yara_scan() {
+	command -v yr >/dev/null 2>&1 || { echo "yr (YARA-X) is not installed in this guest image"; return 127; }
+	timeout "$R2_TIMEOUT" yr scan --disable-console-logs --disable-warnings --relaxed-re-syntax \
+		"$YARA_RULES" "$SAMPLE" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'
 }
 
 # The strings a detection rule (YARA) could be written on: addresses it calls, places it hides or starts from, commands it

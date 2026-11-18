@@ -247,6 +247,23 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-18 (5) — `limbo-decompile triage` scans with YARA-X's `yr`, not C YARA (R4 phase 3, the owner's decision 1)
+- `packaging/limbo/decompile/limbo-decompile`: the yara section runs `yr scan --disable-console-logs --disable-warnings
+  --relaxed-re-syntax RULES SAMPLE` (C YARA's `yara -w` is gone from the image; `--relaxed-re-syntax` keeps regular
+  expressions C YARA accepted). **Output to callers unchanged:** `-- yara`, then one `RULE PATH` line per match (checked
+  against the real `yr` 1.23.0 from Labyrinth's package); a rules error is yr's own message plus `(exit status N)`; colour
+  codes are taken out should any come. Change: with a rules file but no `yr`, the section says so instead of vanishing.
+- `test_limbo_decompile.sh`: 59 → 72 checks (stub `yr` and a stub `yara` that must never be called; no rules file, a match,
+  a failing `yr`, `yr` missing). Passing here with shellcheck. CI does not run it (the workflow only watches `rust/`, `go/`).
+- **How the image gets `yr`** (README, setup step 1): Labyrinth's package repository builds `yara-x` from VirusTotal's
+  source (Labyrinth `9a74745`); the host's pacman downloads it (`pacman -Sw`, signature checked with the Labyrinth key) and
+  that one file is installed in the setup guest with `pacman -U`. No Labyrinth repository or key inside the guest.
+- **For Heimdall:** nothing to change: `immunity analyze` keeps the triage text as before (the `-- yara` lines have the
+  same shape). Heimdall's log "2026-11-18 (5)" note that the image keeps C `yara` is superseded by this entry.
+- **For Limbo:** docs/SAMPLES.md names `yr` for the decompile image (Limbo's log). **For Labyrinth OS:** the `yara-x`
+  recipe is in; the next publish adds it.
+— Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-18 (4) — The last Go-only commands move to Rust
 - Goal: nothing reaches the Go build at `/usr/lib/sarina/sarina` any more, so it can be dropped after a week without a
   rollback. Each group is proved by `rust/parity/cli-differential.py` (cases first, Go against Go, then Go against Rust
