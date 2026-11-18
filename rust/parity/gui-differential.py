@@ -2,8 +2,8 @@
 """The Go console and sarina-rs's console (`sarina gui`), compared request by request (docs/RUST_PORT.md "The GUI
 differential").
 
-Each scenario starts `sarina gui` from the Go build and then from sarina-rs (SARINA_RS_TRY=gui, SARINA_RS_NO_GO=1: a
-console sarina-rs did not run itself fails instead of reaching Go), each in a throwaway folder made afresh with the same
+Each scenario starts `sarina gui` from the Go build and then from sarina-rs (which never hands anything to the Go build:
+the Go build is only the reference), each in a throwaway folder made afresh with the same
 made-up home and workspace, the same flags and environment, on a loopback port the kernel picks (--port 0) and with
 --no-browser (a scenario that leaves it out finds only its own stand-in xdg-open on PATH: no window is ever opened). The
 console prints its launch link with a random token; the steps read it from there and send it as the page does
@@ -132,7 +132,7 @@ class Backend(sd.Backend):
 
 KEY = "sk-made-up-model-key-456789"
 BASE_ENV = {"OPENAI_BASE_URL": "{H}/v1", "OPENAI_MODEL": "made-up-model", "SARINA_RS_TRY": "gui",
-            "SARINA_GO_BINARY": "{G}", "HEIMDALL_REVIEW_URL": "{H}/v1/review", "SARINA_LIMBO_SOCKET": "{S}"}
+            "HEIMDALL_REVIEW_URL": "{H}/v1/review", "SARINA_LIMBO_SOCKET": "{S}"}
 
 
 def S(name, steps, args=(), env=None, files=None, model=(), heimdall=(), probe=(), limbo=(), argv0=None, browser=False,
@@ -763,13 +763,13 @@ def make_files(work, files, sub):
             os.utime(p, (t + i, t + i))
 
 
-def run_scenario(binary, sc, base, backend, limbo, gobin, busy_port):
+def run_scenario(binary, sc, base, backend, limbo, busy_port):
     work = os.path.join(base, "w")
     if os.path.exists(work):
         shutil.rmtree(work)
     os.makedirs(work)
     sockp = os.path.join(base, "agent.sock")
-    ctx = {"W": work, "S": sockp, "H": backend.url, "G": gobin, "BUSY": str(busy_port), "PORT": "0", "TOKEN": "NOTOKEN"}
+    ctx = {"W": work, "S": sockp, "H": backend.url, "BUSY": str(busy_port), "PORT": "0", "TOKEN": "NOTOKEN"}
 
     def sub(s):
         if isinstance(s, bytes):
@@ -782,7 +782,7 @@ def run_scenario(binary, sc, base, backend, limbo, gobin, busy_port):
 
     make_files(work, sc["files"], sub)
     env = {"PATH": os.path.join(work, "bin"), "LANG": "C.UTF-8", "HOME": os.path.join(work, "home"), "USER": "tester",
-           "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"), "SARINA_RS_NO_GO": "1"}
+           "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock")}
     for k, v in sc["env"].items():
         env[k] = sub(v)
     backend.reset(sc["model"], [sub(x) if isinstance(x, str) else x for x in sc["heimdall"]], sc["probe"])
@@ -1121,10 +1121,10 @@ def main():
     gov = sd.go_minor_patch(go)
     old_go = gov is not None and gov < (27, 4)
     for s in scs:
-        g = run_scenario(go, s, base, backend, limbo, go, busy_port)
+        g = run_scenario(go, s, base, backend, limbo, busy_port)
         if old_go:
             g = as_go_1_27_4(g)
-        r = run_scenario(rs, s, base, backend, limbo, go, busy_port)
+        r = run_scenario(rs, s, base, backend, limbo, busy_port)
         diffs = [k for k in keys if g[k] != r[k]]
         if o.show:
             print(f"== {s['name']}: {json.dumps(g, indent=1, ensure_ascii=False)}")

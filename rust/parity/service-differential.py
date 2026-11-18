@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The Go service and sarina-rs's service, compared request by request (docs/RUST_PORT.md "The service differential").
 
-Each scenario starts `sarina service` from the Go build and then from sarina-rs (SARINA_RS_TRY=service, SARINA_RS_NO_GO=1:
-a service sarina-rs did not run itself fails instead of reaching Go), each in a throwaway folder made afresh with the same
+Each scenario starts `sarina service` from the Go build and then from sarina-rs (which never hands anything to the Go
+build: the Go build is only the reference), each in a throwaway folder made afresh with the same
 made-up home and workspace, the same flags and environment, on a loopback port the kernel picks (--port 0). The same
 scripted steps then talk to it: raw HTTP requests on fresh or kept-alive connections (well-formed and not), sessions
 created, chats, resumes, deletes, a client that hangs up mid-turn, two turns at once, signals. Behind it stand scripted
@@ -286,7 +286,7 @@ TOKEN = "made-up-service-token-0123"
 KEY = "sk-made-up-model-key-456789"
 # HEIMDALL_REVIEW_URL always points at the scripted Heimdall: a grant request otherwise goes to 127.0.0.1:8930
 BASE_ENV = {"OPENAI_BASE_URL": "{H}/v1", "OPENAI_MODEL": "made-up-model", "SARINA_RS_TRY": "service",
-            "SARINA_GO_BINARY": "{G}", "HEIMDALL_REVIEW_URL": "{H}/v1/review"}
+            "HEIMDALL_REVIEW_URL": "{H}/v1/review"}
 NORM = [(r"[0-9a-f]{32}", None), (r"mem_[0-9a-f]{12}", "mem_ID"),
         (r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})", "TIME"),
         (r"Date: [A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT", "Date: DATE"),
@@ -637,13 +637,13 @@ def scenarios():
 
 # ---- running ---------------------------------------------------------------------------------------------------------
 
-def run_scenario(binary, sc, base, backend, limbo, gobin, busy_port):
+def run_scenario(binary, sc, base, backend, limbo, busy_port):
     work = os.path.join(base, "w")
     if os.path.exists(work):
         shutil.rmtree(work)
     os.makedirs(work)
     sockp = os.path.join(base, "agent.sock")
-    ctx = {"W": work, "S": sockp, "H": backend.url, "G": gobin, "BUSY": str(busy_port), "PORT": "0"}
+    ctx = {"W": work, "S": sockp, "H": backend.url, "BUSY": str(busy_port), "PORT": "0"}
 
     def sub(s):
         if isinstance(s, bytes):
@@ -656,7 +656,7 @@ def run_scenario(binary, sc, base, backend, limbo, gobin, busy_port):
 
     cd.make_files(work, sc["files"], sub)
     env = {"PATH": os.path.join(work, "bin"), "LANG": "C.UTF-8", "HOME": os.path.join(work, "home"), "USER": "tester",
-           "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"), "SARINA_RS_NO_GO": "1"}
+           "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock")}
     for k, v in sc["env"].items():
         env[k] = sub(v)
     backend.reset(sc["model"], [sub(x) if isinstance(x, str) else x for x in sc["heimdall"]])
@@ -937,10 +937,10 @@ def main():
     if old_go:
         print(f"the Go build is go1.{gov[0]}.{gov[1]}: its body-too-large answers are compared in go1.27.4's form")
     for s in scs:
-        g = run_scenario(go, s, base, backend, limbo, go, busy_port)
+        g = run_scenario(go, s, base, backend, limbo, busy_port)
         if old_go:
             g = as_go_1_27_4(g)
-        r = run_scenario(rs, s, base, backend, limbo, go, busy_port)
+        r = run_scenario(rs, s, base, backend, limbo, busy_port)
         diffs = [k for k in keys if g[k] != r[k]]
         if o.show:
             print(f"== {s['name']}: {json.dumps(g, indent=1, ensure_ascii=False)}")

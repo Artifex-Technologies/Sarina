@@ -9,7 +9,8 @@ night @NIGHT@ of Sarina's training plan. Work until @UNTIL@ at the latest, then 
    Read its header, its per-group results and every FAIL's answer before you change any code, as the plan says.
 3. Do the night's numbered steps in order. Skip only the steps that say "GPU window" / "full run": the night script does run B
    after you. Group reruns (`--group`, `--only`, 3x) are yours; keep each command under 9 minutes (split it otherwise).
-4. Rules that matter most tonight (section 0.2 has all of them): commit each step by path after `go vet ./... && go test ./...`
+4. Rules that matter most tonight (section 0.2 has all of them): commit each step by path after the Rust build's tests
+   (docs/RUST_PORT.md "Running the tests": `cargo test` and `cargo clippy` in `rust/`, under the memory cap)
    (never `git add -A`), then push it (`git push`; first check the commit names no host name, network address or SSID); never raise Sarina's access, never write `SARINA_ACCESS_TIER`, never change sudoers or
    Heimdall's configuration; one thing on the graphics card; nothing written to the owner's vault; no host name, password or token in
    anything you write. Anything that needs the owner (sudo, a decision, a judgement) goes into your notes for the morning report,

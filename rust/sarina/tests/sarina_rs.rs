@@ -1,10 +1,9 @@
 //! The `sarina-rs` binary as it starts (testdata/parity/entry.json from go/cmd/sarina): the command each name stands for,
 //! the command lines a contained Sarina refuses (message and exit status byte for byte) and those it answers (`version`,
-//! `help`: in Rust since 2026-11-18, never handed over), the usage and `version` answered here, and the one hand-over
-//! left until the Go build is removed: a command with an argument that is not UTF-8, given to the Go build by execve (a
-//! stand-in in bash's builtins here): the arguments unchanged, the environment, the folder, the exit status and the
-//! caller's SIGPIPE disposition. (argv[0] is passed as it came; a script cannot show it: the kernel puts the script's path
-//! there.)
+//! `help`: in Rust since 2026-11-18), the usage and `version` answered here, and a command with an argument that is not
+//! UTF-8: refused (one line on standard error naming the command, the argument's position and the argument as `%q`
+//! quotes it, exit status 2, nothing run; Go ran the command: a difference on purpose since 2026-11-18). Nothing is
+//! handed to the Go build.
 
 mod common;
 
@@ -14,23 +13,12 @@ use std::process::Command;
 use sarina::cli::entry;
 use serde_json::json;
 
-const STAND_IN: &str = r#"#!/bin/bash
-for a in "$@"; do printf 'arg=%s\n' "$a"; done
-printf 'pwd=%s\nmark=%s\n' "$PWD" "$PARITY_MARK"
-while IFS=$'\t' read -r k v; do [[ $k == SigIgn: ]] && printf 'sigpipe_ignored=%s\n' $(( 0x$v >> 12 & 1 )); done < /proc/$$/status
-exit "${EXIT_WITH:-0}"
-"#;
-
 #[test]
 fn sarina_rs_starts_as_go_does() {
     let mut check = common::Check::new();
     let tmp = std::env::temp_dir().join(format!("sarina-rs-entry-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp).unwrap();
-    let go = tmp.join("sarina-go");
-    std::fs::write(&go, STAND_IN).unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&go, std::fs::Permissions::from_mode(0o755)).unwrap();
     let lock = tmp.join("contained");
     std::fs::write(&lock, r#"{"reason":"a test lock: <b> & é"}"#).unwrap();
     let exe = env!("CARGO_BIN_EXE_sarina-rs");
@@ -40,9 +28,7 @@ fn sarina_rs_starts_as_go_does() {
     let run = |name: &str, args: &[&[u8]], contained: bool| {
         let mut cmd = Command::new(tmp.join(name));
         cmd.args(args.iter().map(|a| std::ffi::OsStr::from_bytes(a))).current_dir(&tmp);
-        cmd.env("SARINA_GO_BINARY", &go)
-            .env("PARITY_MARK", "kept")
-            .env("SARINA_CONTAINED_PATH", if contained { lock.clone() } else { tmp.join("none") });
+        cmd.env("SARINA_CONTAINED_PATH", if contained { lock.clone() } else { tmp.join("none") });
         cmd.output().unwrap()
     };
     for c in common::cases("entry") {
@@ -62,7 +48,7 @@ fn sarina_rs_starts_as_go_does() {
                 if code == 3 {
                     got["stderr"] = json!(String::from_utf8_lossy(&out.stderr));
                 } else {
-                    // let through (version, help): answered here, the Go build never started
+                    // let through (version, help): answered here
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     check.eq(
                         format!("{name} {args:?} answered in Rust"),
@@ -78,86 +64,60 @@ fn sarina_rs_starts_as_go_does() {
         }
     }
 
-    // the hand-over (only a command with an argument that is not UTF-8 is still given to the Go build): the arguments as
-    // they came, the folder, the environment, the exit status
-    let out = run("sarina", &[b"memory-show", b"caf\xe9", b"--allow-write"], false);
-    let want = format!("arg=memory-show\narg=caf\u{FFFD}\narg=--allow-write\npwd={}\nmark=kept\nsigpipe_ignored=0\n", tmp.display());
-    check.eq("hand-over", &json!(String::from_utf8_lossy(&out.stdout)), &json!(want));
-    let mut cmd = Command::new(tmp.join("sarina"));
-    cmd.arg("memory-show").arg(std::ffi::OsStr::from_bytes(b"\xff"));
-    cmd.env("SARINA_GO_BINARY", &go).env("SARINA_CONTAINED_PATH", tmp.join("none")).env("EXIT_WITH", "7");
-    check.eq("exit status", &json!(cmd.output().unwrap().status.code()), &json!(7));
-    // a caller that ignores SIGPIPE (systemd's default for services) hands that on, as it would to the Go build itself
-    let out = Command::new("/bin/bash")
-        .arg("-c")
-        .arg(format!("trap '' PIPE; exec {} memory-show $'\\xff'", tmp.join("sarina").display()))
-        .env("SARINA_GO_BINARY", &go)
-        .env("SARINA_CONTAINED_PATH", tmp.join("none"))
-        .output()
-        .unwrap();
-    check.eq("sigpipe ignored", &json!(String::from_utf8_lossy(&out.stdout).contains("sigpipe_ignored=1\n")), &json!(true));
-    // no Go build: 127 and what is missing; a relative SARINA_GO_BINARY is not taken
-    let mut cmd = Command::new(tmp.join("sarina"));
-    cmd.arg("memory-show").arg(std::ffi::OsStr::from_bytes(b"\xff"));
-    cmd.env("SARINA_GO_BINARY", tmp.join("absent")).env("SARINA_CONTAINED_PATH", tmp.join("none"));
-    let out = cmd.output().unwrap();
-    check.eq(
-        "missing go build",
-        &json!([out.status.code(), String::from_utf8_lossy(&out.stderr)]),
-        &json!([
-            127,
-            format!(
-                "sarina: memory-show with an argument that is not UTF-8 is not in the Rust build yet, and the Go build ({}) is missing\n",
-                tmp.join("absent").display()
-            )
-        ]),
-    );
-    // a ported command runs here (the stand-in is never started); one with an argument that is not UTF-8 goes to Go
     let home = tmp.join("home");
     std::fs::create_dir_all(&home).unwrap();
-    let ported = |args: &[&[u8]], no_go: bool| {
-        let mut cmd = Command::new(tmp.join("sarina"));
+    let ported = |name: &str, args: &[&[u8]], contained: bool| {
+        let mut cmd = Command::new(tmp.join(name));
         cmd.args(args.iter().map(|a| std::ffi::OsStr::from_bytes(a)))
-            .current_dir(&tmp)
+            .current_dir(&home)
             .env("HOME", &home)
-            .env("SARINA_GO_BINARY", &go)
-            .env("SARINA_CONTAINED_PATH", tmp.join("none"));
-        if no_go {
-            cmd.env("SARINA_RS_NO_GO", "1");
-        }
+            .env("SARINA_VAULT", home.join("vault"))
+            .env("SARINA_CONTAINED_PATH", if contained { lock.clone() } else { tmp.join("none") });
         let out = cmd.output().unwrap();
         json!([out.status.code(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)])
     };
-    check.eq("ported", &ported(&[b"memory-show"], false), &json!([0, "No curated memory is stored.\n", ""]));
-    check.eq("ported, no Go", &ported(&[b"memory-show"], true), &json!([0, "No curated memory is stored.\n", ""]));
-    let away = ported(&[b"memory-show", b"\xff"], false);
-    check.eq("not UTF-8 handed over", &json!(away[1].as_str().unwrap().starts_with("arg=memory-show\n")), &json!(true));
+    check.eq("ported", &ported("sarina", &[b"memory-show"], false), &json!([0, "No curated memory is stored.\n", ""]));
+    // a command with an argument that is not UTF-8: refused, the first such argument named by its position and quoted as
+    // Go's %q quotes (\xHH), exit status 2, nothing run (the commands take text; Go ran them)
+    let refused =
+        |what: &str, pos: usize, q: &str| json!([2, "", format!("sarina: {what}: argument {pos} is not UTF-8: {q}; nothing was run\n")]);
+    for (name, args, what, pos, q) in [
+        ("sarina", &[&b"memory-show"[..], b"caf\xe9", b"--allow-write"][..], "memory-show", 1, "\"caf\\xe9\""),
+        ("sarina", &[b"memory-show", b"--cwd", b"\xff"], "memory-show", 2, "\"\\xff\""),
+        ("sarina", &[b"note", b"caf\xc3\xa9 ok", b"\xc3", b"\xfe"], "note", 2, "\"\\xc3\""),
+        ("sarina", &[b"note", b"line\none \xe2\x80"], "note", 1, "\"line\\none \\xe2\\x80\""),
+        ("sarina", &[b"vault-init", b"--path", b"v", b"\xed\xa0\x80"], "vault-init", 3, "\"\\xed\\xa0\\x80\""),
+        ("sarina", &[b"version", b"\xff"], "version", 1, "\"\\xff\""),
+        ("sarina-gui", &[b"\xff"], "gui", 1, "\"\\xff\""),
+        ("sarina-service", &[b"--addr", b"\x80"], "service", 2, "\"\\x80\""),
+    ] {
+        check.eq(format!("refused {name} {args:?}"), &ported(name, args, false), &refused(what, pos, q));
+    }
+    // nothing ran: the home the commands write to (the vault, ~/.sarina) is still empty
+    check.eq("nothing written", &json!(std::fs::read_dir(&home).unwrap().count()), &json!(0));
+    // Heimdall's lock comes first: a contained Sarina gives its own message, whatever the arguments
     check.eq(
-        "not UTF-8 with SARINA_RS_NO_GO",
-        &ported(&[b"memory-show", b"\xff"], true),
-        &json!([2, "", "sarina-rs: memory-show with an argument that is not UTF-8 is not ported (SARINA_RS_NO_GO is set)\n"]),
+        "contained first",
+        &ported("sarina", &[b"memory-show", b"\xff"], true),
+        &json!([3, "", entry::contained_message("a test lock: <b> & é")]),
     );
-    // version and the usage are answered here, with or without a Go build (the stand-in is never started); the CLI
-    // differential compares them with Go's byte for byte
+    // version and the usage are answered here; the CLI differential compares them with Go's byte for byte
     let usage = sarina::cli::usage();
-    for no_go in [false, true] {
-        let b = sarina::cli::version::read_build();
-        check.eq(format!("version {no_go}"), &ported(&[b"version"], no_go), &json!([0, b.text() + "\n", ""]));
-        check.eq(format!("version --json {no_go}"), &ported(&[b"version", b"--json"], no_go), &json!([0, b.json() + "\n", ""]));
-        check.eq(format!("no command {no_go}"), &ported(&[], no_go), &json!([2, usage, ""]));
-        for h in ["help", "--help", "-h"] {
-            check.eq(format!("{h} {no_go}"), &ported(&[h.as_bytes(), b"\xff"], no_go), &json!([0, usage, ""]));
-        }
-        for (c, q) in [(&b"serve"[..], "\"serve\""), (b"Version", "\"Version\""), (b"--", "\"--\""), (b"caf\xe9", "\"caf\\xe9\"")] {
-            check.eq(
-                format!("unknown {q} {no_go}"),
-                &ported(&[c, b"\xff"], no_go),
-                &json!([2, "", format!("sarina: unknown command {q}\n\n{usage}")]),
-            );
-        }
+    let b = sarina::cli::version::read_build();
+    check.eq("version", &ported("sarina", &[b"version"], false), &json!([0, b.text() + "\n", ""]));
+    check.eq("version --json", &ported("sarina", &[b"version", b"--json"], false), &json!([0, b.json() + "\n", ""]));
+    check.eq("no command", &ported("sarina", &[], false), &json!([2, usage, ""]));
+    for h in ["help", "--help", "-h"] {
+        check.eq(h, &ported("sarina", &[h.as_bytes(), b"\xff"], false), &json!([0, usage, ""]));
+    }
+    for (c, q) in [(&b"serve"[..], "\"serve\""), (b"Version", "\"Version\""), (b"--", "\"--\""), (b"caf\xe9", "\"caf\\xe9\"")] {
+        check.eq(
+            format!("unknown {q}"),
+            &ported("sarina", &[c, b"\xff"], false),
+            &json!([2, "", format!("sarina: unknown command {q}\n\n{usage}")]),
+        );
     }
     check.eq("the table", &json!(sarina::cli::COMMANDS.len()), &json!(52));
-    check.eq("relative go build", &json!(entry::go_binary(&|_: &str| b"sarina-go".to_vec())), &json!(entry::GO_BUILD.as_bytes()));
     let _ = std::fs::remove_dir_all(&tmp);
     check.done("sarina-rs");
 }

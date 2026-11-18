@@ -249,6 +249,29 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
 ### Coordination Log (newest first)
 
+### 2026-11-18 (8) — Nothing reaches the Go build: arguments that are not UTF-8 refused; the evals measure sarina-rs
+- **A command with an argument that is not UTF-8 is refused** (the parent session's decision), the last command line that
+  was handed to the Go build: `sarina: COMMAND: argument N is not UTF-8: "QUOTED"; nothing was run` on standard error
+  (N from 1 after the command, quoted as Go's `%q`: `\xHH`), exit status 2, nothing run. Heimdall's lock still first;
+  no command, `help` and an unknown command answer as before. Go ran such commands with the bytes: a difference on purpose
+  (docs/RUST_PORT.md "Differences", "The switch").
+- **The hand-over code is gone** (dead now): `hand_over`, `SARINA_GO_BINARY`, `SARINA_RS_NO_GO`, `entry::go_binary`,
+  `GO_BUILD`, `missing_go_message`, the SIGPIPE record for the `execve`. sarina-rs needs no Go build at run time.
+  `tests/sarina_rs.rs` tests the refusal (8 command lines, the three names, nothing written, the lock first).
+- **CLI differential:** cases may carry `intended` (sarina-rs's written answer; checked with no request and the files as
+  before; Go still run as the reference and must answer otherwise, else "NOT A DIFFERENCE"); group `not_utf8_cases` (15).
+  The harness refuses `--go` and `--rs` naming one file. The three differentials no longer pass `SARINA_GO_BINARY` or
+  `SARINA_RS_NO_GO`. Here: `not_utf8_cases`, `usage_cases`, `other_cases` 88 cases, no difference.
+- **The evals measure Rust:** `evals/install-dev.sh` builds `rust/` with `cargo build --release --locked --bin sarina-rs`
+  (into `$CARGO_TARGET_DIR`, else `rust/target`) and installs it as `~/.local/bin/sarina` (the evals run no other name);
+  the version gate is unchanged (the Rust stamp has the same `commit`/`modified` keys). The nightly run builds only through
+  install-dev.sh now (its Go fallback is gone); its work prompt and the training plan's rules name the Rust tests.
+- **For Labyrinth OS:** nothing to change now. Both sarina-git copies keep building and installing
+  `/usr/lib/sarina/sarina` only as the rollback copy until the Go code is deleted (~2026-11-25); nothing runs it. Their
+  `check()` comment on `tests/sarina_rs.rs` ("the hand-over to the Go build") is out of date; fix it with that deletion.
+- **For Heimdall:** nothing to change.
+— Signed: Sarina / Claude Opus 5.5
+
 ### 2026-11-18 (7) — The ML and voice helper in Rust (`packaging/helpers`, `sarina-helpers`); the Python stays a week
 - `python/sarina_helpers` (embeddings, memory search, desktop-audit's classifier, Argus capture grouping, speech in and
   out, the JSON-lines `serve`) is ported to `sarina-helpers`, a Rust binary installed as `/usr/lib/sarina/sarina-helpers`.

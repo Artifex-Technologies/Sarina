@@ -3,7 +3,7 @@
 # sarina-night.timer. The full eval runs are done here, not by a model session, so no tokens are spent waiting on them:
 #
 #   1. wait for an idle graphics card (up to 60 min; otherwise the night is skipped and the report says why)
-#   2. build Sarina from HEAD into ~/.local/bin (evals/install-dev.sh once it exists) and full run A (the night's before-number)
+#   2. build Sarina (the Rust build) from HEAD into ~/.local/bin (evals/install-dev.sh) and full run A (the night's before-number)
 #   3. a headless Claude session does the night's engineering (prompt-work.md), commits as it goes
 #   4. rebuild and full run B (the after-number)
 #   5. a second, short session compares A and B, commits the reports, and writes the morning report (prompt-wrap.md)
@@ -72,9 +72,8 @@ if (( CHECK )); then why=$(busy); say "card: ${why:-idle}"; else
 fi
 
 # ---- 2. build HEAD, full run A
-build() {
-  if [[ -x $REPO/evals/install-dev.sh ]]; then bash "$REPO/evals/install-dev.sh"
-  else cp -a ~/.local/bin/sarina ~/.local/bin/sarina.before-"$(date +%Y%m%d-%H%M)" 2>/dev/null; (cd "$REPO/go" && go build -o ~/.local/bin/sarina ./cmd/sarina); fi
+build() { # the Rust build (sarina-rs) into ~/.local/bin/sarina, the binary before kept; the build gate is install-dev.sh's
+  bash "$REPO/evals/install-dev.sh"
 }
 fullrun() { # $1 = A or B; prints the report path
   local out; out=$REPORTS/$(date +%Y-%m-%d-%H%M).md

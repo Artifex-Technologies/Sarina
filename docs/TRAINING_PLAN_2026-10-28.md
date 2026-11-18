@@ -100,12 +100,13 @@ Already done since this plan was written (do not redo; the Day 1 evening list is
    the GPU; the runner prints "Graphics card: SHARED" and such a run is excluded from the ladder streak (Day 1 makes `ladder.py` do
    that). Keep clear of 04:30-05:00 (reflect timer) and 10:00-10:30 (check-up timer), local time. Daylight saving ends Sunday
    2026-11-01 at 02:00 (MDT -> MST); all times here are local.
-5. Commit per step; `cd go && go vet ./... && go test ./...` before every commit; never `git add -A` (the repos are public;
+5. Commit per step; the Rust build's tests before every commit (since 2026-11-18 the core is Rust: `cd rust && cargo test` and
+   `cargo clippy --all-targets -- -D warnings` under the memory cap, docs/RUST_PORT.md "Running the tests"; before, `go vet` and `go test`); never `git add -A` (the repos are public;
    Labyrinth_OS carries unrelated PKGBUILD bumps). No host name, password or token in a commit, a report or a board entry
    (`sudo -l` output carries the host name: never paste it). Reports (`.md`, `.json`) and `ladder.json` go into
    `Labyrinth_OS/docs/sarina-evals` by path. Commit, do not push, unless the owner says push.
 6. A run measures a binary whose commit equals `git rev-parse HEAD` (Day 1 adds the gate). The dev binary is `~/.local/bin/sarina`
-   (built by `evals/install-dev.sh`, Day 1). Never copy a dev build over `/usr/bin/sarina`: Heimdall's file-integrity list covers it
+   (built by `evals/install-dev.sh`, Day 1; since 2026-11-18 it builds the Rust build, sarina-rs, as the package installs it). Never copy a dev build over `/usr/bin/sarina`: Heimdall's file-integrity list covers it
    and raises CRITICAL; that file changes only through the `sarina-git` package, built and installed by the owner.
 7. Test runs never write to the owner's vault, never speak aloud, never touch the clipboard. The evals set `LABYRINTH_TALK_LOG=0` for cases
    without a test vault; any voice-path measurement you make by hand uses `LABYRINTH_TALK_LOG=0` and a throw-away
@@ -124,8 +125,8 @@ Already done since this plan was written (do not redo; the Day 1 evening list is
 ### 0.3 The day template (every day, in this order)
 
 1. Read `~/Desktop/answers-for-claude.txt` (new lines since yesterday) and the last `TEAM_BOARD.md` entry's "resume here".
-2. `cd ~/Documents/Github/Sarina/go && go build ./... && go vet ./... && go test ./...`, then `bash ../evals/install-dev.sh`
-   (Day 1 writes it); `sarina version` must print HEAD's commit.
+2. The Rust build's tests (rule 5), then `bash ~/Documents/Github/Sarina/evals/install-dev.sh` (Day 1 wrote it; it builds sarina-rs
+   since 2026-11-18); `sarina version` must print HEAD's commit.
 3. Check the card is idle: `nvidia-smi` (no process but the desktop), `ollama ps` (nothing, or only `nomic-embed-text`), no timer within
    30 min (`systemctl --user list-timers`). Then the morning full run (`python3 evals/run_evals.py`, 40-50 min).
 4. Triage from the report's per-group table and send-back table (Day 1 adds both): read every FAIL's answer in the `.md` and the
@@ -242,7 +243,7 @@ Steps (~5.5 h):
    b38d6a1, 74d2e97, 9a54aa8, 071026c, 7ad69f0 (one line each; the commit messages say what they did). Fix `docs/ECOSYSTEM.md` §4a and
    `CLAUDE.md` §5 to say Heimdall reads `/var/lib/sarina/sessions` (not `.port_sessions/agent`; the live `/etc/heimdall/config.json`
    says so). Commit: `docs: 2026-10-27 audit commits logged; Heimdall reads /var/lib/sarina/sessions (ECOSYSTEM 4a)`.
-2. (45 min) One binary, one truth. New `evals/install-dev.sh`: `cd go && go build -o ~/.local/bin/sarina ./cmd/sarina` after a dated
+2. (45 min) One binary, one truth. New `evals/install-dev.sh` (since 2026-11-18 it builds sarina-rs instead): `cd go && go build -o ~/.local/bin/sarina ./cmd/sarina` after a dated
    `~/.local/bin/sarina.before-YYYYMMDD-HHMM` backup; copy `../Labyrinth_OS/profile/airootfs/usr/local/bin/labyrinth-ask-sarina` to
    `~/.local/bin/` (the runner and the owner's PATH use that copy; `/usr/local/bin` stays the owner's). In `evals/run_evals.py` `main()`:
    compare the build commit the report already records with `git rev-parse HEAD`; on mismatch print `STALE BUILD`, write

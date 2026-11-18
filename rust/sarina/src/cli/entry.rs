@@ -1,6 +1,7 @@
 //! Go: `go/cmd/sarina/main.go`, as `sarina-rs` starts (docs/RUST_PORT.md, "The plan for `sarina-rs`"): the command the
-//! name it was started as stands for, Heimdall's containment lock before anything else, and where the Go build is that
-//! a command line not ported yet (one with an argument that is not UTF-8) is handed to.
+//! name it was started as stands for, Heimdall's containment lock before anything else, and the refusal of a command
+//! whose arguments are not all UTF-8 (Sarina's commands take text; Go's took the bytes, a difference on purpose since
+//! 2026-11-18).
 
 use crate::gopath;
 use crate::gotext;
@@ -25,29 +26,15 @@ pub fn contained_message(why: &str) -> String {
     format!("sarina: Heimdall has contained me ({why}). The owner releases me in Settings > Security, or: sudo heimdalld contain release\n")
 }
 
-/// Where the Go build is installed. Its file name is `sarina` on purpose: after the hand-over the process's name (comm)
-/// and executable are the Go build's, and Heimdall knows Sarina's processes by the name `sarina` (the grant gate's
-/// ancestry check, the agent-descendant rule for her shell commands, containment). Named anything else, a Go-run Sarina
-/// would drop out of those checks.
-pub const GO_BUILD: &str = "/usr/lib/sarina/sarina";
-
-/// The Go build a command line not ported yet goes to: `$SARINA_GO_BINARY` when it is an absolute path, else
-/// [`GO_BUILD`]. It is never looked up on PATH.
-pub fn go_binary(getenv: &dyn Fn(&str) -> Vec<u8>) -> Vec<u8> {
-    let v = getenv("SARINA_GO_BINARY");
-    if gopath::is_abs(&v) {
-        v
-    } else {
-        GO_BUILD.as_bytes().to_vec()
-    }
-}
-
-/// The message (exit status 127) when the Go build a command line needs (one with an argument that is not UTF-8) is not
-/// there.
-pub fn missing_go_message(command: &[u8], path: &[u8]) -> String {
-    let c = if command.is_empty() { "sarina".to_owned() } else { gotext::lossy(command) };
-    format!(
-        "sarina: {c} with an argument that is not UTF-8 is not in the Rust build yet, and the Go build ({}) is missing\n",
-        gotext::lossy(path)
-    )
+/// The arguments after `command` as text, or the refusal (one line for standard error, exit status 2, nothing run) when
+/// one is not UTF-8: the command, the first such argument's position (1 is the first after the command) and the argument
+/// quoted as the usage quotes a name (Go's `%q`: the bytes that are not UTF-8 as `\xHH`).
+pub fn text_arguments(command: &str, rest: &[Vec<u8>]) -> Result<Vec<String>, String> {
+    rest.iter()
+        .enumerate()
+        .map(|(i, a)| {
+            String::from_utf8(a.clone())
+                .map_err(|_| format!("sarina: {command}: argument {} is not UTF-8: {}; nothing was run\n", i + 1, gotext::quote_bytes(a)))
+        })
+        .collect()
 }

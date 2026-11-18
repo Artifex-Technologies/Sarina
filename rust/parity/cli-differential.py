@@ -14,9 +14,11 @@ up): the scripted servers and both builds live in it, so nothing a case runs can
 real service on 127.0.0.1:8899 and console on 8765, which `doctor` dials, or a model server on 11434), and a case may
 hold a port of its own (`listen`) without meeting a real one. Without namespaces the harness stops.
 
-sarina-rs runs with SARINA_RS_NO_GO=1: a command line it would hand to the Go build fails ("is not ported") instead of
-reaching it, so such a case shows up as a difference, never as a silent pass. (Since 2026-11-18 every command, the usage
-and `version` are Rust; only a command with an argument that is not UTF-8 is still handed over.)
+The Go build is only the reference: sarina-rs hands nothing to it (since 2026-11-18 every command, the usage and `version`
+are Rust, and a command with an argument that is not UTF-8 is refused), so no case can pass by running Go twice. The
+differences on purpose are cases with `intended`: sarina-rs's answer (stdout, stderr, exit status) is checked against
+the one written in the case, with no request made and every file left as it was, and Go's answer, still run, must differ
+from it (else the case documents no difference). docs/RUST_PORT.md "Differences" lists them.
 
     python3 -I rust/parity/cli-differential.py --go GO_SARINA --rs SARINA_RS [--out DIR] [--only SUBSTRING] [--show]
 
@@ -275,9 +277,13 @@ def state(**more):
     return files
 
 
-def C(name, args, files=None, env=None, stdin=None, limbo=(), http=(), norm=(), cwd="ws"):
-    return {"name": name, "args": list(args), "files": state() if files is None else files, "env": env or {},
-            "stdin": stdin, "limbo": list(limbo), "http": list(http), "norm": list(norm), "cwd": cwd}
+def C(name, args, files=None, env=None, stdin=None, limbo=(), http=(), norm=(), cwd="ws", intended=None):
+    c = {"name": name, "args": list(args), "files": state() if files is None else files, "env": env or {},
+         "stdin": stdin, "limbo": list(limbo), "http": list(http), "norm": list(norm), "cwd": cwd}
+    if intended:
+        # a difference on purpose: sarina-rs's {stdout, stderr, exit}, nothing requested, nothing written
+        c["intended"] = intended
+    return c
 
 
 def memory_cases():
@@ -566,8 +572,7 @@ def sse_completion(parts, finish="stop"):
     return resp(body, ctype="text/event-stream")
 
 
-MODEL_ENV = {"OPENAI_BASE_URL": "{H}/v1", "OPENAI_MODEL": "made-up-model", "SARINA_RS_TRY": "chat,resume,skill,memory-review",
-             "SARINA_GO_BINARY": "{G}"}
+MODEL_ENV = {"OPENAI_BASE_URL": "{H}/v1", "OPENAI_MODEL": "made-up-model", "SARINA_RS_TRY": "chat,resume,skill,memory-review"}
 # what differs between two runs by design: the session id and a memory proposal's id (random), the time
 CHAT_NORM = [(r"[0-9a-f]{32}", "SESSIONID"), (r"mem_[0-9a-f]{12}", "mem_ID"), (r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})", "TIME")]
 
@@ -927,6 +932,39 @@ def usage_cases():
     lock = {"no-lock": '{"reason": "a made-up lock"}'}
     for args in (["version"], ["version", "--json"], ["help"], ["--help"], ["-h"], [], ["bogus"], ["Version"]):
         add("contained " + repr(args), args, files=dict(state(), **lock))
+    return cs
+
+
+def not_utf8_cases():
+    """A command with an argument that is not UTF-8 (2026-11-18, decided when the Go build's last caller went): Go ran
+    the command with the bytes; sarina-rs refuses it, one line on standard error naming the command, the position of the
+    first such argument (1 is the first after the command) and the argument quoted as Go's %q quotes (bytes as \\xHH),
+    exit status 2, nothing run: no request, no file. Heimdall's lock still comes first (other_cases)."""
+    cs = []
+
+    def refused(name, args, pos, q, **k):
+        what = "sarina: %s: argument %d is not UTF-8: %s; nothing was run\n" % (args[0], pos, q)
+        cs.append(C("not utf-8: " + name, args, intended={"stdout": "", "stderr": what, "exit": 2}, **k))
+    refused("memory-show, first", ["memory-show", "caf\udce9", "--cwd", "{W}/ws"], 1, '"caf\\xe9"')
+    refused("memory-show, a flag's value", ["memory-show", "--cwd", "ws\udcff"], 2, '"ws\\xff"')
+    refused("memory-show, after text", ["memory-show", "--cwd", "{W}/ws", "\udcc3", "\udcfe"], 3, '"\\xc3"')
+    refused("session-search, a word", ["session-search", "widget", "caf\u00e9", "w\udce2\udc80"], 3, '"w\\xe2\\x80"')
+    refused("session-search, quotes and a newline", ["session-search", 'say "hi"\n\udcff'], 1, '"say \\"hi\\"\\n\\xff"')
+    refused("session-search, a surrogate's UTF-8", ["session-search", "\udced\udca0\udc80"], 1, '"\\xed\\xa0\\x80"')
+    refused("version", ["version", "\udcff"], 1, '"\\xff"')
+    refused("version --json", ["version", "--json", "\udcff"], 2, '"\\xff"')
+    vault = dict(state(), **{"vault/Inbox/old.md": "kept\n"})
+    refused("note writes nothing", ["note", "caf\udce9 at noon"], 1, '"caf\\xe9 at noon"', env={"SARINA_VAULT": "{W}/vault"}, files=vault)
+    refused("vault-init", ["vault-init", "--path", "v\udcff"], 2, '"v\\xff"')
+    refused("chat asks no model", ["chat", "hello caf\udce9"], 1, '"hello caf\\xe9"', env=dict(MODEL_ENV), http=[completion("Hello.")],
+            norm=CHAT_NORM)
+    refused("memory-review-approve changes nothing", ["memory-review-approve", "mem_\udcff"], 1, '"mem_\\xff"')
+    refused("session-migrate changes nothing", ["session-migrate", "--dry-run=false", "\udcff"], 2, '"\\xff"')
+    refused("trachtenberg, SARINA_MATH=auto", ["trachtenberg", "12", "\udcff"], 2, '"\\xff"', env={"SARINA_MATH": "auto"})
+    c = C("not utf-8: stdout closed", ["memory-show", "\udcff"], intended={"stdout": "", "stderr":
+          "sarina: memory-show: argument 1 is not UTF-8: \"\\xff\"; nothing was run\n", "exit": 2})
+    c["closed_stdout"] = True
+    cs.append(c)
     return cs
 
 
@@ -3599,7 +3637,7 @@ def run_case(case, go, rs, base):
                 ls.bind(("127.0.0.1", port))
                 ls.listen(4)
                 held.append(ls)
-            out = json.dumps([run_one(go, case, base, limbo, http, hurl, go), run_one(rs, case, base, limbo, http, hurl, go)])
+            out = json.dumps([run_one(go, case, base, limbo, http, hurl), run_one(rs, case, base, limbo, http, hurl)])
             for p in spawned:
                 p.kill()
                 p.wait()
@@ -3628,7 +3666,7 @@ def sub_resp(a, sub):
     return head + b"\r\n\r\n" + body
 
 
-def run_one(binary, case, base, limbo, http, hurl, gobin):
+def run_one(binary, case, base, limbo, http, hurl):
     work = os.path.join(base, "w")
     if os.path.exists(work):
         for root, dirs, _ in os.walk(work):
@@ -3638,14 +3676,14 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
     os.makedirs(work)
     sockp = os.path.join(base, "agent.sock")
     sub = lambda s: (s.replace("{W}", work).replace("{S}", sockp).replace("{H_HOSTPORT}", hurl[len("http://"):]).replace("{H_PORT}", hurl.rsplit(":", 1)[1])
-                     .replace("{H}", hurl).replace("{G}", gobin).replace("{C_PORT}", str(CURRENT_CONSOLE.port if CURRENT_CONSOLE else 0)))
+                     .replace("{H}", hurl).replace("{C_PORT}", str(CURRENT_CONSOLE.port if CURRENT_CONSOLE else 0)))
     make_files(work, case["files"], sub)
     t0 = time.time()
     for path, ago in case.get("mtimes", {}).items():
         # a file's time this many seconds before now (a session written on another day; the same for the same `ago`)
         os.utime(os.path.join(work, path), (t0 - ago, t0 - ago), follow_symlinks=False)
     env = {"PATH": os.path.join(work, "bin"), "LANG": "C.UTF-8", "HOME": os.path.join(work, "home"), "USER": "tester",
-           "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"), "SARINA_RS_NO_GO": "1",
+           "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"),
            # the Python helper for both builds (Go knows no other), also where the Rust helper is installed
            "SARINA_HELPERS": "python"}
     chmods = []
@@ -3658,6 +3696,8 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
         path, mode = c.split("=")
         os.chmod(os.path.join(work, path), int(mode, 8))
     os.chmod(sockp, case.get("sockmode", 0o755))
+    # a difference on purpose (`intended`): the files as they were before the command, which must leave them so
+    before = snapshot(work, case["norm"], case.get("vary", ())) if case.get("intended") else None
     limbo.reset(case["limbo"])
     if CURRENT_CONSOLE:
         CURRENT_CONSOLE.reset([sub(x) if isinstance(x, str) and x not in (HANGUP, "SILENT") else x for x in case["console"]])
@@ -3724,10 +3764,12 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
         reqs["http"].sort(key=lambda r: json.dumps(r, sort_keys=True))
     res["requests"] = json.loads(normalize(json.dumps(reqs).encode(), case["norm"]).decode())
     res["files"] = snapshot(work, case["norm"], case.get("vary", ()))
+    if before is not None:
+        res["before"] = before
     return res
 
 
-CASE_GROUPS = ["usage_cases", "memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
+CASE_GROUPS = ["usage_cases", "not_utf8_cases", "memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
                "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "desktop_cases", "chymaera_cases", "ext_cases", "quantum_cases", "reverse_cases", "council_cases",
                "crypto_stego_command_cases", "crypto_stego_chat_cases", "vault_cases", "insight_cases", "forge_cases"]
 
@@ -3751,6 +3793,8 @@ def main():
     ap.add_argument("--show", action="store_true", help="print each case's Go result (and sarina-rs's when they differ)")
     o = ap.parse_args()
     go, rs = os.path.abspath(o.go), os.path.abspath(o.rs)
+    if os.path.samefile(go, rs):
+        sys.exit("--go and --rs are the same file: the Go build is the reference, sarina-rs what is checked")
     base = o.out or tempfile.mkdtemp(prefix="scd")
     os.makedirs(base, exist_ok=True)
     if len(os.path.join(base, "agent.sock")) >= 100:
@@ -3761,9 +3805,19 @@ def main():
     bad = 0
     for c in cs:
         g, r = run_case(c, go, rs, base)
-        diffs = [k for k in ("stdout", "stderr", "exit", "requests", "files") if g[k] != r[k]]
+        keys = ("stdout", "stderr", "exit", "requests", "files")
+        if c.get("intended"):
+            # a difference on purpose: sarina-rs against the answer written in the case (no request, the files as they
+            # were), and Go's own answer, run as the reference, must not be that answer
+            want = dict(c["intended"], requests={k: [] for k in r["requests"]}, files=r.pop("before"))
+            g.pop("before", None)
+            if all(g[k] == want[k] for k in ("stdout", "stderr", "exit")):
+                print(f"NOT A DIFFERENCE {c['name']}: Go gives the answer written as sarina-rs's".encode("utf-8", "backslashreplace").decode())
+                bad += 1
+            g = want
+        diffs = [k for k in keys if g[k] != r[k]]
         if o.show:
-            print(f"== {c['name']}: {json.dumps(g, indent=1, ensure_ascii=False)}")
+            print(f"== {c['name']}{' (intended)' if c.get('intended') else ''}: {json.dumps(g, indent=1, ensure_ascii=False)}")
             if g != r:
                 print(f"== rs {c['name']}: {json.dumps(r, indent=1, ensure_ascii=False)}")
         if diffs:
@@ -3774,7 +3828,8 @@ def main():
                 a_, b_ = json.dumps(g[k], ensure_ascii=False), json.dumps(r[k], ensure_ascii=False)
                 i = next((j for j in range(min(len(a_), len(b_))) if a_[j] != b_[j]), min(len(a_), len(b_)))
                 lo = max(0, i - 300)
-                print(f"  {k} (first difference at {i}):\n    go: ...{a_[lo:i + 600]}\n    rs: ...{b_[lo:i + 600]}")
+                ref = "intended" if c.get("intended") else "go"
+                print(f"  {k} (first difference at {i}):\n    {ref}: ...{a_[lo:i + 600]}\n    rs: ...{b_[lo:i + 600]}")
     w = os.path.join(base, "w")
     if os.path.exists(w):
         for root, dirs, _ in os.walk(w):

@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # install-dev.sh: build the checked-out Sarina into ~/.local/bin/sarina, the one binary the evals measure (docs/TRAINING_PLAN_2026-10-28.md
-# rule 6). The binary before is kept as ~/.local/bin/sarina.before-YYYYMMDD-HHMM. The repo copy of labyrinth-ask-sarina (Labyrinth_OS)
-# goes to ~/.local/bin too: the eval runner and the owner's PATH use that copy; /usr/local/bin and /usr/bin stay the owner's
-# (Heimdall watches /usr/bin/sarina; it changes only through the sarina-git package).
+# rule 6): the Rust build, sarina-rs (rust/, `cargo build --release --locked --bin sarina-rs`), as the package installs it as
+# /usr/bin/sarina (since 2026-11-18; the Go build is no longer measured). Only the name `sarina` is installed: the evals run no
+# other (sarina-gui and sarina-service are the package's links to the same program). Cargo's output goes to $CARGO_TARGET_DIR,
+# else rust/target (ignored by git, so the build's stamp stays clean). The binary before is kept as
+# ~/.local/bin/sarina.before-YYYYMMDD-HHMM. The repo copy of labyrinth-ask-sarina (Labyrinth_OS) goes to ~/.local/bin too: the
+# eval runner and the owner's PATH use that copy; /usr/local/bin and /usr/bin stay the owner's (Heimdall watches
+# /usr/bin/sarina; it changes only through the sarina-git package).
 #
 #     bash evals/install-dev.sh       then `sarina version` prints HEAD's commit
 set -euo pipefail
@@ -13,7 +17,9 @@ mkdir -p "$BIN"
 if [[ -e $BIN/sarina ]]; then
   cp -a "$BIN/sarina" "$BIN/sarina.before-$(date +%Y%m%d-%H%M)"
 fi
-(cd "$REPO/go" && go build -o "$BIN/sarina.new" ./cmd/sarina)
+TARGET=$(realpath -m "${CARGO_TARGET_DIR:-$REPO/rust/target}")
+(cd "$REPO/rust" && cargo build --release --locked --bin sarina-rs --target-dir "$TARGET")
+install -m 755 "$TARGET/release/sarina-rs" "$BIN/sarina.new"
 mv -f "$BIN/sarina.new" "$BIN/sarina"
 if [[ -f $ASK ]]; then
   install -m 755 "$ASK" "$BIN/labyrinth-ask-sarina"

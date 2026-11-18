@@ -17,7 +17,7 @@ equal.
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego on 2026-11-16 (every part proved against Go fixtures, then wired: `sarina crypto` and `sarina stego` in sarina-rs, the seven tools and both prefetches; `needs_go` no longer names SARINA_CRYPTO), the vault on 2026-11-16 (reading, recall with and without meaning, writing, its tools and commands: `needs_go` no longer names SARINA_VAULT), daily (`sarina trends`, `sarina daily-report`); insight on 2026-11-16 and -17 (`sarina vault-tidy`; `sarina reflect` and `sarina vault-ingest`, which ask the model, under SARINA_RS_TRY); the forge on 2026-11-17 (its tools and forge-list, forge-approve, forge-remove): every optional set is ported and `needs_go` is gone |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), and `mcp` and `agents` with them, then `version` and the usage (no command, `help`, an unknown one: "The last Go commands", 7), so **no command reaches the Go build any more** (only a command line with an argument that is not UTF-8 still does; the Go build goes after the rollback week, ~2026-11-25) and Labyrinth's `sarina-rs-switch` is merged; begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), and `mcp` and `agents` with them, then `version` and the usage (no command, `help`, an unknown one: "The last Go commands", 7), so **no command reaches the Go build any more**, and since the same day **nothing does**: a command with an argument that is not UTF-8 is refused ("The switch", 2026-11-18 (8)); the evals measure sarina-rs; the Go build goes after the rollback week, ~2026-11-25 and Labyrinth's `sarina-rs-switch` is merged; begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -166,6 +166,19 @@ reinstalling the previous package. `sarina-service.service` is switched by the p
 differential run shows no difference. Commands move from Go to Rust one at a time; the Go build is dropped when nothing
 reaches it any more (dead code is a risk).
 
+**Since 2026-11-18 nothing reaches it** (the plan below is kept as it was carried out). The last command line handed over,
+a command with an argument that is not UTF-8, is now refused by sarina-rs (decided by the owner's session on 2026-11-18):
+one line on standard error, `sarina: COMMAND: argument N is not UTF-8: "QUOTED"; nothing was run` (N counts from the
+first argument after the command; the argument quoted as Go's `%q` quotes, the usage's way of quoting a name: bytes
+that are not UTF-8 as `\xHH`), exit status 2, nothing run (no request, no file, no environment decision). Heimdall's
+lock still comes first, and no command, `help` and an unknown command keep Go's answers (a `help` or an unknown name
+with such bytes after it too). The hand-over code is gone with it (`hand_over`, `SARINA_GO_BINARY`, `SARINA_RS_NO_GO`,
+the SIGPIPE record kept for the `execve`): sarina-rs no longer knows where a Go build is. sarina-rs needs no Go build at
+run time, so the recipes (packaging/arch/PKGBUILD, Labyrinth's two sarina-git copies) keep building and installing
+`/usr/lib/sarina/sarina` only as the rollback copy until the Go code is deleted (~2026-11-25); nothing runs it. Their
+check() still runs `tests/sarina_rs.rs`, whose name stays (its comment there still says "the hand-over to the Go build":
+changed with the deletion).
+
 ### The plan for `sarina-rs` (written 2026-11-12; the binary is built once the agent loop is equal)
 
 1. **Start, in Go's order** (`cmd/sarina/main.go`): the name it was started as picks the command (`sarina-service` is
@@ -198,8 +211,9 @@ reaches it any more (dead code is a risk).
 5. **Proof before a command moves**: its fixture, then a differential run of both binaries on the same arguments,
    environment and files (`rust/parity/cli-differential.py`, as Limbo's: stdout, stderr, exit status and every file
    written compared byte for byte; time and random ids normalised; never the real model, the real vault or real
-   sessions). sarina-rs runs there with `SARINA_RS_NO_GO=1`: a command it has not ported fails ("sarina-rs: X is not
-   ported", exit 2) instead of being handed to Go, so a case can never pass by running Go twice.
+   sessions). sarina-rs ran there with `SARINA_RS_NO_GO=1`: a command it had not ported failed ("sarina-rs: X is not
+   ported", exit 2) instead of being handed to Go, so a case could never pass by running Go twice. Since 2026-11-18
+   sarina-rs hands nothing over, so the variable is gone and the Go build is only ever the reference.
 6. **Packaging** (`packaging/arch/PKGBUILD`, and Labyrinth's `sarina-git`; CONTRACT: cargo is already a makedepend for
    the voice programs; done 2026-11-12: Sarina's PKGBUILD on main, Labyrinth's recipes on the branch `sarina-rs-switch`,
    because Labyrinth's publish builds main and merging is the switch): both builds; `/usr/bin/sarina` is sarina-rs, `sarina-gui` and `sarina-service` are links to it,
@@ -280,7 +294,7 @@ reaches it any more (dead code is a risk).
 | `session/readfile.rs` | `session/readfile.go` (new 2026-11-12): a session file or a session's notes as a bounded regular file; `Load`, `LoadByID` | Go's tests, `tests/session_reads.rs` | 1 each |
 | `runkit.rs` | `runkit`: `Scrubber` (literals, the redactor's shapes, bearer tokens, secret-named JSON keys, key=value), `Entry`, `Transcript`, `Result` as the service and the GUI send them; `Build` from plain settings (allowlists, policy, compute tiers, the claude CLI escalation, sub-agents, prompt options), each built agent run once against the same scripted model as Go's | `runkit.json`, `runkitbuild.json` | 17 + 11 (every request body) |
 | `agent/run.rs` (`Options.confirm`, `set_confirm`), `tools/registry.rs` (`Confirm`, `Context.confirm`) | `agent.Options.Confirm`, `SetConfirm`, `tools.RuntimeOperatorConfirm`: the per-call operator question (council_ask's channel), not the Approver; sub-agents get the parent's | Go's `TestSetConfirmAddsOnlyItsOwnRuntimeKey`, as a unit test | 1 |
-| `bin/sarina-rs.rs`, `cli/entry.rs` | `cmd/sarina/main.go`: the names it answers to (`aliasCommand`), Heimdall's lock first (the built Go program run with a made-up lock under each name and command line: which are refused, the message, exit 3), and the hand-over to the Go build by execve: the arguments unchanged (bytes that are not UTF-8 too), the environment, the folder, the exit status, the caller's SIGPIPE (ignored or not); a missing Go build (127); since 2026-11-18 `cli/mod.rs`'s table with Go's summaries and `cli.Main`'s usage and unknown command (`not_a_command`), so only a command with an argument that is not UTF-8 is handed over | `entry.json` | 41, and 9 hand-over checks; CLI differential `usage_cases` 62 |
+| `bin/sarina-rs.rs`, `cli/entry.rs` | `cmd/sarina/main.go`: the names it answers to (`aliasCommand`), Heimdall's lock first (the built Go program run with a made-up lock under each name and command line: which are refused, the message, exit 3), since 2026-11-18 `cli/mod.rs`'s table with Go's summaries and `cli.Main`'s usage and unknown command (`not_a_command`), and a command with an argument that is not UTF-8 refused (`entry::text_arguments`; a difference on purpose: the hand-over to the Go build by execve it replaced is gone) | `entry.json` | 41, and 22 checks of the refusal, the usage and `version`; CLI differential `usage_cases` 62, `not_utf8_cases` 15 |
 | `service.rs`, `gohttpd.rs`, `cli/servicecmd.rs`, `gourl.rs` (`parse_request_uri`), `goflag.rs` (`tribool`) | `service/service.go` (the pool with its LRU, create with every check of the ceiling, chat with resume and the local /help, delete, the browser guard, the bearer token, the 422, 403 and 404 bodies; each pooled session's agent on a thread of its own, which serialises its turns; a client that hangs up cancels its turn) and `command.go` (the flags with `triBool`, the banner, the listen errors, SIGINT and SIGTERM with Go's 5 s shutdown); Go 1.27's `net/http` server as the service uses it (request reading and its errors, keep-alive, 100-continue, the answer's header order, chunking past 2 KiB, draining an unread body, the mux's cleaned-path redirects) | the service differential | 33 scenarios, 279 steps |
 | `gui/` (`mod.rs`, `state.rs`, `run.rs`, `api.rs`, `files.rs`), `cli/guicmd.rs`, `gohttpd.rs` (streamed answers, `io.WriteString` bodies), `agent/run.rs` (`watch_registry`) | `gui/` (the guard with its token, Host, Origin, Sec-Fetch-Site and JSON rules; the mux with its patterns, cleaned-path and slash redirects and the 405 a CONNECT gets; the page with its token and cookie; `http.FileServerFS` over the built-in page with its redirects, conditions and byte ranges; the settings and their patch; runs answered as JSON or as an event stream, the re-attachable stream with its keep-alive, approvals of tool calls and plans, cancel, a client that hangs up; sessions, file history, the plan, the to-do list, memory and its review, the instruction files, tiers, the backend probe) and `command.go` (the flags, the banner, the launch link, the browser, SIGINT and SIGTERM with Go's 3 s shutdown) | the GUI differential | see "The GUI differential" |
 | `doctor.rs`, `cli/doctorcmd.rs`, `cli/chat.rs` (`doctor_tool`), `gohttp.rs` (user information in a URL) | `doctor/` (every check: the backend's `/models` and context window, the session folder's scan with the shape Heimdall reads, keys stored, retired tool names, the tiers with their health, skills, MCP and policy files, Limbo's socket and answers, Heimdall's /healthz, the ports; the table and the JSON; the command's flags; the tool, now in-process); Go's client sending a URL's user information as Basic credentials | the CLI differential's doctor cases, each in a network namespace of its own | 73 cases, 365 comparisons |
@@ -317,6 +331,13 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   PrivateReference too; a secret file name stays one in any folder and in any case.
 
 ## Differences from Go, on purpose or accepted
+
+- **A command with an argument that is not UTF-8 is refused** (2026-11-18): Go's commands took the bytes and ran (a
+  note written with them, a model asked, a session searched); sarina-rs's commands take text, and rather than turn bytes
+  into U+FFFD behind the caller's back it runs nothing: `sarina: COMMAND: argument N is not UTF-8: "QUOTED"; nothing was
+  run` on standard error (N from 1 after the command, the argument quoted as `%q`: `\xHH`), exit status 2. Heimdall's lock
+  and the usage answer first, as before. The CLI differential's `not_utf8_cases` hold the refusal as written answers
+  (`intended`), with Go still run as the reference and required to answer otherwise.
 
 - **`sarina version` names rustc where Go named Go** (2026-11-18): the Rust build's stamp (`rust/sarina/build.rs`) is
   made as the Go toolchain makes the Go build's (`git status --porcelain`, then `git log -1 --format=%H:%ct`: commit,
@@ -621,6 +642,16 @@ output, a bad run id, wrong socket names, a huge and a negative `--timeout`); ti
 configs, one to three tiers healthy, refusing and hanging up, claude tiers with and without a key or a model, disabled,
 wake, resource limits, a stand-in nvidia-smi, the escalation flags, `SARINA_TIERS_FILE`; Heimdall's lock for ported
 commands; standard output a closed pipe (SIGPIPE, also when the caller ignores it). CI runs it after the tests.
+
+**Differences on purpose** (since 2026-11-18): a case may carry `intended`, sarina-rs's answer written out (stdout,
+stderr, exit status). The harness then checks sarina-rs against it, with no request made and every file as it was before
+the command (a snapshot taken before the run), and still runs the Go build as the reference, whose answer must not be
+the written one (else the case shows no difference and fails: "NOT A DIFFERENCE"); the report prints the written answer
+as `intended:`. Group `not_utf8_cases` (15): a command with an argument that is not UTF-8 refused (the first argument,
+a flag's value, after text, several, a cut UTF-8 sequence, a surrogate's UTF-8, quotes and a newline in the quoted
+argument; `version`, `note` with a vault Go writes into, `vault-init`, `chat` with a model Go asks, a review approval,
+`session-migrate`, `trachtenberg` under SARINA_MATH=auto; standard output closed). The harness refuses `--go` and
+`--rs` naming the same file; sarina-rs has no way to reach a Go build, so the Go build is only ever the reference.
 
 ```bash
 (cd go && go build -o /tmp/sarina-go ./cmd/sarina) && (cd rust && cargo build -j4 --offline --bin sarina-rs)
@@ -941,11 +972,9 @@ runs git itself, as `go build` does (sarina-git's clone has git; the release tar
 so both builds say "commit unknown"). `.gitignore` now names `go/sarina` and `go/sarina-tone`: sarina-git builds them
 in the tree before the Rust build, whose stamp would otherwise count them as uncommitted changes.
 
-After this nothing reaches the Go build by command: `rust/sarina/tests/sarina_rs.rs` tests the hand-over with the one
-command line still handed over, a command with an argument that is not UTF-8 (Go's commands take bytes, the Rust ones
-strings; what the Rust build does with such an argument is decided when the Go build goes). Also still on the Go build,
-outside sarina-rs: `evals/install-dev.sh` (and the nightly run through it) builds `go/cmd/sarina` into
-`~/.local/bin/sarina`, so the evals measure the Go build; it moves to sarina-rs before the Go build is deleted.
+After this nothing reached the Go build by command; the one command line still handed over then, a command with an
+argument that is not UTF-8, is refused since 2026-11-18 (8) ("The switch"), and `evals/install-dev.sh` (and the nightly
+run through it) builds sarina-rs into `~/.local/bin/sarina` since then. Before, it built `go/cmd/sarina` there, so the evals measured the Go build.
 
 ### The chat cases (2026-11-12)
 
@@ -995,7 +1024,7 @@ across UTC midnight) and pass on the new one.
 ## The service differential (`rust/parity/service-differential.py`)
 
 Both builds' `sarina service` on the same scripted steps: each scenario starts the Go build's service and then
-sarina-rs's (`SARINA_RS_TRY=service`, `SARINA_RS_NO_GO=1`), each in a throwaway folder made afresh (the made-up home and
+sarina-rs's (then with `SARINA_RS_TRY=service` and `SARINA_RS_NO_GO=1`; since 2026-11-18 sarina-rs hands nothing to Go), each in a throwaway folder made afresh (the made-up home and
 workspace of the CLI differential, whose helpers it imports), with the same flags and environment, on a port the kernel
 picks (`--port 0` before the scenario's own flags: never 8899, where the real service listens). Behind it: one loopback
 server for the model's chat completions (the context-window probes answered 404) and Heimdall's review and grant-request
@@ -1038,7 +1067,7 @@ python3 -I rust/parity/service-differential.py --go /tmp/sarina-go --rs rust/tar
 ## The GUI differential (`rust/parity/gui-differential.py`)
 
 Both builds' `sarina gui` on the same scripted steps, as the service differential (whose scripted servers and helpers it
-imports): each scenario starts the Go build's console and then sarina-rs's (`SARINA_RS_TRY=gui`, `SARINA_RS_NO_GO=1`),
+imports): each scenario starts the Go build's console and then sarina-rs's (then with `SARINA_RS_TRY=gui` and `SARINA_RS_NO_GO=1`; since 2026-11-18 sarina-rs hands nothing to Go),
 each in a throwaway folder made afresh, with the same flags and environment, on a port the kernel picks (`--port 0`:
 never 8765) and with `--no-browser`. The two scenarios that leave it out find only their own stand-in `xdg-open` on
 PATH (or none), so no window is ever opened on my desktop, and no display is needed. The console prints its launch link
@@ -1570,11 +1599,14 @@ Next, in this order:
 0. **Done 2026-11-18: the Go build's last callers.** `sarina version` (the Rust build's own stamp from build.rs; the `go`
    field names rustc, decided 2026-11-18) and the usage (no command, `help`, `-h`, `--help`, an unknown command: every
    command's summary in `cli::COMMANDS`) are Rust ("The last Go commands", 7: 62 cases, no difference). **No command
-   reaches the Go build now.** What is left before it can be removed after the rollback week (~2026-11-25; the Go code
-   stays until then): a command line with an argument that is not UTF-8 is still handed over (decide what the Rust
-   commands do with one), `evals/install-dev.sh` and the nightly run build the Go binary as the evals' `sarina` (point them
-   at sarina-rs), and the recipes stop building and installing `/usr/lib/sarina/sarina` (both PKGBUILDs, and Heimdall's
-   file-integrity list in Labyrinth's `heimdall-config.json`).
+   reaches the Go build now**, and since 2026-11-18 (8) nothing at all: a command with an argument that is not UTF-8 is
+   refused ("The switch"; the hand-over code is gone), and `evals/install-dev.sh` and the nightly run build sarina-rs as
+   the evals' `sarina`. What is left for after the rollback week (~2026-11-25; the Go code stays until then): delete
+   `go/` (and the Go fixture writers' part of the proof: `go/internal/parity`, the CLI, service and GUI differentials
+   compare against a Go build, so they go or keep a frozen Go reference, to decide then; CI's Go steps with them;
+   `go/cmd/sarina-tone` is Go too and installed as `/usr/bin/sarina-tone`), and the recipes stop building and installing
+   `/usr/lib/sarina/sarina` (packaging/arch/PKGBUILD and both of Labyrinth's sarina-git copies, whose `check()` comment on
+   `tests/sarina_rs.rs` still names the hand-over; and Heimdall's file-integrity list in Labyrinth's `heimdall-config.json`).
 
 1. **Made 2026-11-18 (the owner's word, all at once): chat, resume, skill, memory-review, service, gui, doctor, council,
    reflect and vault-ingest are always Rust** (`cli::ported`; `cli::proving` and `SARINA_RS_TRY` are gone). The steps below were
