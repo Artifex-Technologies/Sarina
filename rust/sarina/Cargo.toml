@@ -11,7 +11,7 @@ publish = false
 name = "sarina"
 path = "src/lib.rs"
 
-# the Rust build's entry point (docs/RUST_PORT.md "The plan for `sarina-rs`"): hands every command to the Go build for now
+# the Rust build's entry point (docs/RUST_PORT.md "The plan for `sarina-rs`"): /usr/bin/sarina, it runs every command itself (since 2026-11-18)
 [[bin]]
 name = "sarina-rs"
 path = "src/bin/sarina-rs.rs"

@@ -206,7 +206,7 @@ Configure `~/.sarina/tiers.json` (or `SARINA_TIERS_FILE`):
 {
   "tiers": [
     {"name": "local",   "kind": "openai_compat", "base_url": "http://127.0.0.1:11434/v1", "model": "qwen3"},
-    {"name": "desktop", "kind": "openai_compat", "base_url": "http://192.168.1.20:11434/v1", "model": "qwen3:32b",
+    {"name": "desktop", "kind": "openai_compat", "base_url": "http://192.0.2.20:11434/v1", "model": "qwen3:32b",
      "allow_data": ["no_secrets"]},
     {"name": "claude",  "kind": "claude_cli"}
   ],
