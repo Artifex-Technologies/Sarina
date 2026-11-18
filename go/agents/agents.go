@@ -290,7 +290,12 @@ func Parse(data []byte, fallbackName string) (*Profile, error) {
 			p.Tools = items
 		}
 	}
-	for key, dst := range map[string]*bool{"shell": &p.Shell, "project_context": &p.ProjectContext} {
+	// in a fixed order: with both wrong, the refusal names shell every time (a map's order named either)
+	for _, sw := range []struct {
+		key string
+		dst *bool
+	}{{"shell", &p.Shell}, {"project_context", &p.ProjectContext}} {
+		key, dst := sw.key, sw.dst
 		if v, ok := kv[key]; ok {
 			switch strings.ToLower(v) {
 			case "true", "yes", "1":

@@ -89,7 +89,7 @@
 {"fn":"parse","in":["---\ndescription: d\nshell: TRUE\nproject_context: No\n---\nb","fallback"],"out":[[{"description":"d","maxTurns":0,"name":"fallback","path":"","projectContext":false,"prompt":"b","shell":true,"source":"","tools":null},""]]},
 {"fn":"parse","in":["---\ndescription: d\nshell: TRUE\nproject_context: No\n---\nb","bad name"],"out":[[null,"invalid profile name \"bad name\" (letters, digits, . _ - ; at most 64 characters)"]]},
 {"fn":"parse","in":["---\ndescription: d\nshell: TRUE\nproject_context: No\n---\nb",""],"out":[[null,"invalid profile name \"\" (letters, digits, . _ - ; at most 64 characters)"]]},
-{"fn":"parse","in":["---\ndescription: d\nshell: maybe\nproject_context: perhaps\n---\nb","fallback"],"out":[[null,"project_context must be true or false, got \"perhaps\""],[null,"shell must be true or false, got \"maybe\""]]},
+{"fn":"parse","in":["---\ndescription: d\nshell: maybe\nproject_context: perhaps\n---\nb","fallback"],"out":[[null,"shell must be true or false, got \"maybe\""]]},
 {"fn":"parse","in":["---\ndescription: d\nshell: maybe\nproject_context: perhaps\n---\nb","bad name"],"out":[[null,"invalid profile name \"bad name\" (letters, digits, . _ - ; at most 64 characters)"]]},
 {"fn":"parse","in":["---\ndescription: d\nshell: maybe\nproject_context: perhaps\n---\nb",""],"out":[[null,"invalid profile name \"\" (letters, digits, . _ - ; at most 64 characters)"]]},
 {"fn":"parse","in":["---\ndescription: d\nmax_turns: 0\n---\nb","fallback"],"out":[[null,"max_turns must be a whole number from 1 to 20"]]},

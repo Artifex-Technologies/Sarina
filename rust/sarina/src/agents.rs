@@ -352,8 +352,8 @@ pub fn parse(data: &[u8], fallback_name: &str) -> Result<Profile, String> {
             p.tools = Some(items.iter().map(|t| gotext::lossy(t)).collect());
         }
     }
-    // Go walks these two in map order: when both are wrong, either is named
-    for key in ["project_context", "shell"] {
+    // shell first, then project_context (Go's fixed order since 2026-11-17: its map's order named either)
+    for key in ["shell", "project_context"] {
         if let Some(v) = get(key) {
             let set = match gotext::to_lower(&gotext::lossy(v)).as_str() {
                 "true" | "yes" | "1" => true,
