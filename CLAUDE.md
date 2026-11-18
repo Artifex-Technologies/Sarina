@@ -309,7 +309,8 @@ Signed: Sarina / Claude Opus 5.5
   Create's errors depended on Go's map order; a state or approvals file of `null` crashed vault-ingest and forge-approve;
   `reflect --batch 0` never ended; titles and observations were cut inside a letter; an inbox name that is not UTF-8 was
   summarised again every day; the forge's Load read a planted sparse file whole.
-- **For the owner** (`~/Desktop/finish-todo.sh` steps 2-3): sarina-git 1.0.0-165 (from `5785dc0`, with reverse_engineer's /quarantine paths for Heimdall: every fix above and the
+- **For the owner** (`~/Desktop/finish-todo.sh` steps 2-3): sarina-git 1.0.0-168 (from `2290596`: reverse_engineer's /quarantine paths and similar for Heimdall,
+  `fleet-status --json` for Yggdrasil's Agents item; every fix above and the
   11-16 ones, the whole port so far, and `/usr/bin/sarina-voiced`), then the voice service moved from his drop-in to the
   package.
 - **Two more CI flakes fixed in Go** (both Go's map or pipe races, each reproduced by a test first): `agents` named either

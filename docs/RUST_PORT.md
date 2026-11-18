@@ -1293,8 +1293,8 @@ gate is the set, not the tool). Where crypto stands, exactly:
 
 Twelfth session (2026-11-17): the owner's package, Labyrinth's voice switch, insight's last part and the forge.
 
-- **For the owner** (`~/Desktop/finish-todo.sh`, not in this repository): step 2 installs sarina-git 1.0.0-165 (built
-  without root from Labyrinth's `sarina-rs-switch` recipe and `5785dc0`, in `~/.cache/labyrinth-switch`; it also carries
+- **For the owner** (`~/Desktop/finish-todo.sh`, not in this repository): step 2 installs sarina-git 1.0.0-168 (built
+  without root from Labyrinth's `sarina-rs-switch` recipe and `2290596`, in `~/.cache/labyrinth-switch`; it also carries
   `/usr/bin/sarina-voiced`), step 3 moves the voice service to it (the new unit in place, the owner's drop-in and home copy
   removed, keep or undo asked). Labyrinth's `voiced-rust-switch` is merged into its main (`fd58489`, the store's recipe
   too) and main into `sarina-rs-switch` (`1b1c6b6`); both CI runs green.
