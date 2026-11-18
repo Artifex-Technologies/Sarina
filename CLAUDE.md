@@ -231,8 +231,9 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   the file it lent as the sandbox sees it, `/quarantine/<sha256>.sample`, which
   `go/reverse` reads as the quarantine folder. The answer is untrusted text Heimdall
   keeps with the held file; it changes nothing. **Keep the allowlist's exact names, the
-  `tools` count, `reverse_engineer`'s name and the `/quarantine` reading.**
-  `docs/ECOSYSTEM.md` section 4d.
+  `tools` count, `reverse_engineer`'s name and the `/quarantine` reading.** Since 2026-11-18
+  Heimdall also asks her to run the command `similar` when her service's similarity
+  library exists (**keep that command's name**). `docs/ECOSYSTEM.md` section 4d.
 - **Model council (`sarina council`, `council_ask`):** **live, internal.** Asks
   several models (local, and online ones such as Claude, Gemini, ChatGPT) the same
   question and compares the answers; for research when Sarina is stuck. Members get
@@ -245,6 +246,25 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-11-18 (2) — `reverse_engineer similar`: Ghidra BSim against the programs analysed before
+- New static command `similar` (Go `go/reverse`, Rust `reverse.rs`; the owner approved BSim after Heimdall's analysis
+  request, 2026-11-17): inside labyrinth-rea's sandbox (no network, the file read-only), Ghidra's headless analyzer imports
+  the file read-only into a throwaway project and runs `go/reverse/LabyrinthBSim.java` (Ghidra's BSim API, embedded in
+  both builds): the file's functions (toolchain code and stubs below self-significance 15 left out) are compared with the
+  similarity library, a local BSim H2 database at `/work/bsim/library.mv.db` (rea-work/bsim on the computer), then the
+  file's signatures are added there. The report is bounded (10 programs, 25 function pairs, names cut at 80 plain
+  characters), Ghidra's log stays out of it, Ghidra gets 2 GB at most. Without a library nothing runs (the library is
+  made once at setup with Ghidra's own `bsim createdatabase`; Labyrinth `docs/REA.md`). The answer ends with a note that
+  the names come from earlier files (untrusted) and a match is a hint, not proof. Nothing is ever run.
+- Tests: Go `TestSimilarRunsOnlyWithALibraryAndShowsOnlyTheReport` (the sandbox script run with its paths moved and a
+  stand-in analyzer), Rust `tests/reverse_similar.rs` (the same scripts, read from Go's source), 6 new CLI differential
+  cases (`--only reverse`: 49 cases, no difference). Real Ghidra 12.1.4 end to end on made-up programs inside the
+  sandbox, capped: a program sharing three functions with an earlier one matched them at 1.000, an unrelated one matched
+  nothing, a stripped copy matched by code, an -O2 rebuild at 0.70 to 0.78; about 9 s each.
+- **CONTRACT (Heimdall):** §4d: Heimdall asks for `similar` when the service's library exists; its side is its
+  `CLAUDE.md` log 2026-11-18.
+— Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-18 — `sarina fleet-status --json` for Yggdrasil's Agents item
 - `fleet-status --json` prints the sanitised view as one object (`go/chymaera/fleet/statusjson.go`; shape in

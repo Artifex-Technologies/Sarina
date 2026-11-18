@@ -34,6 +34,10 @@ pub static COMMANDS: &[(&str, &str)] = &[
     ("network-map", "web addresses, host names and IP addresses inside the program, with where each IP belongs (offline)"),
     ("search", "search strings and symbols (target = the text)"),
     ("search-bytes", "search a byte pattern (target = hex)"),
+    (
+        "similar",
+        "programs analysed before that share functions with this one (Ghidra BSim, with similarity scores); then this one joins them",
+    ),
     ("xrefs", "who calls or references an address or name (target)"),
 ];
 
@@ -96,6 +100,26 @@ fn from_sandbox(p: &[u8]) -> Vec<u8> {
     p.to_vec()
 }
 
+/// Go's `bsimScript`: the Ghidra script that compares the analysed program with the similarity library and then adds it
+/// there (go/reverse/LabyrinthBSim.java, the same file).
+pub const BSIM_SCRIPT: &str = include_str!("../../../go/reverse/LabyrinthBSim.java");
+
+/// Go's `similarScript`: the comparison inside labyrinth-rea's sandbox ($1 the file as the sandbox sees it, $2 the Ghidra
+/// script); the library is /work/bsim/library.mv.db, made once at setup; without it nothing runs.
+pub const SIMILAR_SCRIPT: &str = r#"lib=/work/bsim/library.mv.db
+if [ ! -f "$lib" ]; then echo "There is no similarity library yet (it is made once, at setup): nothing to compare with."; exit 0; fi
+d=$(mktemp -d /tmp/bsim.XXXXXXXX) || exit 1
+trap 'rm -rf "$d"' EXIT
+printf '%s' "$2" > "$d/LabyrinthBSim.java"
+GHIDRA_MAXMEM=2G /opt/ghidra/support/analyzeHeadless "$d" p -import "$1" -readOnly -deleteProject -analysisTimeoutPerFile 300 -scriptPath "$d" -postScript LabyrinthBSim.java "$lib" "$d/out" >"$d/log" 2>&1
+if [ -s "$d/out" ]; then cat "$d/out"; exit 0; fi
+grep -E 'ERROR|Exception' "$d/log" | head -n 5 >&2
+exit 1
+"#;
+
+/// Go's `similarNote`: after a comparison's report, what a match does and does not show.
+const SIMILAR_NOTE: &str = "\n\n[Untrusted: the library holds programs analysed before, and their names and function names come from those files. A match is a hint that code is shared, not proof of the same origin: a common library or compiler code matches too. Name the matching program and its scores as shown; decompile a matching function before you say what it does.]";
+
 /// Go's `targetRE`: `^[A-Za-z0-9_.:+$@/\- ]{1,200}$`.
 fn plain_target(t: &str) -> bool {
     (1..=200).contains(&t.len()) && t.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.:+$@/- ".contains(&c))
@@ -111,6 +135,12 @@ pub fn args(command: &str, path: &str, target: &str, max_tokens: i64) -> Result<
     if command == "functions" {
         let mut a = v(&["--exec", "nm", "-C", "--defined-only", "-n"]);
         a.push(inside);
+        return Ok(a);
+    }
+    if command == "similar" {
+        let mut a = v(&["--exec", "sh", "-c", SIMILAR_SCRIPT, "bsim"]);
+        a.push(inside);
+        a.push(BSIM_SCRIPT.as_bytes().to_vec());
         return Ok(a);
     }
     if command == "network-map" {
@@ -218,6 +248,9 @@ fn reverse_tool(bin: String) -> Tool {
                     text.extend_from_slice(b"\n\n");
                     text.extend_from_slice(own_functions(&nm).as_bytes());
                 }
+            }
+            if command == "similar" {
+                text.extend_from_slice(SIMILAR_NOTE.as_bytes());
             }
             if command == "decompile" {
                 let calls = called_functions(&lossy(&text), &target);

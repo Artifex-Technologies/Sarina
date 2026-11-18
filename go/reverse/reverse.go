@@ -8,6 +8,7 @@ package reverse
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
 	"github.com/Artifex-Technologies/Sarina/go/heimdall"
 	"os"
@@ -38,6 +39,7 @@ var Commands = map[string]string{
 	"inspect-pe-resources":     "Windows resources (manifest, version, icons)",
 	"inspect-firmware-regions": "regions of a firmware image",
 	"network-map":              "web addresses, host names and IP addresses inside the program, with where each IP belongs (offline)",
+	"similar":                  "programs analysed before that share functions with this one (Ghidra BSim, with similarity scores); then this one joins them",
 }
 
 // SamplesDir is where files to analyse are put (the sandbox sees it as /samples).
@@ -107,6 +109,9 @@ func Args(command, path, target string, maxTokens int) ([]string, error) {
 	if command == "functions" {
 		return []string{"--exec", "nm", "-C", "--defined-only", "-n", inside}, nil // not a REA command: the symbol table, read inside the sandbox
 	}
+	if command == "similar" { // not a REA command: Ghidra's BSim against the similarity library, inside the sandbox
+		return []string{"--exec", "sh", "-c", similarScript, "bsim", inside, bsimScript}, nil
+	}
 	if command == "network-map" { // not a REA command: the program's strings (8-bit and UTF-16), read inside the sandbox
 		return []string{"--exec", "sh", "-c", `strings -a -n 6 "$1"; strings -a -n 6 -e l "$1"`, "strings", inside}, nil
 	}
@@ -122,6 +127,31 @@ func Args(command, path, target string, maxTokens int) ([]string, error) {
 	}
 	return append(args, "--format", "md", "--token-limit", fmt.Sprint(maxTokens)), nil
 }
+
+// bsimScript is the Ghidra script that compares the analysed program with the similarity library and then adds it there
+// (LabyrinthBSim.java: Ghidra's BSim API on a local H2 database, bounded report, names reduced to plain characters).
+//
+//go:embed LabyrinthBSim.java
+var bsimScript string
+
+// similarScript runs the comparison inside labyrinth-rea's sandbox ($1 the file as the sandbox sees it, $2 the Ghidra
+// script): the library is /work/bsim/library.mv.db (the analysis work folder, rea-work/bsim on the computer), made once at
+// setup with Ghidra's own `bsim createdatabase`; without it nothing runs. Ghidra imports the file read-only into a
+// throwaway project, analyses it (never runs it) with at most 2 GB of memory, and the script writes its report to a file,
+// which is all that is shown (Ghidra's log stays out of the answer; a failure shows its first error lines).
+const similarScript = `lib=/work/bsim/library.mv.db
+if [ ! -f "$lib" ]; then echo "There is no similarity library yet (it is made once, at setup): nothing to compare with."; exit 0; fi
+d=$(mktemp -d /tmp/bsim.XXXXXXXX) || exit 1
+trap 'rm -rf "$d"' EXIT
+printf '%s' "$2" > "$d/LabyrinthBSim.java"
+GHIDRA_MAXMEM=2G /opt/ghidra/support/analyzeHeadless "$d" p -import "$1" -readOnly -deleteProject -analysisTimeoutPerFile 300 -scriptPath "$d" -postScript LabyrinthBSim.java "$lib" "$d/out" >"$d/log" 2>&1
+if [ -s "$d/out" ]; then cat "$d/out"; exit 0; fi
+grep -E 'ERROR|Exception' "$d/log" | head -n 5 >&2
+exit 1
+`
+
+// similarNote goes after a comparison's report: what a match does and does not show.
+const similarNote = "\n\n[Untrusted: the library holds programs analysed before, and their names and function names come from those files. A match is a hint that code is shared, not proof of the same origin: a common library or compiler code matches too. Name the matching program and its scores as shown; decompile a matching function before you say what it does.]"
 
 func names() []string {
 	var out []string
@@ -191,6 +221,9 @@ func Tools() []tools.Tool {
 					nm, _, _ := runBounded(ctx, bin, fargs, maxOutput)
 					text += "\n\n" + ownFunctions(nm)
 				}
+			}
+			if str("command") == "similar" {
+				text += similarNote
 			}
 			if str("command") == "decompile" {
 				if calls := calledFunctions(text, str("target")); len(calls) > 0 {

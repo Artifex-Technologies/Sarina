@@ -487,7 +487,7 @@ the `tool_allowlist` field and `tools` count described above.
 
 ### 4d. Heimdall asks Sarina to analyse a held file — **live (2026-11-17), needs setting up**
 
-I approved this on 2026-11-17 (Ghidra BSim comes later). When Heimdall holds a file
+I approved this on 2026-11-17 (Ghidra BSim followed on 2026-11-18, below). When Heimdall holds a file
 (its immunity quarantine, Heimdall `docs/IMMUNITY.md` "Sarina's analysis"), root's
 `heimdalld immunity analyze --sarina SHA256` asks Sarina for a static analysis with
 `reverse_engineer`. Same service API as 4c, with `tool_allowlist: ["reverse_engineer"]`,
@@ -518,8 +518,16 @@ that ignores the allowlist reports every tool; a service without the tool on rep
   (every new held file ClamAV does not know), `off`. Never while Sarina is contained; one
   at a time; 20 minutes at most.
 
-Keep the exact-name `tool_allowlist` filter, the `tools` count, the tool's name and the
-`/quarantine` reading: Heimdall depends on them.
+- **Similar programs (2026-11-18).** When the service account's similarity library
+  exists (`/var/lib/sarina/.local/share/labyrinth/rea-work/bsim/library.mv.db`, a Ghidra
+  BSim database made once at setup), Heimdall's request adds a fifth point: run
+  `reverse_engineer` with the command `similar` and copy the closest programs and
+  functions with their scores. `similar` compares the file with every program analysed
+  there before and then adds it, inside the same sandbox; the kept analysis records
+  `similar: true`. The names it reports come from earlier files: untrusted like the rest.
+
+Keep the exact-name `tool_allowlist` filter, the `tools` count, the tool's name, the
+`similar` command's name and the `/quarantine` reading: Heimdall depends on them.
 
 ---
 

@@ -3,6 +3,7 @@ package reverse
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -191,5 +192,63 @@ func TestTheOverviewIsCondensedAndNamesTheFunctions(t *testing.T) {
 	}
 	if !strings.Contains(ownFunctions(""), "stripped") {
 		t.Fatal("a stripped program is said to be stripped")
+	}
+}
+
+// similar: the arguments name the file as the sandbox sees it and carry the Ghidra script; the script around it is run here
+// with its sandbox paths (/work, /opt/ghidra, /tmp) moved into a test folder and a stand-in analyzer: no library, nothing
+// runs; a report is all that is shown; a failure shows the log's error lines, never the rest; the throwaway folder goes.
+func TestSimilarRunsOnlyWithALibraryAndShowsOnlyTheReport(t *testing.T) {
+	d := t.TempDir()
+	t.Setenv("LABYRINTH_REA_SAMPLES", d)
+	_ = os.WriteFile(filepath.Join(d, "x.bin"), []byte("x"), 0o644)
+	a, err := Args("similar", filepath.Join(d, "x.bin"), "ignored", 0)
+	if err != nil || len(a) != 7 || strings.Join(a[:6], " ") != "--exec sh -c "+similarScript+" bsim /samples/x.bin" || a[6] != bsimScript {
+		t.Fatalf("args: %q %v", a, err)
+	}
+	if !strings.Contains(bsimScript, "public class LabyrinthBSim extends GhidraScript") || !strings.Contains(bsimScript, "new InsertRequest()") {
+		t.Fatal("the Ghidra script is not embedded")
+	}
+	root := t.TempDir()
+	for _, p := range []string{"work/bsim", "opt/ghidra/support", "tmp"} {
+		_ = os.MkdirAll(filepath.Join(root, p), 0o755)
+	}
+	moved := strings.NewReplacer("/work/", root+"/work/", "/opt/ghidra/", root+"/opt/ghidra/", "/tmp/", root+"/tmp/").Replace(similarScript)
+	analyzer := filepath.Join(root, "opt/ghidra/support/analyzeHeadless")
+	run := func(fake string) (string, string, error) {
+		_ = os.WriteFile(analyzer, []byte("#!/bin/sh\n"+fake), 0o755)
+		cmd := exec.Command("sh", "-c", moved, "bsim", "/samples/x.bin", "public class LabyrinthBSim {}")
+		var out, errb strings.Builder
+		cmd.Stdout, cmd.Stderr = &out, &errb
+		err := cmd.Run()
+		return out.String(), errb.String(), err
+	}
+	// the analyzer's arguments: "$d" p -import FILE ... -postScript LabyrinthBSim.java LIB OUT (OUT is the last one)
+	report := `for a; do out=$a; done; echo "ghidra log line"; echo "args: $*" > "$1/../args"; cat "$1/LabyrinthBSim.java" > "$1/../java"; echo "1. alpha.bin: 6 of 8 functions" > "$out"` + "\n"
+	if out, _, err := run(report); err != nil || !strings.Contains(out, "no similarity library yet") {
+		t.Fatalf("no library: %q %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tmp/args")); err == nil {
+		t.Fatal("the analyzer ran without a library")
+	}
+	_ = os.WriteFile(filepath.Join(root, "work/bsim/library.mv.db"), []byte("db"), 0o640)
+	out, errb, err := run(report)
+	if err != nil || out != "1. alpha.bin: 6 of 8 functions\n" || errb != "" {
+		t.Fatalf("report: %q %q %v", out, errb, err)
+	}
+	args, _ := os.ReadFile(filepath.Join(root, "tmp/args"))
+	java, _ := os.ReadFile(filepath.Join(root, "tmp/java"))
+	f := strings.Fields(strings.TrimPrefix(string(args), "args: "))
+	if len(f) < 4 || !strings.HasPrefix(f[0], root+"/tmp/bsim.") || f[len(f)-1] != f[0]+"/out" ||
+		!strings.Contains(string(args), " p -import /samples/x.bin -readOnly -deleteProject ") ||
+		f[len(f)-2] != root+"/work/bsim/library.mv.db" || string(java) != "public class LabyrinthBSim {}" {
+		t.Errorf("analyzer got %q, script %q", args, java)
+	}
+	out, errb, err = run("echo 'INFO fine'; echo 'ERROR the import failed'; echo 'java.lang.IllegalStateException: library busy'; exit 0\n")
+	if err == nil || out != "" || errb != "ERROR the import failed\njava.lang.IllegalStateException: library busy\n" {
+		t.Errorf("a failure: %q %q %v", out, errb, err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(root, "tmp/bsim.*")); len(left) != 0 {
+		t.Errorf("throwaway folders left: %v", left)
 	}
 }
