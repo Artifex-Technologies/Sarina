@@ -17,7 +17,8 @@ It runs against local, open-source models over an OpenAI-compatible API. The cor
 is **Go** (`go/`, standard library only): the agent loop, the tools, the
 integration service and the GUI. The legacy Python implementation (`sarina/`,
 with its FastAPI/Uvicorn GUI and service) was deleted on 2026-11-11; git history
-keeps it. Only the optional ML and voice helpers stay in Python (`python/sarina_helpers/`).
+keeps it. The optional ML and voice helper is Rust too since 2026-11-18 (`packaging/helpers`); its Python original
+(`python/sarina_helpers/`) stays for the rollback week.
 
 It is one of the Artifex repos in the Artifex Ecosystem (formerly the Chymaera Ecosystem; repos renamed 2026-10-10;
 older log entries below use the old names on purpose):
@@ -87,7 +88,7 @@ go/
   desktop/           application-menu categorisation (reports by default)
   doctor/            read-only checkup of the whole setup
   service/  gui/     integration API (:8899) and operator GUI (:8765)
-  helpers/           bridge to the Python ML/voice helper
+  helpers/           bridge to the ML/voice helper (Rust's runs the Rust one, packaging/helpers)
   forge/             agents Sarina writes, run only inside Limbo guests (docs/AGENT_FORGE.md)
   vault/ daily/      her linked Markdown notes; the day's note (Daily/YYYY-MM-DD.md)
   insight/           what she learns about the person she talks with (`sarina reflect`)
@@ -100,7 +101,8 @@ go/
   voice/ tone/       Piper text-to-speech without Python; how something was said (pace, pitch)
   testguard/         under SARINA_TEST=1 nothing writes outside the test's folders
   notes/ NOTES.md    design notes and status for the Go core
-python/sarina_helpers/   optional ML and voice helper
+python/sarina_helpers/   the Python ML and voice helper, kept for the rollback week (goes ~2026-11-25)
+packaging/helpers/   sarina-helpers (Rust): the ML and voice helper (serve, memory-search, voice-chat); differential with the Python
 packaging/arch/      source of truth for the distro's systemd unit + sysusers + PKGBUILD
 packaging/voice/     sarina-voice (Rust): labyrinth-ask-sarina, the check-up, the voice client; side-by-side tests with the Python
 docs/ECOSYSTEM.md    cross-repo integration contract
@@ -246,6 +248,25 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-11-18 (7) — The ML and voice helper in Rust (`packaging/helpers`, `sarina-helpers`); the Python stays a week
+- `python/sarina_helpers` (embeddings, memory search, desktop-audit's classifier, Argus capture grouping, speech in and
+  out, the JSON-lines `serve`) is ported to `sarina-helpers`, a Rust binary installed as `/usr/lib/sarina/sarina-helpers`.
+  Same modes, arguments, protocol and answers (`python/sarina_helpers/PROTOCOL.md`, protocol 1). ONNX Runtime and
+  espeak-ng are loaded at run time (nothing linked or downloaded), tokenizers is Hugging Face's crate. Design and
+  measurements: `packaging/helpers/README.md`; docs/RUST_PORT.md "The ML and voice helper".
+- **Proof** (`packaging/helpers/tests/differential.py`): 340 cases, no difference. `serve` byte for byte with the same
+  ONNX Runtime build and within 6.8e-8 with the system's (tolerance 1e-6); memory-search, voice-chat (whole sessions with
+  stand-in audio tools and agent, the real Piper voice: every line, command line and WAV played) byte for byte; Piper WAVs
+  byte for byte. Stand-in embedding models (none is on the computer, none was downloaded).
+- **Speech to text is whisper.cpp now** (`whisper-cli` with the ggml model Super+S uses), not faster-whisper (neither it
+  nor a CTranslate2 model exists here; no Rust equivalent). `--stt-model-dir` names the ggml model (or a folder with one).
+- **The switch is made:** the core's `helpers` runs the Rust helper when it is installed; `SARINA_HELPERS=python` goes
+  back to the Python package for the rollback week; ~2026-11-25 the Python goes (the list: docs/RUST_PORT.md).
+- **For Labyrinth OS:** sarina-git builds and installs `/usr/lib/sarina/sarina-helpers` (both recipes; optdepends
+  whisper-cpp and espeak-ng for voice-chat, onnxruntime-cpu). Nothing else changes: same commands and outputs.
+- **For Heimdall:** a new executable in `/usr/lib/sarina/`; the file-integrity list may name it like the Go build.
+— Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-18 (6) — `sarina version` and the usage in Rust: no command reaches the Go build
 - `sarina version` comes from the Rust build's own stamp (`rust/sarina/build.rs`, made as `go build` makes Go's: `git

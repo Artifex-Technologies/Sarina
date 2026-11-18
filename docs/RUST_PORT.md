@@ -1086,6 +1086,53 @@ guard's site rule, the token check, a media-type parameter named twice, the cook
 grant, a run's own stream, the max_turns bound, cancel, the probe's key, writing through a link, the pipe bound) caught
 12 of 12 (the grant only after the call-id fix).
 
+## The ML and voice helper (`packaging/helpers`, 2026-11-18)
+
+The last Python of Sarina's runtime: `python/sarina_helpers` (about 1,200 lines: embeddings, memory search, desktop-audit's
+classifier and Argus capture grouping, speech to text, text to speech, audio I/O, the JSON-lines `serve` protocol) is now
+`sarina-helpers`, a Rust binary in its own crate beside packaging/voice and packaging/voiced, installed as
+`/usr/lib/sarina/sarina-helpers`. The design, the module map and the measurements are in `packaging/helpers/README.md`;
+the protocol is unchanged (`python/sarina_helpers/PROTOCOL.md`).
+
+**Who calls what** (grepped in Go and Rust): `serve` from desktop-audit's `--model-dir` (ping, classify) and
+chymaera-analyze's `--model-dir` (ping, group); nothing calls `embed` (kept, as the protocol has it); `memory-search` and
+`voice-chat` are the commands of the same names, passed through with the terminal as it is. Nothing else in Sarina,
+Labyrinth or Yggdrasil starts the helper.
+
+**What is Rust now, all of it:** ONNX Runtime loaded at run time (`ort` load-dynamic, as sarina-voiced: nothing linked or
+downloaded), Hugging Face's `tokenizers` crate (what Python's tokenizers binds), the pooling and cosine arithmetic step for
+step as NumPy and Python 3.12's `sum()` do it, CPython's JSON error messages, Python 3.14's argparse (with its colours on a
+terminal), Piper through ONNX Runtime with espeak-ng's library loaded at run time, and speech to text through whisper.cpp's
+`whisper-cli` instead of faster-whisper (faster-whisper and a CTranslate2 model do not exist on this computer; whisper-cpp
+and the ggml model Super+S uses do: no download). Light: 4.5 MB, a server answers its first request in 0.03 s with 38 MB
+(the Python: 0.13 s, 71 MB) on the stand-in model; aarch64 builds and tests in CI.
+
+**Proof** (`packaging/helpers/tests/differential.py`, the Python under the venvs that have its extras): 340 cases, no
+difference. serve 264 (byte for byte with the same ONNX Runtime build, then within 6.8e-8 with the system's 1.29:
+tolerance 1e-6, the reasoning is in the script), memory-search 34 (stdout, stderr, status), text to speech 9 (WAVs byte for
+byte; phonemes identical for 1,221 of 1,228 texts, the rest where piper's own espeak-ng build pronounces differently),
+voice-chat 32 (whole sessions with stand-in audio tools, recogniser and agent, the real voice: output, every agent command
+line and every WAV played), speech to text 1 (whisper.cpp heard a Rust-spoken sentence word for word). No real
+sentence-embedding model is on the computer, so the models are stand-ins (a BERT-shaped one the test makes, the Chatterbox
+token-embedding graph); a real one would be the owner's call (all-MiniLM-L6-v2 as ONNX is about 90 MB).
+
+**Differences on purpose** (the README lists them): a request line that is not UTF-8 or longer than 64 MiB is answered
+(the Python died or read without end); nesting past 50,000 levels has a fixed message; a lone surrogate reads as U+FFFD;
+memory-search skips pipes, dangling links and files over 256 MiB, and prints an exception's text where the Python printed
+a traceback; voice-chat's speech to text is whisper.cpp (its `--stt-model-dir` names a ggml model) and its "missing" line
+names whisper-cpp and espeak-ng.
+
+**The switch** (made with this commit): the core's `helpers` runs the Rust helper when `/usr/lib/sarina/sarina-helpers` is
+installed (`SARINA_HELPERS_BIN` names another); `SARINA_HELPERS=python` or `SARINA_HELPERS_PYTHON` goes back to the Python
+package. The CLI differential sets `SARINA_HELPERS=python`, since the Go build only knows the Python one.
+
+**The rollback week, then the Python goes (~2026-11-25, with the Go build):** delete `python/sarina_helpers`, its wheel in
+both PKGBUILDs (`makedepends` python-build, -installer, -wheel, -setuptools; the `python` optdepends), the core's Python
+branch (`python()`, `PYTHON_ENV`, `PATH_ENV`, the "importable" text), and rewrite the texts that name the Python helper
+(`INSTALL_HINT`, desktop-audit's and chymaera-analyze's "needs the Python helper", their Go-made fixtures in
+`testdata/parity/helpers.json` and the CLI differential's stand-in interpreter cases). Only if the owner wants
+faster-whisper back would any Python stay, and then only for speech to text.
+
 ## Why Rust: measured
 
 The Go build (`go build -ldflags "-s -w"`, as the package builds it) against sarina-rs (`cargo build --release`), on my
@@ -1515,6 +1562,10 @@ dashes after "-----END" starts on them, so the block is always the rest of the t
 in every case tried).
 
 Next, in this order:
+
+00. **The ML and voice helper is Rust (2026-11-18, "The ML and voice helper"); its rollback week ends with the Go build's
+   (~2026-11-25).** Then delete `python/sarina_helpers` and its packaging, and rewrite the texts that name the Python helper
+   (the list is in that section).
 
 0. **Done 2026-11-18: the Go build's last callers.** `sarina version` (the Rust build's own stamp from build.rs; the `go`
    field names rustc, decided 2026-11-18) and the usage (no command, `help`, `-h`, `--help`, an unknown command: every

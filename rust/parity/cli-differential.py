@@ -3645,7 +3645,9 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
         # a file's time this many seconds before now (a session written on another day; the same for the same `ago`)
         os.utime(os.path.join(work, path), (t0 - ago, t0 - ago), follow_symlinks=False)
     env = {"PATH": os.path.join(work, "bin"), "LANG": "C.UTF-8", "HOME": os.path.join(work, "home"), "USER": "tester",
-           "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"), "SARINA_RS_NO_GO": "1"}
+           "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"), "SARINA_RS_NO_GO": "1",
+           # the Python helper for both builds (Go knows no other), also where the Rust helper is installed
+           "SARINA_HELPERS": "python"}
     chmods = []
     for k, v in case["env"].items():
         if k == "__chmod":

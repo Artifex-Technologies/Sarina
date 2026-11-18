@@ -1,6 +1,13 @@
 # sarina_helpers protocol
 
-The Go `sarina` binary calls this package as `python -m sarina_helpers <mode> ...`. Nothing is imported
+Two builds speak this protocol with the same answers: the Rust helper `sarina-helpers` (`packaging/helpers`, installed as
+`/usr/lib/sarina/sarina-helpers`; Sarina's core runs it when it is installed, since 2026-11-18) and this Python package,
+kept for the rollback week (`SARINA_HELPERS=python` chooses it; it goes ~2026-11-25, docs/RUST_PORT.md "The ML and voice
+helper"). The Rust helper takes the same arguments (`sarina-helpers <mode> ...`) and prints
+`usage: sarina-helpers {serve|memory-search|voice-chat} ...` when run without one; its speech to text is whisper.cpp
+(`--stt-model-dir` names a ggml model), not faster-whisper (packaging/helpers/README.md).
+
+Sarina's core calls this package as `python -m sarina_helpers <mode> ...`. Nothing is imported
 across the language boundary. Interpreter: `SARINA_HELPERS_PYTHON`, else `python3`, else `python`.
 If the package is not installed, set `SARINA_HELPERS_PATH` to the directory containing `sarina_helpers/`
 (it is prepended to `PYTHONPATH`). Running the module with no arguments prints

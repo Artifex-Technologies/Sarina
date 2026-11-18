@@ -10,8 +10,10 @@
 # command with an argument that is not UTF-8 is still handed, unchanged, to the Go build
 # (go/cmd/sarina) by execve, until the Go build is removed. The Go build is
 # /usr/lib/sarina/sarina: named sarina so that Heimdall still knows the process as Sarina.
-# The optional ML/voice helper is a small separate Python package
-# (python/sarina_helpers) installed alongside.
+# The optional ML/voice helper is sarina-helpers (Rust, packaging/helpers) at
+# /usr/lib/sarina/sarina-helpers, which the core runs when it is there; the Python package
+# (python/sarina_helpers) it replaces stays installed for the rollback week (SARINA_HELPERS=python),
+# then goes (docs/RUST_PORT.md "The ML and voice helper").
 #
 # pkgver is the release this builds: the tag v$pkgver, the version in the VERSION file
 # (Labyrinth_OS's scripts/release.sh writes both; its docs/VERSIONING.md). sha256sums is
@@ -20,17 +22,17 @@
 pkgname=sarina
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="Local-model security agent for Chymaera OS (Go core, optional Python ML/voice helper)"
+pkgdesc="Local-model security agent for Chymaera OS (Rust core, optional ML/voice helper)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Artifex-Technologies/Sarina"
 license=('MPL2')
 depends=('glibc')
 optdepends=(
-  'python: required for the optional ML/voice helper (sarina-helpers)'
-  'python-onnxruntime: semantic search and desktop-audit classification (helper, `ml` extra)'
+  'onnxruntime-cpu: the ML/voice helper (memory-search, desktop-audit --model-dir, voice-chat), loaded at run time'
   'alsa-utils: arecord/aplay, required by `sarina voice-chat` for audio I/O'
-  'python-faster-whisper: speech-to-text for `sarina voice-chat` (AUR, not yet packaged)'
-  'piper-tts: text-to-speech for `sarina voice-chat` (AUR, not yet packaged)'
+  'whisper-cpp: speech-to-text for `sarina voice-chat` (whisper-cli and a ggml model)'
+  'espeak-ng: phonemes for `sarina voice-chat` speech (a Piper voice)'
+  'python: the Python ML/voice helper, during the rollback week only (SARINA_HELPERS=python)'
   'claude-code: hand off tasks to the real Claude Code CLI when local resources are insufficient'
 )
 makedepends=('go' 'cargo' 'python-build' 'python-installer' 'python-wheel' 'python-setuptools')
@@ -47,7 +49,11 @@ build() {
   cd ../rust
   cargo build --release --locked --bin sarina-rs --target-dir "$srcdir/target"
 
-  cd ../python/sarina_helpers
+  cd ../packaging/helpers
+  cargo build --release --locked --target-dir "$srcdir/target"
+  cd ../..
+
+  cd python/sarina_helpers
   python -m build --wheel --no-isolation
 }
 
@@ -56,6 +62,7 @@ package() {
 
   install -Dm755 "$srcdir/target/release/sarina-rs" "$pkgdir/usr/bin/sarina"
   install -Dm755 go/sarina "$pkgdir/usr/lib/sarina/sarina"
+  install -Dm755 "$srcdir/target/release/sarina-helpers" "$pkgdir/usr/lib/sarina/sarina-helpers"
   ln -s sarina "$pkgdir/usr/bin/sarina-gui"
   ln -s sarina "$pkgdir/usr/bin/sarina-service"
 

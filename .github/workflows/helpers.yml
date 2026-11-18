@@ -1,0 +1,33 @@
+# The ML and voice helper (packaging/helpers, sarina-helpers): format, lints, the unit tests and the release build, on
+# x86_64 and on aarch64 (the Raspberry Pi). ONNX Runtime, espeak-ng and whisper.cpp are loaded at run time, so none is
+# needed here; the side-by-side proof against the Python (tests/differential.py) needs the models and venvs of the
+# computer it was written on and runs there.
+name: helpers
+on:
+  push:
+    paths: ["packaging/helpers/**", "packaging/voice/**", ".github/workflows/helpers.yml"]
+  pull_request:
+    paths: ["packaging/helpers/**", "packaging/voice/**", ".github/workflows/helpers.yml"]
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: packaging/helpers
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets --features parity -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --locked --release && ls -l target/release/sarina-helpers
+      # the binary starts and says what it is: the core checks for this line
+      - run: |
+          rc=0; target/release/sarina-helpers 2> usage.txt || rc=$?
+          test "$rc" -eq 2
+          grep -qxF 'usage: sarina-helpers {serve|memory-search|voice-chat} ...' usage.txt
