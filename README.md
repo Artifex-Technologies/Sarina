@@ -244,12 +244,14 @@ shell tools.
 
 | Repository | What it is | Sarina's part |
 | --- | --- | --- |
-| `Labyrinth_OS` | the gaming-focused OS (CachyOS base) | packages her (optional), voice, crash helper, daily check-up |
-| `Yggdrasil` | the desktop (panel, Fylgja, Settings, Agora, Minos, compositor) | Super+S, Settings > Sarina's agents |
-| `LykanOS` | the security edition (formerly Chymaera OS) | hosts her for security work |
-| `Heimdall` | the security watcher | watches her sessions, reviews what she keeps, signs her behaviour files, can contain her; she reads its findings |
-| `Limbo` | disposable virtual machines | where her validation runs and agents execute |
-| `Argus_App`, `Argus_Firmware` | Flipper Zero desktop console and firmware (formerly Chymaera Zero) | read-only advisories, local control API |
+| [Labyrinth_OS](https://github.com/Artifex-Technologies/Labyrinth_OS) | the gaming-focused OS (CachyOS base) | packages her (optional), voice, crash helper, daily check-up |
+| [Yggdrasil](https://github.com/Artifex-Technologies/Yggdrasil) | the desktop (panel, Fylgja, Settings, Agora, Minos, compositor) | Super+S, Settings > Sarina's agents |
+| [LykanOS](https://github.com/Artifex-Technologies/LykanOS) | the security edition (formerly Chymaera OS) | hosts her for security work |
+| [Heimdall](https://github.com/Artifex-Technologies/Heimdall) | the security watcher | watches her sessions, reviews what she keeps, signs her behaviour files, can contain her; she reads its findings |
+| [Limbo](https://github.com/Artifex-Technologies/Limbo) | disposable virtual machines | where her validation runs and agents execute |
+| [Argus_App](https://github.com/Artifex-Technologies/Argus_App), [Argus_Firmware](https://github.com/Artifex-Technologies/Argus_Firmware) | Flipper Zero desktop console and firmware (formerly Chymaera Zero) | read-only advisories, local control API |
+| [Kairos](https://github.com/Artifex-Technologies/Kairos) | frame generation for games | none (works without Sarina) |
+| [Daedalus_CAD](https://github.com/Artifex-Technologies/Daedalus_CAD), [Icarus](https://github.com/Artifex-Technologies/Icarus) | CAD and vehicle tuning apps | none today |
 
 The integration contract, ports and rules are in [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) and
 [docs/spec/00-must-preserve.md](docs/spec/00-must-preserve.md). Hardware writes always need a human;
