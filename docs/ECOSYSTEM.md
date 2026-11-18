@@ -171,7 +171,16 @@ power and risk:
    untrusted data written by other programs:** control and bidi characters are
    stripped, text is truncated, ids must match `[a-z0-9][a-z0-9_-]{0,31}`,
    numbers are clamped, files over 1 MiB are skipped. Unknown headroom is never
-   ranked as unlimited.
+   ranked as unlimited. **`--json`** (2026-11-18) prints the same sanitised view
+   as one object for a desktop's top bar (Yggdrasil's Agents item):
+   `{"agents": [{"id", "name", "ready", "stale", "updatedAt", "todayTokens",
+   "weekTokens", "totalSessions", "limits": [{"label", "percentUsed" (null when
+   unknown), "resetsAt"}], "statusText"}], "self": {"id": "sarina", "name",
+   "running", "lastActive"}}`, plus `"mostHeadroom"` (an id, or `""`) with
+   `--suggest`. `self` is Sarina from cheap signals only: `lastActive` is the
+   newest of her session folders' own times (a save renames the file in, so no
+   session file is opened) and `running` is whether a process's first argument
+   ends in `sarina-service`. The reader treats every string as untrusted again.
 3. **`sarina fleet-launch <agent> [prompt]`** — **proposal-first.** Omarchy
    starts agents in their auto-approve modes (`claude --permission-mode auto`,
    `gemini --yolo`, ...). This launcher has **no way to add such a flag**; each

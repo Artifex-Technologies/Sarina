@@ -16,7 +16,7 @@ import (
 // commands to the CLI. It deliberately registers NO tools (see the package doc).
 func init() {
 	cli.Register("fleet-usage", "print (or --write) Sarina's usage record for Omarchy's agents panel", usageCommand)
-	cli.Register("fleet-status", "show other agents' usage and limits from Omarchy's records: fleet-status [--suggest]", statusCommand)
+	cli.Register("fleet-status", "show other agents' usage and limits from Omarchy's records: fleet-status [--suggest] [--json]", statusCommand)
 	cli.Register("fleet-launch", "propose launching another agent, run it only after you confirm: fleet-launch AGENT [PROMPT] [--cwd D] [--yes]", launchCommand)
 }
 
@@ -25,6 +25,7 @@ var (
 	runner     Runner                 = ExecRunner
 	lookPath   func(string) string    // nil = exec.LookPath
 	isTerminal func(r io.Reader) bool = stdinIsTerminal
+	procRoot                          = "/proc"
 )
 
 func stdinIsTerminal(r io.Reader) bool {
@@ -106,11 +107,12 @@ func usageCommand(env *cli.Env, args []string) int {
 	return 0
 }
 
-// fleet-status [--usage-dir D] [--suggest]
+// fleet-status [--usage-dir D] [--suggest] [--json]
 func statusCommand(env *cli.Env, args []string) int {
 	fs := newFlags("fleet-status", env)
 	usageDir := fs.String("usage-dir", "", "panel usage directory (default ~/.local/state/omarchy/agents/usage)")
 	suggest := fs.Bool("suggest", false, "also name the agent with the most headroom")
+	asJSON := fs.Bool("json", false, "print one JSON object (the records, and Sarina's own state) instead of text")
 	if code, done := parseFlags(fs, args); done {
 		return code
 	}
@@ -119,6 +121,17 @@ func statusCommand(env *cli.Env, args []string) int {
 		dir = UsageDirectory(env.Getenv, homeOf(env))
 	}
 	statuses := ReadAgentStatus(dir, time.Time{}, 0)
+	if *asJSON {
+		cwd, _ := os.Getwd()
+		self := ReadSelf(DefaultSessionDirectories(env.Getenv, cwd, homeOf(env)), procRoot)
+		text, err := StatusJSON(statuses, self, *suggest)
+		if err != nil {
+			fmt.Fprintln(env.Stdout, "fleet-status:", err)
+			return 1
+		}
+		fmt.Fprintln(env.Stdout, text)
+		return 0
+	}
 	fmt.Fprintln(env.Stdout, RenderStatus(statuses))
 	if *suggest {
 		fmt.Fprintln(env.Stdout)

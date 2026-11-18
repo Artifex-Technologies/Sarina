@@ -182,7 +182,7 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 - **Sarina → Chymaera_OS, agent fleet (contract item 7):** **live.**
   `sarina fleet-usage` writes `sarina.json` into Omarchy's agents-panel usage
   directory, `fleet-status` reads the other agents' records (untrusted data,
-  sanitised), and `fleet-launch` proposes launching another agent and runs only
+  sanitised; `--json` for Yggdrasil's Agents item: keep its keys), and `fleet-launch` proposes launching another agent and runs only
   after a human confirms. `fleet-launch` is CLI-only and must **never** become a
   model-callable tool; a test enforces it. Detail in `docs/ECOSYSTEM.md` §1.
 - **Sarina → Argus_Firmware:** **live, read-only.**
@@ -245,6 +245,20 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-11-18 — `sarina fleet-status --json` for Yggdrasil's Agents item
+- `fleet-status --json` prints the sanitised view as one object (`go/chymaera/fleet/statusjson.go`; shape in
+  `docs/ECOSYSTEM.md` §1, step 2), plus `self`: Sarina's `lastActive` (her session folders' own times, no session file
+  opened) and `running` (a process whose first argument ends in `sarina-service`; only regular files read, 4 KiB each).
+  Still read-only: nothing is started, signalled or written. Tests: `statusjson_test.go` (hostile names and bidi
+  characters, null percents, empty lists, the newest folder, a look-alike argument and a planted pipe in a fake /proc,
+  the command end to end).
+- **Rust:** `fleet-status` is not ported (no `fleet` in `rust/`), so `sarina-rs` hands it to Go unchanged and there is
+  no differential case to add; the port of the fleet commands, when it comes, must keep `--json`.
+- **CONTRACT (Yggdrasil):** its Agents bar item (packages/agent-usage, `yggdrasil-agent-usage --agents`) runs
+  `sarina fleet-status --json` and treats every string as untrusted again. A Sarina without `--json` (1.0.0-165 and older)
+  just leaves Sarina's rows out of the item.
+Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-17 (2) — Heimdall asks Sarina to analyse a held file: `/quarantine/...` paths
 - `reverse_engineer` (Go `go/reverse`, Rust `reverse.rs`) reads a path written as its sandbox shows it, `/quarantine/X` or
