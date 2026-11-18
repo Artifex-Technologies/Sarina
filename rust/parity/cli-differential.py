@@ -146,6 +146,69 @@ class Server:
             conn.close()
 
 
+class LineServer:
+    """A scripted stand-in for Argus App's console (newline-delimited JSON over loopback TCP, in the case's own network:
+    never the real console on 44700): records each request line and answers from the case's list in order, one answer
+    per request. An answer is a line to send (a newline added), raw bytes sent as they are (and the connection
+    closed after them), HANGUP (the connection closed), "SILENT" (no answer: the client's deadline ends it) or a callable given the request. At the end of the
+    list the connection is closed."""
+
+    def __init__(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(16)
+        self.port = self.sock.getsockname()[1]
+        self.answers, self.requests = [], []
+        self.lock = threading.Lock()
+        threading.Thread(target=self.loop, daemon=True).start()
+
+    def reset(self, answers):
+        with self.lock:
+            self.answers, self.requests = list(answers), []
+
+    def loop(self):
+        while True:
+            try:
+                conn, _ = self.sock.accept()
+            except OSError:
+                return
+            threading.Thread(target=self.serve, args=(conn,), daemon=True).start()
+
+    def serve(self, conn):
+        conn.settimeout(15)
+        buf = b""
+        try:
+            while True:
+                while b"\n" not in buf:
+                    d = conn.recv(65536)
+                    if not d:
+                        return
+                    buf += d
+                line, buf = buf.split(b"\n", 1)
+                with self.lock:
+                    self.requests.append(line.decode("utf-8", "backslashreplace"))
+                    a = self.answers.pop(0) if self.answers else HANGUP
+                if callable(a):
+                    a = a(line)
+                if a == HANGUP:
+                    return
+                if a == "SILENT":
+                    while conn.recv(65536):
+                        pass
+                    return
+                if isinstance(a, bytes):
+                    conn.sendall(a)  # raw bytes, then the connection closed
+                    return
+                conn.sendall((a + "\n").encode())
+        except OSError:
+            return
+        finally:
+            conn.close()
+
+
+CURRENT_CONSOLE = None
+
+
 # ---- made-up state -------------------------------------------------------------------------------------------------
 
 AGENT_MEMORY = "ws/.port_sessions/memory/AGENT_MEMORY.md"
@@ -1986,6 +2049,233 @@ def desktop_cases():
     return cs
 
 
+def console_reply(**o):
+    return json.dumps(dict({"ok": True}, **o))
+
+
+CAPTURES = [
+    {"id": 1, "type": "nfc", "name": "badge.nfc", "size": 512, "meta": '{"uid": "04 A2 B3", "atqa": "0044"}'},
+    {"id": 2, "type": "nfc", "name": "badge-again.nfc", "size": 512, "meta": '{"uid": "04 A2 B3"}'},
+    {"id": 3, "type": "subghz", "name": "gate.sub", "size": 2048, "meta": '{"frequency": 433920000, "protocol": "Princeton"}'},
+    {"id": 4, "type": "subghz", "name": "car.sub", "size": 4096, "meta": '{"frequency": 315000000}'},
+    {"id": 5, "type": "subghz", "name": "gate2.sub", "size": 2048, "meta": '{"frequency": 433920000}'},
+    {"id": 6, "type": "subghz", "name": "odd.sub", "meta": '{"frequency": 868.35e6}'},
+    {"id": 7, "type": "ir", "name": "tv.ir", "size": 100, "meta": "not json"},
+    {"id": 8, "name": "untyped", "meta": '{"uid": 0, "frequency": ""}'},
+    {"id": 9, "type": None, "name": None, "size": None, "meta": '{"uid": true}'},
+    {"id": 10, "type": "nfc", "name": "trailing.nfc", "meta": '{"uid": "AA"} {"uid": "BB"}'},
+    {"id": 11, "type": "nfc", "name": "junk-after.nfc", "meta": '{"uid": "AA"} x'},
+    {"id": 12, "type": "nfc", "name": "number-after.nfc", "meta": '{"uid": "AA"} 12'},
+    {"id": 13, "type": "nfc", "name": "list.nfc", "meta": '["uid"]'},
+    {"id": 14, "type": "nfc", "name": "cut.nfc", "meta": '{"uid": "AA"'},
+    {"id": 15, "type": "nfc", "name": "nested.nfc", "meta": '{"uid": {"b": [1, 2.50, null], "a": "x"}}'},
+    {"id": 16, "type": "nfc", "name": "nested-again.nfc", "meta": '{"uid": {"a": "x", "b": [1, 2.50, null]}}'},
+    {"id": 17, "type": "subghz", "name": "big.sub", "meta": '{"frequency": 1e999}'},
+    {"id": 18, "type": "subghz", "name": "half.sub", "meta": '{"frequency": "433.92"} '},
+    {"id": 19, "type": "nfc", "name": "ünïcödé ‮.nfc", "meta": '{"uid": "\\u00e9t\\u00e9"}'},
+    {"id": 20, "type": "nfc", "name": "q'uote", "meta": '{"uid": "\\u00e9t\\u00e9"}'},
+    "not a capture",
+    {"id": 21, "type": "nfc", "name": "open-bracket.nfc", "meta": '{"uid": "CC"} ['},
+    {"id": 22, "type": "nfc", "name": "lit.nfc", "meta": '{"uid": "CC"} tru'},
+]
+
+DEVICE_INFO = """Flipper banner text here
+>: device_info
+hardware_model         : Flipper Zero
+firmware_origin_fork   : Argus
+firmware_version       : ARG-1.4.2r3+5
+firmware_commit        : 1a2b3c4d
+firmware_origin_git    : https://example.org/argus.git
+enclave_valid          : true
+radio_alive            : true
+odd key with spaces    : ignored
+: empty key
+no colon here
+"""
+
+GIT_STANDIN = r"""#!/bin/sh
+# a stand-in git: answers from the case's files in {W}/git (never a real repository), logs how and where it ran
+printf '%s|%s\n' "$*" "$PWD" >> {W}/git.log
+show() { [ -f "{W}/git/$1" ] || exit 0; while IFS= read -r l; do printf '%s\n' "$l"; done < "{W}/git/$1"; }
+case "$1" in
+  merge-base) [ -f {W}/git/fail-base ] && { show fail-base >&2; exit 128; }; show base;;
+  diff) case "$3" in *..HEAD) show local;; *) show upstream;; esac;;
+  ls-tree) [ -f {W}/git/fail-tree ] && exit 2; show tree;;
+esac
+"""
+
+
+def chymaera_cases():
+    """The Argus commands: chymaera-console and chymaera-analyze against the stand-in console in the case's own network
+    (the real one on 44700 is never reached: the case's port 44700 is free in its namespace), the analysis with the
+    stand-in helper (--model-dir); chymaera-device-info on device_info texts; chymaera-merge-report against a stand-in git."""
+    cs = []
+
+    def add(name, args, files=None, env=None, console=None, stdin=None, **k):
+        e = {"XDG_RUNTIME_DIR": "{W}/run"}
+        e.update(env or {})
+        e = {k2: v for k2, v in e.items() if v is not None}
+        c = C(name, args, files=files, env=e, stdin=stdin)
+        if console is not None:
+            c["console"] = console
+        c.update(k)
+        cs.append(c)
+    port = ["--port", "{C_PORT}"]
+    status = console_reply(version="1.2.3", serverRunning=True, serverPort=44700, sessionActive=False, eventCount=4,
+                           sessionName="lab <test>", datastorePath="/data/argus.db", extra="not shown")
+    caps = console_reply(captures=CAPTURES)
+    # ---- chymaera-console
+    add("chymaera-console", ["chymaera-console"] + port, console=[status, caps])
+    add("chymaera-console --captures", ["chymaera-console", "--captures", "3"] + port, console=[status, console_reply(captures=CAPTURES[:3])])
+    add("chymaera-console no captures", ["chymaera-console"] + port, console=[console_reply(), console_reply(captures=[])])
+    add("chymaera-console captures not a list", ["chymaera-console"] + port, console=[status, console_reply(captures={"a": 1})])
+    add("chymaera-console status values", ["chymaera-console"] + port,
+        console=[console_reply(version=None, serverRunning=1, serverPort=4.47e4, sessionActive=[1, "a"], sessionName={"x": None},
+                               eventCount=12345678901234567890), caps])
+    add("chymaera-console nothing listening", ["chymaera-console"] + port, console=[])
+    add("chymaera-console the default port (nothing there in the case's network)", ["chymaera-console"])
+    add("chymaera-console a bad port", ["chymaera-console", "--port", "70000"])
+    add("chymaera-console port 65536", ["chymaera-console", "--port", "65536"])
+    add("chymaera-console a negative port", ["chymaera-console", "--port=-1"])
+    add("chymaera-console an empty host", ["chymaera-console", "--host", ""] + port, console=[status, caps])
+    add("chymaera-console localhost", ["chymaera-console", "--host", "localhost"] + port, console=[status, caps])
+    add("chymaera-console status refused", ["chymaera-console"] + port, console=[json.dumps({"ok": False, "error": "unauthorized"})])
+    add("chymaera-console ok false without error", ["chymaera-console"] + port, console=[json.dumps({"ok": 0})])
+    add("chymaera-console error null", ["chymaera-console"] + port, console=[json.dumps({"ok": False, "error": None})])
+    add("chymaera-console error a number", ["chymaera-console"] + port, console=[json.dumps({"ok": False, "error": 1.50})])
+    add("chymaera-console captures refused", ["chymaera-console"] + port, console=[status, json.dumps({"ok": False, "error": "busy"})])
+    add("chymaera-console hangs up", ["chymaera-console"] + port, console=[HANGUP])
+    add("chymaera-console hangs up at captures", ["chymaera-console"] + port, console=[status, HANGUP])
+    add("chymaera-console not JSON", ["chymaera-console"] + port, console=["this is not json"])
+    add("chymaera-console a list", ["chymaera-console"] + port, console=['["a list"]'])
+    for v, label in [("1", "number"), ("1.5", "float"), ('"s"', "string"), ("null", "null"), ("true", "bool")]:
+        add(f"chymaera-console a {label}", ["chymaera-console"] + port, console=[v])
+    add("chymaera-console extra data", ["chymaera-console"] + port, console=['{"ok": true} {"ok": true}'])
+    add("chymaera-console extra junk", ["chymaera-console"] + port, console=['{"ok": true} x'])
+    add("chymaera-console trailing spaces", ["chymaera-console"] + port, console=['{"ok": true}  \r', caps])
+    add("chymaera-console a cut reply then close", ["chymaera-console"] + port, console=[b'{"ok": tr'])
+    add("chymaera-console a whole reply without newline then close", ["chymaera-console"] + port, console=[b'{"ok": true}'])
+    add("chymaera-console an empty line", ["chymaera-console"] + port, console=[""])
+    add("chymaera-console a line too long", ["chymaera-console"] + port,
+        console=[json.dumps({"ok": True, "pad": "x" * (16 << 20)})])
+    # the reply line with its newline at the bound (16 MiB) and one byte past it
+    add("chymaera-console a line at the limit", ["chymaera-console"] + port,
+        console=[json.dumps({"ok": True, "pad": "x" * ((16 << 20) - 24)}), caps])
+    add("chymaera-console a line one past the limit", ["chymaera-console"] + port,
+        console=[json.dumps({"ok": True, "pad": "x" * ((16 << 20) - 23)}), caps])
+    add("chymaera-console no answer (the deadline)", ["chymaera-console"] + port, console=["SILENT"],
+        norm=[(r"tcp 127\.0\.0\.1:\d+->127\.0\.0\.1:\d+", "tcp LOCAL->REMOTE")])
+    # the token: given, from the environment, from Argus App's file (a planted pipe there), with HTML characters
+    add("chymaera-console --token", ["chymaera-console", "--token", "s3cret<&>"] + port, console=[status, caps])
+    add("chymaera-console --token empty", ["chymaera-console", "--token="] + port, console=[status, caps],
+        env={"CHYMAERA_CONSOLE_TOKEN": "from-env"})
+    add("chymaera-console token from the environment", ["chymaera-console"] + port, console=[status, caps],
+        env={"CHYMAERA_CONSOLE_TOKEN": "from-env"})
+    add("chymaera-console token from Argus App's file", ["chymaera-console"] + port, console=[status, caps],
+        files=state(**{"run/argus/token": "  file-token\n"}))
+    add("chymaera-console token file a pipe", ["chymaera-console"] + port, console=[status, caps],
+        files=state(**{"run/argus/token|": ""}))
+    add("chymaera-console token file a folder", ["chymaera-console"] + port, console=[status, caps],
+        files=state(**{"run/argus/token/": ""}))
+    add("chymaera-console no runtime folder", ["chymaera-console"] + port, console=[status, caps],
+        env={"XDG_RUNTIME_DIR": None})
+    for bad in (["-h"], ["--nope"], ["--port", "x"], ["--captures"], ["--token"]):
+        add(f"chymaera-console {' '.join(bad)}", ["chymaera-console"] + bad, env={"CHYMAERA_CONSOLE_TOKEN": "never-shown"})
+    # ---- chymaera-analyze
+    add("chymaera-analyze", ["chymaera-analyze"] + port, console=[caps])
+    add("chymaera-analyze --limit", ["chymaera-analyze", "--limit", "2"] + port, console=[console_reply(captures=CAPTURES[:2])])
+    add("chymaera-analyze nothing", ["chymaera-analyze"] + port, console=[console_reply(captures=[])])
+    add("chymaera-analyze refused", ["chymaera-analyze"] + port, console=[json.dumps({"ok": False, "error": "nope"})])
+    add("chymaera-analyze nothing listening", ["chymaera-analyze"] + port, console=[])
+    group_py = ("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {W}/helper.log\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> {W}/helper.log;"
+                " case \"$line\" in *'\"op\":\"ping\"'*) echo '{\"ok\":true,\"protocol\":1,\"prototypes\":\"x\"}';;"
+                " *'\"op\":\"group\"'*) echo '{\"ok\":true,\"groups\":[[\"gate.sub\",\"gate2.sub\"],[\"badge.nfc\"]]}';;"
+                " *) echo '{\"ok\":false,\"error\":\"?\"}';; esac; done\n")
+    md = ["--model-dir", "{W}/model"]
+    add("chymaera-analyze --model-dir", ["chymaera-analyze", "--similarity-threshold", "0.6"] + md + port, console=[caps],
+        files=state(**{"bin/python3*": group_py}))
+    add("chymaera-analyze --model-dir no groups", ["chymaera-analyze"] + md + port, console=[caps],
+        files=state(**{"bin/python3*": group_py.replace('[[\\"gate.sub\\",\\"gate2.sub\\"],[\\"badge.nfc\\"]]', "[]")}))
+    add("chymaera-analyze --model-dir groups null", ["chymaera-analyze"] + md + port, console=[caps],
+        files=state(**{"bin/python3*": group_py.replace('[[\\"gate.sub\\",\\"gate2.sub\\"],[\\"badge.nfc\\"]]', "null")}))
+    add("chymaera-analyze --model-dir the helper refuses", ["chymaera-analyze"] + md + port, console=[caps],
+        files=state(**{"bin/python3*": group_py.replace('*\'"op":"group"\'*', "*nothing-matches*")}))
+    add("chymaera-analyze --model-dir no Python", ["chymaera-analyze"] + md + port, console=[caps])
+    add("chymaera-analyze --model-dir the helper dies", ["chymaera-analyze"] + md + port, console=[caps],
+        files=state(**{"bin/python3*": "#!/bin/sh\necho 'cannot load the model' >&2\nexit 4\n"}))
+    for bad in (["-h"], ["--similarity-threshold", "high"], ["--limit=x"]):
+        add(f"chymaera-analyze {' '.join(bad)}", ["chymaera-analyze"] + bad)
+    # ---- chymaera-device-info
+    def info(**changes):
+        lines = []
+        for l in DEVICE_INFO.splitlines():
+            k = l.split(":")[0].strip()
+            if k in changes:
+                if changes[k] is not None:
+                    lines.append(f"{k} : {changes[k]}")
+                continue
+            lines.append(l)
+        return "\n".join(lines) + "\n"
+    add("chymaera-device-info stdin", ["chymaera-device-info"], stdin=info().encode())
+    add("chymaera-device-info --file", ["chymaera-device-info", "--file", "{W}/info.txt"], files=state(**{"info.txt": info()}))
+    add("chymaera-device-info --file missing", ["chymaera-device-info", "--file", "{W}/none.txt"])
+    add("chymaera-device-info --file a folder", ["chymaera-device-info", "--file", "{W}/empty"])
+    add("chymaera-device-info nothing", ["chymaera-device-info"], stdin=b"")
+    add("chymaera-device-info banner only", ["chymaera-device-info"], stdin=b"Welcome\r\nno fields\r\n")
+    add("chymaera-device-info CRLF", ["chymaera-device-info"], stdin=info().replace("\n", "\r\n").encode())
+    add("chymaera-device-info --expected-commit matching", ["chymaera-device-info", "--expected-commit", "1a2b3c4d5e6f"], stdin=info().encode())
+    add("chymaera-device-info --expected-commit shorter", ["chymaera-device-info", "--expected-commit=1a2b"], stdin=info().encode())
+    add("chymaera-device-info --expected-commit other", ["chymaera-device-info", "--expected-commit", "ffff"], stdin=info().encode())
+    add("chymaera-device-info --expected-commit no commit", ["chymaera-device-info", "--expected-commit", "ffff"],
+        stdin=info(firmware_commit=None).encode())
+    for label, ch in [("old fork name", {"firmware_origin_fork": "chymaera"}), ("other fork", {"firmware_origin_fork": "Unleashed"}),
+                      ("fork in capitals", {"firmware_origin_fork": "ARGUS"}), ("enclave false", {"enclave_valid": "false"}),
+                      ("radio missing", {"radio_alive": None}), ("all missing", {"firmware_origin_fork": None, "enclave_valid": None,
+                                                                                     "radio_alive": None}),
+                      ("version unknown", {"firmware_version": "unknown"}), ("version empty", {"firmware_version": ""}),
+                      ("version missing", {"firmware_version": None}), ("version dev", {"firmware_version": "ARG-1.4.2-dev"}),
+                      ("version release", {"firmware_version": "ARG-1.4.2r3"}), ("version dev ahead", {"firmware_version": "ARG-1.4.2-dev+2"}),
+                      ("version chymaera", {"firmware_version": "1.4.2-CHY-1.2+3"}), ("version chymaera dev", {"firmware_version": "1.4.2-CHY-dev"}),
+                      ("version chymaera release", {"firmware_version": "1.4.2-CHY-7"}),
+                      ("version legacy", {"firmware_version": "chy-1.0-12-gabcdef0"}), ("version odd", {"firmware_version": "v9 ünï"}),
+                      ("quotes in values", {"firmware_origin_fork": "it's \"x\"", "enclave_valid": "it's"}),
+                      ("a value with a colon", {"firmware_origin_git": "https://host:8080/x"})]:
+        add(f"chymaera-device-info {label}", ["chymaera-device-info"], stdin=info(**ch).encode())
+    add("chymaera-device-info only keys with spaces", ["chymaera-device-info"], stdin=b"odd key: x\nfirmware version: y\n")
+    add("chymaera-device-info -h", ["chymaera-device-info", "-h"])
+    add("chymaera-device-info a bad flag", ["chymaera-device-info", "--nope"])
+    # ---- chymaera-merge-report: the stand-in git answers from the case's files
+    git = {"bin/git*": GIT_STANDIN, "fw/": "", "git/base": "abc123\n", "git/upstream": "furi/core.c\nREADME.md\n\nlib/x.c\n",
+           "git/local": " applications_user/myapp/app.c\nfuri/core.c\nREADME.md\nassets/protobuf/flipper.proto\nnotes.md\nother.txt\n",
+           "git/tree": "furi/core.c\nREADME.md\nlib/x.c\nassets/protobuf/flipper.proto\nnotes.md\n"}
+    add("chymaera-merge-report", ["chymaera-merge-report", "--cwd", "{W}/fw"], files=state(**git))
+    add("chymaera-merge-report default folder", ["chymaera-merge-report"], files=state(**git), cwd="fw")
+    add("chymaera-merge-report --upstream-ref", ["chymaera-merge-report", "--cwd={W}/fw", "--upstream-ref", "origin/main"], files=state(**git))
+    add("chymaera-merge-report --upstream-ref empty", ["chymaera-merge-report", "--cwd={W}/fw", "--upstream-ref="], files=state(**git))
+    add("chymaera-merge-report a link to the checkout", ["chymaera-merge-report", "--cwd", "{W}/lnk"], files=state(**git, **{"lnk@": "{W}/fw"}))
+    add("chymaera-merge-report nothing local", ["chymaera-merge-report", "--cwd", "{W}/fw"], files=state(**dict(git, **{"git/local": "\n"})))
+    add("chymaera-merge-report no conflict", ["chymaera-merge-report", "--cwd", "{W}/fw"],
+        files=state(**dict(git, **{"git/upstream": "lib/x.c\n"})))
+    many = "\n".join(f"furi/f{i:02d}.c" for i in range(14)) + "\n"
+    add("chymaera-merge-report over the policy budget", ["chymaera-merge-report", "--cwd", "{W}/fw"],
+        files=state(**dict(git, **{"git/local": many, "git/tree": many, "git/upstream": "furi/f03.c\n"})))
+    add("chymaera-merge-report one over the policy budget", ["chymaera-merge-report", "--cwd", "{W}/fw"],
+        files=state(**dict(git, **{"git/local": "\n".join(many.split()[:13]) + "\n", "git/tree": many, "git/upstream": ""})))
+    add("chymaera-merge-report at the policy budget", ["chymaera-merge-report", "--cwd", "{W}/fw"],
+        files=state(**dict(git, **{"git/local": "\n".join(many.split()[:12]) + "\n", "git/tree": many, "git/upstream": ""})))
+    add("chymaera-merge-report merge-base fails", ["chymaera-merge-report", "--cwd", "{W}/fw"],
+        files=state(**dict(git, **{"git/fail-base": "fatal: Not a valid object name upstream/dev\n"})))
+    add("chymaera-merge-report merge-base fails silently", ["chymaera-merge-report", "--cwd", "{W}/fw"],
+        files=state(**dict(git, **{"git/fail-base": ""})))
+    add("chymaera-merge-report ls-tree fails", ["chymaera-merge-report", "--cwd", "{W}/fw"],
+        files=state(**dict(git, **{"git/fail-tree": ""})))
+    add("chymaera-merge-report no git", ["chymaera-merge-report", "--cwd", "{W}/fw"], files=state(**{"fw/": ""}))
+    add("chymaera-merge-report the folder missing", ["chymaera-merge-report", "--cwd", "{W}/none"], files=state(**git))
+    add("chymaera-merge-report the folder a file", ["chymaera-merge-report", "--cwd", "{W}/git/base"], files=state(**git))
+    add("chymaera-merge-report -h", ["chymaera-merge-report", "-h"])
+    return cs
+
+
 # shots are drawn from a clock-seeded generator in both builds: the counts are left out, their total is checked by
 # testdata/parity/quantum.json's fixed seeds (here only the line's shape and the number of shots)
 SHOTS_NORM = [(r"(?: \|[01]+(?:>|\\u003e):\d+)+", " COUNTS")]
@@ -3205,6 +3495,8 @@ def run_case(case, go, rs, base):
         try:
             enter_netns(case.get("tmpfs"))
             limbo, http, hurl = start_servers(base)
+            global CURRENT_CONSOLE
+            CURRENT_CONSOLE = LineServer() if "console" in case else None
             spawned = [subprocess.Popen(argv, executable=exe, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL) for exe, argv in case.get("spawn", ())]
             held = []
@@ -3252,7 +3544,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
     os.makedirs(work)
     sockp = os.path.join(base, "agent.sock")
     sub = lambda s: (s.replace("{W}", work).replace("{S}", sockp).replace("{H_HOSTPORT}", hurl[len("http://"):]).replace("{H_PORT}", hurl.rsplit(":", 1)[1])
-                     .replace("{H}", hurl).replace("{G}", gobin))
+                     .replace("{H}", hurl).replace("{G}", gobin).replace("{C_PORT}", str(CURRENT_CONSOLE.port if CURRENT_CONSOLE else 0)))
     make_files(work, case["files"], sub)
     t0 = time.time()
     for path, ago in case.get("mtimes", {}).items():
@@ -3271,6 +3563,8 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
         os.chmod(os.path.join(work, path), int(mode, 8))
     os.chmod(sockp, case.get("sockmode", 0o755))
     limbo.reset(case["limbo"])
+    if CURRENT_CONSOLE:
+        CURRENT_CONSOLE.reset([sub(x) if isinstance(x, str) and x not in (HANGUP, "SILENT") else x for x in case["console"]])
     http.reset([sub(x) if isinstance(x, str) and x != HANGUP else sub_resp(x, sub) for x in case["http"]], case.get("model", False),
                case.get("routes"))
     argv = [binary] + [sub(x) for x in case["args"]]
@@ -3326,6 +3620,9 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
         res = {"stdout": "", "stderr": "TIMEOUT", "exit": -1}
     with limbo.lock, http.lock:
         reqs = {"limbo": list(limbo.requests), "http": list(http.requests)}
+    if CURRENT_CONSOLE:
+        with CURRENT_CONSOLE.lock:
+            reqs["console"] = list(CURRENT_CONSOLE.requests)
     if case.get("unordered"):
         # requests whose order Go leaves to its map iteration (the route's examples, embedded topic by topic)
         reqs["http"].sort(key=lambda r: json.dumps(r, sort_keys=True))
@@ -3335,7 +3632,7 @@ def run_one(binary, case, base, limbo, http, hurl, gobin):
 
 
 CASE_GROUPS = ["memory_cases", "search_cases", "migrate_cases", "limbo_cases", "tiers_cases", "chat_cases", "other_cases",
-               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "desktop_cases", "quantum_cases", "reverse_cases", "council_cases",
+               "doctor_cases", "system_cases", "math_cases", "wrapper_cases", "helper_cases", "fleet_cases", "desktop_cases", "chymaera_cases", "quantum_cases", "reverse_cases", "council_cases",
                "crypto_stego_command_cases", "crypto_stego_chat_cases", "vault_cases", "insight_cases", "forge_cases"]
 
 

@@ -133,7 +133,7 @@ pub fn available(getenv: &dyn Fn(&str) -> String) -> Result<(), String> {
 }
 
 /// Go's `*exec.ExitError` text for a status.
-fn exit_text(st: std::process::ExitStatus) -> String {
+pub(crate) fn exit_text(st: std::process::ExitStatus) -> String {
     use std::os::unix::process::ExitStatusExt;
     if let Some(c) = st.code() {
         return if c == 0 { String::new() } else { format!("exit status {c}") };

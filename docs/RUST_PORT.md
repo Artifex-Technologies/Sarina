@@ -17,7 +17,7 @@ equal.
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **in progress**: the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **in progress**: `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego on 2026-11-16 (every part proved against Go fixtures, then wired: `sarina crypto` and `sarina stego` in sarina-rs, the seven tools and both prefetches; `needs_go` no longer names SARINA_CRYPTO), the vault on 2026-11-16 (reading, recall with and without meaning, writing, its tools and commands: `needs_go` no longer names SARINA_VAULT), daily (`sarina trends`, `sarina daily-report`); insight on 2026-11-16 and -17 (`sarina vault-tidy`; `sarina reflect` and `sarina vault-ingest`, which ask the model, under SARINA_RS_TRY); the forge on 2026-11-17 (its tools and forge-list, forge-approve, forge-remove): every optional set is ported and `needs_go` is gone |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust and Labyrinth's `sarina-rs-switch` is merged; begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), so only `mcp`, `agents`, `version` and the usage (no command, `help`, an unknown one) still reach the Go build and Labyrinth's `sarina-rs-switch` is merged; begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; the move is proposed in "Resume here", not made); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -881,6 +881,31 @@ difference: a pacman description that is not UTF-8 reaches a created entry's Com
 .desktop file must be UTF-8). Mutation run 11 of 11 after the cases were widened (a package whose binaries tie, an
 `env VAR=x` program that is also a package, blank lines of different kinds before a second group).
 
+**5. The Argus commands** (112 cases, `chymaera_cases`; `rust/sarina/src/chymaera/`): a stand-in console (a new harness
+server, `console`: newline-delimited JSON on a loopback port of the case's own network; the real console's 44700 is
+never reached, and a case on the default port finds nothing there) answering each request from the case's list.
+`chymaera-console`: status and captures, `--captures`, none, not a list, odd status values, nothing listening, the
+default port, ports 70000, 65536 and -1, an empty host, localhost, refused (with an error, none, null, a number), hang-ups,
+not JSON, a list, every scalar, extra data and junk after the reply, trailing white space, a cut reply and a whole one
+without its newline before the close, an empty line, a reply line at the 16 MiB bound and one byte past it, no answer
+(the 5 s deadline; the local port normalised), the token given (with HTML characters), empty, from
+CHYMAERA_CONSOLE_TOKEN, from Argus App's file, the file a pipe or a folder, no runtime folder; flags (the token never in
+the usage). `chymaera-analyze` on 22 captures (duplicate UIDs that are strings, nested objects and Unicode; frequencies
+as integers, floats, exponents past float64 and strings; meta that is not JSON, followed by another value, by junk, by a
+number, by an open bracket, by a cut literal, cut itself, a list), `--limit`, refused, nothing listening, `--model-dir`
+with the stand-in helper (groups, none, null, refused, no Python, dying). `chymaera-device-info` from standard input and
+`--file` (missing, a folder), CRLF, banners, every expectation and version format, `--expected-commit` matching, shorter,
+other, without a commit, keys with spaces only. `chymaera-merge-report` against a stand-in git (never a real
+repository): the tiers, the default folder, `--upstream-ref`, a link to the checkout, nothing local, no conflict, the
+policy budget at 12, 13 and 14, merge-base failing with and without a message, ls-tree failing, no git, the folder
+missing or a file. Found and fixed in Go and Rust (Go tests that failed before: `go/chymaera/console/planted_test.go`):
+a named pipe planted at Argus App's token file ($XDG_RUNTIME_DIR/argus/token) held every chymaera command for ever (now
+a bounded regular file); a reply line was read whole however long it was (now at most 16 MiB: "console sent a reply
+longer than ..."). Not ported: the console client's `Ping`, `Help`, `LogTail` and `SessionStart` (nothing but Go's tests
+uses them). `gojson` gains `UseNumber` reading (`to_any_use_number`) and where the first value ends (`parse_first_end`).
+Mutation run 11 of 11 after boundary cases were added (the reply bound, port 65536, 13 files over the budget, keys with
+spaces only).
+
 ### The chat cases (2026-11-12)
 
 chat, resume, skill and memory-review are ported but not moved: sarina-rs runs them only when `SARINA_RS_TRY` names them
@@ -1449,6 +1474,13 @@ dashes after "-----END" starts on them, so the block is always the rest of the t
 in every case tried).
 
 Next, in this order:
+
+0. **The Go build's last callers** (2026-11-18): every command the owner asked for is Rust now ("The last Go
+   commands"). What still reaches `/usr/lib/sarina/sarina`: `sarina mcp list` and `sarina agents list` (cli/extcmd.go,
+   over packages already ported), `sarina version` (its answer is the Go build's own VCS stamp: the Rust build needs its
+   own stamp first) and the usage (no command, `help`, `-h`, `--help`, an unknown command: the table's summaries). Those
+   four go before the Go build can be dropped; `rust/sarina/tests/sarina_rs.rs` uses `mcp` and `agents` as its
+   examples of commands still handed over and moves to `version` once they are ported.
 
 1. **Made 2026-11-18 (the owner's word, all at once): chat, resume, skill, memory-review, service, gui, doctor, council,
    reflect and vault-ingest are always Rust** (`cli::ported`; `cli::proving` and `SARINA_RS_TRY` are gone). The steps below were

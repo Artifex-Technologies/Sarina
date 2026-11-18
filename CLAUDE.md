@@ -277,6 +277,12 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   ever, and fleet-launch's audit log is no longer written through a link planted at its name (nothing is launched then).
 - Moved: `desktop-audit` (54 cases). Fixed in Go and Rust: `--apply` no longer writes an entry through a link planted at
   its name; a named pipe among the entries or at the classification cache no longer holds it for ever.
+- Moved: `chymaera-console`, `chymaera-analyze`, `chymaera-device-info`, `chymaera-merge-report` (112 cases, against a
+  stand-in console in each case's own network: never the real one on 44700). The Argus console protocol is unchanged
+  (Argus_App's `docs/SARINA_API.md`); fixed in Go and Rust: a named pipe at Argus App's token file no longer holds the
+  commands for ever, and a reply line is read only up to 16 MiB.
+- Still reaching the Go build: `mcp list`, `agents list`, `version` and the usage (`help`, no or an unknown command);
+  docs/RUST_PORT.md "Resume here" item 0.
 - **For Labyrinth OS / Yggdrasil:** nothing to change: same names, arguments, output and exit statuses.
 — Signed: Sarina / Claude Opus 5.5
 

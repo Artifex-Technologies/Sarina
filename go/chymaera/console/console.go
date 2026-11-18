@@ -12,6 +12,7 @@ package console
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Artifex-Technologies/Sarina/go/chymaera/internal/pyfmt"
+	"github.com/Artifex-Technologies/Sarina/go/session"
 )
 
 // Defaults: the loopback port the app binds (registered in docs/ECOSYSTEM.md).
@@ -29,6 +31,9 @@ const (
 	DefaultPort    = 44700
 	DefaultHost    = "127.0.0.1"
 	DefaultTimeout = 5 * time.Second
+	// MaxReplyBytes bounds one reply line: a capture list of hundreds of records is far smaller, so a longer line is not
+	// the protocol and is not read into memory
+	MaxReplyBytes = 16 << 20
 )
 
 // Error means the console answered {"ok": false, "error": ...}.
@@ -70,7 +75,8 @@ func TokenFile() string {
 // DefaultToken reads the token Argus App wrote, or returns "" when there is none.
 func DefaultToken() string {
 	if f := TokenFile(); f != "" {
-		if b, err := os.ReadFile(f); err == nil {
+		// a regular file only, bounded: a named pipe planted at its name would hold every command for ever
+		if b, err := session.ReadRegular(f, 64<<10); err == nil {
 			return strings.TrimSpace(string(b))
 		}
 	}
@@ -144,10 +150,14 @@ func (c *Client) Request(cmd string, params map[string]any) (map[string]any, err
 	c.conn.SetDeadline(time.Now().Add(timeout))
 	var line string
 	if _, err = c.conn.Write(append(data, '\n')); err == nil {
-		line, err = c.reader.ReadString('\n')
+		line, err = readLine(c.reader, MaxReplyBytes)
 		if err == io.EOF {
 			err = nil // EOF with no data is reported below as "closed"
 		}
+	}
+	if err == errTooLong {
+		c.Close()
+		return nil, &UnavailableError{fmt.Sprintf("%s: console sent a reply longer than %d bytes", cmd, MaxReplyBytes)}
 	}
 	if err != nil {
 		c.Close()
@@ -187,6 +197,24 @@ func (c *Client) Request(cmd string, params map[string]any) (map[string]any, err
 		return nil, &Error{Message: msg, Command: cmd}
 	}
 	return resp, nil
+}
+
+var errTooLong = errors.New("line too long")
+
+// readLine is ReadString('\n') that stops past max bytes (errTooLong) instead of reading the whole line.
+func readLine(r *bufio.Reader, max int) (string, error) {
+	var b []byte
+	for {
+		chunk, err := r.ReadSlice('\n')
+		b = append(b, chunk...)
+		if len(b) > max {
+			return "", errTooLong
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		return string(b), err
+	}
 }
 
 func objects(v any) []map[string]any {

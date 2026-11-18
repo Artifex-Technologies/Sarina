@@ -476,11 +476,34 @@ pub fn parse_first(b: &[u8]) -> (Result<Value, Error>, bool) {
     }
 }
 
+/// One `json.Decoder.Decode` over `b` as [`parse_first`], with where the value ends (what a second Decode reads from).
+pub fn parse_first_end(b: &[u8]) -> (Result<Value, Error>, usize) {
+    let mut p = Parser { b, i: 0, depth: 0 };
+    p.ws();
+    if p.i >= b.len() {
+        return (Err(Error("EOF".into())), p.i);
+    }
+    match p.value() {
+        Ok(v) => (Ok(v), p.i),
+        Err(Stop::End) => (Err(Error("unexpected EOF".into())), p.i),
+        Err(Stop::Syntax(s)) => (Err(Error(s)), p.i),
+    }
+}
+
 // ---- reading into Go's `any` ----
 
 /// The document as Go puts it in an `any`: float64 numbers, maps. A number out of float64's range reads as 0, and the first
 /// such number is the error (the rest is still read, as Go does). Without recursion, as the parser.
 pub fn to_any(v: &Value) -> (Any, Option<Error>) {
+    to_any_with(v, false)
+}
+
+/// [`to_any`] for a decoder with `UseNumber`: numbers kept as their own text (`Any::Num`), never an error.
+pub fn to_any_use_number(v: &Value) -> Any {
+    to_any_with(v, true).0
+}
+
+fn to_any_with(v: &Value, use_number: bool) -> (Any, Option<Error>) {
     enum Build<'v> {
         Array(std::slice::Iter<'v, Value>, Vec<Any>),
         Object(std::slice::Iter<'v, (String, Value)>, BTreeMap<String, Any>, String),
@@ -494,6 +517,7 @@ pub fn to_any(v: &Value) -> (Any, Option<Error>) {
         match next.take() {
             Some(Value::Array(items)) => stack.push(Build::Array(items.iter(), Vec::with_capacity(items.len()))),
             Some(Value::Object(members)) => stack.push(Build::Object(members.iter(), BTreeMap::new(), String::new())),
+            Some(Value::Number(t)) if use_number => done = Some(Any::Num(t.clone())),
             Some(scalar) => done = Some(scalar_any(scalar, &path, &mut first)),
             None => {}
         }

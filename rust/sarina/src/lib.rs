@@ -4,6 +4,7 @@
 pub mod agent;
 pub mod agents;
 pub mod analysiscache;
+pub mod chymaera;
 pub mod cli;
 pub mod config;
 pub mod council;
