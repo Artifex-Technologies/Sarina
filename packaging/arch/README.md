@@ -13,9 +13,16 @@ Contents:
   as); it runs every command itself and hands nothing to the Go build (since
   2026-11-18; a command with an argument that is not UTF-8 is refused). The Go
   build is still installed at `/usr/lib/sarina/sarina` only as the rollback copy
-  (docs/RUST_PORT.md "The switch"; it goes after the rollback week). Also builds and installs the optional ML/voice helper wheel
-  (`python/sarina_helpers`), which only matters if `python` and the
-  `ml`/`voice` dependencies are present.
+  (docs/RUST_PORT.md "The switch"; it goes after the rollback week). Also builds
+  and installs `sarina-tone` (`/usr/bin/sarina-tone`, the Rust build's second program)
+  and the optional ML/voice helper `sarina-helpers` (Rust, `packaging/helpers`,
+  `/usr/lib/sarina/sarina-helpers`; it needs `onnxruntime-cpu`, and for voice-chat
+  `whisper-cpp`, `espeak-ng` and `alsa-utils`). The Python helper wheel
+  (`python/sarina_helpers`) is still installed for the rollback week
+  (`SARINA_HELPERS=python`).
+- The distros do not use this PKGBUILD: Labyrinth OS and LykanOS install
+  `sarina-git`, built by Labyrinth_OS's recipe (`packages/pkgbuilds/sarina-git`),
+  which also builds `sarina-voice` and `sarina-voiced`.
 - `sarina-service.service` — systemd unit for `sarina service`, the
   local HTTP integration service. Installed but **not enabled** by default,
   per Arch convention (packages never auto-enable services).
@@ -51,7 +58,9 @@ sudo systemctl enable --now sarina-service
   code has been removed from git history (see `NOTICE.md`).
 - This PKGBUILD's Go build step (same flags, `CGO_ENABLED=0`) was run on
   Arch in WSL and produced a static binary whose `sarina-service` and
-  `sarina-gui` symlinks dispatch correctly. The full `makepkg -si`,
+  `sarina-gui` symlinks dispatch correctly (October 2026, before the Rust
+  build; Labyrinth's `sarina-git` recipe is the one built and installed daily).
+  For this PKGBUILD the full `makepkg -si`,
   `namcap PKGBUILD *.pkg.tar.zst` and
   `systemd-analyze verify sarina-service.service` have **not** been run.
 

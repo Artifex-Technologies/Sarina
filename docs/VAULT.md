@@ -91,6 +91,6 @@ A lesson note can carry two front-matter keys: `rule:` (one sentence, general, n
 (`proposed`, `active` or `retired`). `sarina lessons list` shows them; `sarina lessons digest` prints the active rules, which
 are installed root-owned at `/usr/local/share/sarina/lessons.md`
 (`sarina lessons --path ~/Documents/Obsidian/Sarina digest > /tmp/l.md && sudo install -m 644 /tmp/l.md /usr/local/share/sarina/lessons.md`).
-Every session puts them in the fixed part of her system prompt (`go/agent/lessons.go`): at most 20 rules. The owner approves a
+Every session puts them in the fixed part of her system prompt (`rust/sarina/src/agent/prompt.rs`, Go's `go/agent/lessons.go`): at most 20 rules. The owner approves a
 proposed lesson by setting `status: active` in Obsidian, then the digest is installed again. Why: on 2026-11-04 she broke a
 lesson she already had (decompile-explain), because lessons were only reached through `vault-search`.

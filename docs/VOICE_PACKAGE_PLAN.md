@@ -9,7 +9,9 @@ not built until I can.
 (`sarina-voice`, one binary under the old names), side by side with the Python in tests; the switch is on Labyrinth's branch
 `voice-rust-switch` until I have tried Super+S with it. See `docs/VOICE_RUST_PORT.md`. The moves below are still to do.
 **2026-11-11:** the voice service too: `packaging/voiced/` (`sarina-voiced`), switch on Labyrinth's branch `voiced-rust-switch`,
-merged into Labyrinth's main on 2026-11-17.
+merged into Labyrinth's main on 2026-11-17. The `voice-rust-switch` branch was merged on 2026-11-11 (Labyrinth_OS 4ecd342;
+`docs/VOICE_RUST_PORT.md` "After the switch"). **2026-11-18:** `sarina-tone` is Rust too (`rust/`, installed as
+`/usr/bin/sarina-tone`).
 
 ## Why
 

@@ -3,9 +3,15 @@
 Sarina is one of the Artifex repos (the table below). It is the one that touches
 the others, so this file records how they fit together **from Sarina's side**.
 
-> **Renamed 2026-10-10.** `Chymaera_Sentry` is now `Heimdall`, `Chymaera_Linux` is
-> `Chymaera_OS`, `Chymaera_Zero_App` is `Argus_App`, `Chymaera_Zero_Firmware` is
-> `Argus_Firmware`. Older Coordination Log entries use the old names on purpose.
+> **Renamed 2026-10-10 and 2026-11-07.** `Chymaera_Sentry` is now `Heimdall`, `Chymaera_Zero_App` is `Argus_App`,
+> `Chymaera_Zero_Firmware` is `Argus_Firmware`, and the security distro (`Chymaera_Linux`, then `Chymaera_OS`) is
+> **`LykanOS`** since 2026-11-07. Older Coordination Log entries use the old names on purpose. Sarina's command and
+> module names with `chymaera` in them (`chymaera-console`, `chymaera-analyze`, `chymaera-device-info`,
+> `chymaera-merge-report`, `rust/sarina/src/chymaera`) are her Argus tools and keep their names.
+>
+> **Sarina's core is Rust since 2026-11-18** (`rust/`, `sarina-rs` installed as `/usr/bin/sarina`). Code paths below
+> name the Rust module; the Go package of the same name (`go/...`) is the reference it was proved against, kept until
+> about 2026-11-25.
 
 Status keys: **live** (implemented and verified), **agreed** (both sides accepted
 the shape, not yet built), **proposed** (awaiting the owning repo's answer),
@@ -13,14 +19,15 @@ the shape, not yet built), **proposed** (awaiting the owning repo's answer),
 
 | Repo | Role | Owns |
 | --- | --- | --- |
-| [`Chymaera_OS`](https://github.com/Artifex-Technologies/Chymaera_OS) | Arch-based security distro; the host | ISO profile, package set, the packaging contract |
+| [`Labyrinth_OS`](https://github.com/Artifex-Technologies/Labyrinth_OS) | CachyOS-based daily and gaming distro; Sarina is optional there (Agora) | Its image and install, the signed `[labyrinth]` package repository, **the `sarina-git` recipe both distros install (the packaging contract)**, the voice wiring (Super+S). `docs/DRIVER_LAB.md` is the Sarina + Limbo driver workflow |
+| [`LykanOS`](https://github.com/Artifex-Technologies/LykanOS) | Arch-based security edition (formerly Chymaera OS); Sarina is part of it | ISO profile, package set, what it needs from Sarina (its `CLAUDE.md`, items 1-7) |
+| [`Yggdrasil`](https://github.com/Artifex-Technologies/Yggdrasil) | The desktop of both distros (panel, Settings, Agora) | Sarina's place in the panel and Settings (from her integration file); the Agents item that runs `sarina fleet-status --json` |
 | [`Argus_Firmware`](https://github.com/Artifex-Technologies/Argus_Firmware) | Flipper Zero firmware fork | RPC wire format (`assets/protobuf/`), the BLE budget |
 | [`Argus_App`](https://github.com/Artifex-Technologies/Argus_App) | qFlipper fork; desktop operator console | **The Sarina control API**, datastore, exporters |
-| [`Heimdall`](https://github.com/Artifex-Technologies/Heimdall) | Go security agent watching Sarina (formerly Chymaera_Sentry) | Its own detection engine; reads Sarina's session files, read-only |
-| `Labyrinth_OS` | CachyOS-based daily-driver distro for one machine (i9-9900K, 64 GB, RTX 2080 Ti with 11 GB VRAM) meant to replace Windows; the owner's current focus and the second host for Sarina | Its own image and install; `docs/DRIVER_LAB.md` is the Sarina + Limbo driver workflow. Its own `docs/STATUS.md` (2026-10-10) still lists the ISO build pieces as missing |
-| `Daedalus_CAD` | CAD application (Rust) | Not a Sarina contract; listed so the repo set is complete |
-| `Limbo` | Sandbox that runs guest VMs (Linux/Windows) as seamless windows; quarantine and validation runs | The agent socket Sarina uses (section 8) |
-| `Sarina` (this repo) | Local-model agent shipped in the distro | The client/advisory surfaces below |
+| [`Heimdall`](https://github.com/Artifex-Technologies/Heimdall) | Security agent watching Sarina (formerly Chymaera_Sentry) | Its own detection engine; reads Sarina's session files, read-only; the review, grant and containment surfaces |
+| [`Limbo`](https://github.com/Artifex-Technologies/Limbo) | Sandbox that runs guest VMs (Linux/Windows) as seamless windows; quarantine and validation runs | The agent socket Sarina uses (section 8) |
+| `Kairos`, `Daedalus_CAD` | Frame generation for games (Vulkan layer); a CAD application (Rust) | Not Sarina contracts; listed so the repo set is complete |
+| `Sarina` (this repo) | Local-model agent shipped in both distros | The client/advisory surfaces below |
 
 > **Each contract is owned by exactly one repo, and it is usually not this one.**
 > Where a sibling has published a spec, that spec wins and Sarina conforms. This
@@ -28,50 +35,51 @@ the shape, not yet built), **proposed** (awaiting the owning repo's answer),
 
 ---
 
-## 1. Sarina ↔ Chymaera_OS — **live**
+## 1. Sarina ↔ Labyrinth_OS and LykanOS — **live**
 
-Sarina ships *in* the distro, as a package built from a submodule.
+Sarina ships *in* both distros as the package `sarina-git`, built from this repository.
 
-**Two hosts, one Sarina.** Labyrinth_OS vendors the same `sarina-git` PKGBUILD from
-Chymaera_OS, so the packaging contract below serves both, and nothing in Sarina may
-assume one of them. The owner is focused on Labyrinth (replacing Windows on one
-machine), so what Sarina does there matters most right now: helping bring the
-install to a good state, troubleshooting drivers and updates by validating in Limbo
-first (`Labyrinth_OS/docs/DRIVER_LAB.md`), and not fighting games for the 11 GB of
-VRAM (the council runs local members one at a time by default for the same reason).
-Labyrinth's `driver-test` Limbo profile and its "Sarina hook" are not built yet.
+**Two hosts, one Sarina.** Labyrinth_OS owns the `sarina-git` recipe and publishes the package in its signed
+`[labyrinth]` repository; LykanOS installs the same package from there (it builds nothing itself). So the packaging
+contract below serves both, and nothing in Sarina may assume one of them. On Labyrinth OS she is optional (installed from
+Agora); on LykanOS she is part of the system. What Sarina does on Labyrinth matters most day to day: troubleshooting
+drivers and updates by validating in Limbo first (`Labyrinth_OS/docs/DRIVER_LAB.md`), and not fighting games for the
+graphics card's memory (the council runs local members one at a time by default for the same reason).
 
-### The packaging contract (owned by Chymaera_OS)
+### The packaging contract (owned by Labyrinth_OS)
 
-`packages/pkgbuilds/sarina-git/PKGBUILD` builds this repo directly and **breaks
-if any of these move**. Verified present as of this commit:
+`Labyrinth_OS/packages/pkgbuilds/sarina-git/PKGBUILD` builds this repo directly and **breaks if any of these move**.
+Checked against that recipe on 2026-11-18:
 
 | Path here | Used for |
 | --- | --- |
-| `go/` | `go build ./cmd/sarina` (the one binary) |
-| `python/sarina_helpers/pyproject.toml` | `python -m build --wheel --no-isolation` (the optional helper) |
+| `rust/` | `cargo build --release --locked --bin sarina-rs --bin sarina-tone` → `/usr/bin/sarina`, `/usr/bin/sarina-tone`; `check()` runs `--test sarina_rs` and `--test parity_tone` |
+| `packaging/helpers/` | `sarina-helpers` → `/usr/lib/sarina/sarina-helpers` (the ML/voice helper) |
+| `packaging/voice/` | `sarina-voice` → `/usr/bin/sarina-voice` (the spoken-question programs; the image's `labyrinth-ask-sarina` and friends link to it) |
+| `packaging/voiced/` | `sarina-voiced` → `/usr/bin/sarina-voiced` (the voice service) |
+| `go/` | `go build ./cmd/sarina` → `/usr/lib/sarina/sarina`, the rollback copy nothing runs (until ~2026-11-25) |
+| `python/sarina_helpers/pyproject.toml` | the Python helper wheel, the rollback copy (until ~2026-11-25) |
+| `packaging/skills/*/` | → `/usr/share/sarina/skills/` (with their `sections/`) |
 | `packaging/arch/sarina-service.service` | → `/usr/lib/systemd/system/` |
 | `packaging/arch/sarina.sysusers` | → `/usr/lib/sysusers.d/sarina.conf` |
 | `packaging/arch/service.env.example` | → `/etc/sarina/` |
-| `README.md` | → `/usr/share/doc/sarina-git/` |
+| `README.md`, `LICENSE` | → `/usr/share/doc/sarina-git/`, `/usr/share/licenses/sarina-git/` |
 
-**Entry points the ISO expects on `PATH`** — all three verified resolvable:
+The recipe also installs Labyrinth's own `sarina.integration.conf` (Yggdrasil's `assistant` integration file) from its
+folder. **Entry points the ISO expects on `PATH`:**
 
-| Console script | Target | Status |
-| --- | --- | --- |
-| `sarina` | the Go binary (`go/cmd/sarina`) | present |
-| `sarina-gui` | a link to `sarina` | present |
-| `sarina-service` | a link to `sarina` | present |
+| Command | Target |
+| --- | --- |
+| `sarina` | the Rust build (`rust/`, `sarina-rs`) |
+| `sarina-gui` | a link to `sarina` |
+| `sarina-service` | a link to `sarina` |
 
-**Runtime dependencies must stay in sync and must exist in Arch's repos.**
-This repo declares `fastapi`, `uvicorn`, `pydantic`; the PKGBUILD declares
-`python`, `python-fastapi`, `uvicorn`, `python-pydantic`. Note Arch's uvicorn
-package has **no `python-` prefix** — that mismatch has already broken the ISO
-build once. A PyPI-only dependency needs its own PKGBUILD in the distro first,
-so **adding a dependency here is a cross-repo change**: say so in the commit
-message with `CONTRACT:` so the distro side can grep for it.
+**Runtime dependencies must exist in Arch's repos** (the Rust build needs only glibc; the helper's ONNX Runtime,
+whisper.cpp and espeak-ng are optional and loaded at run time). A dependency Arch does not have needs its own recipe in
+Labyrinth's repository first, so **adding a dependency here is a cross-repo change**: say so in the commit message with
+`CONTRACT:` so the distro side can grep for it.
 
-### What the distro needs from Sarina — **open, not built**
+### What LykanOS needs from Sarina — **open, not built**
 
 The distro ships a **small hand-picked tool core**, not `blackarch-*` category
 groups. The groups were tried and abandoned (thousands of packages, unresolvable
@@ -90,7 +98,7 @@ core is explicitly Sarina's job:
    same day: LykanOS's contract names it as Sarina's to provide.)
 
 5. **Crash diagnosis** and 6. **Proton VPN lifecycle** — added by the distro,
-   **open, not built** (see its `CLAUDE.md`).
+   **open, not built** (see LykanOS's `CLAUDE.md`).
 7. **Agent manager** — **built**, see "Agent fleet" below.
 
 Do not add tools to the distro's `packages.x86_64` to work around the gap; that
@@ -98,7 +106,7 @@ re-creates the problem the categories caused.
 
 ### Menu categorisation — **live** (`sarina desktop-audit`)
 
-`sarina/desktop/` answers ask (2). Read-only by default: it reports, and writes
+`desktop.rs` (Go `go/desktop`) answers ask (2). Read-only by default: it reports, and writes
 only with `--apply`. **General-purpose, not security-specific** — the problem is
 any package shipping a bare binary; BlackArch is where it is worst.
 
@@ -149,7 +157,7 @@ generated entries currently set no `Icon`, so they take a generic fallback.
 
 ### Agent fleet: Omarchy's agents panel — **live** (`sarina fleet-*`)
 
-Answers `Chymaera_OS` contract item 7. The distro adopts
+Answers LykanOS's contract item 7. The distro adopted
 [Omarchy](https://github.com/omacom/omarchy)'s desktop, whose bar has one panel
 showing every AI agent on the machine. The panel is a pure display: each agent
 is one JSON record in `~/.local/state/omarchy/agents/usage/`, and **any file
@@ -189,8 +197,8 @@ power and risk:
    attempt to `~/.local/state/sarina/agent-launch.jsonl` for Heimdall to
    read — prompt as a SHA-256, a length and a 60-character preview, never in
    full. **It is a CLI command only and is deliberately not a model tool**
-   (`tests/test_chymaera_agent_launch.py` checks the tool layer never imports
-   it), so a prompt-injected model cannot trigger it. `crush` and `openclaw` are
+   (`rust/sarina/tests/fleet_invariant.rs` checks no tool can reach it, as Go's
+   `go/chymaera/fleet/invariant_test.go` does), so a prompt-injected model cannot trigger it. `crush` and `openclaw` are
    unsupported and say why.
 
 Not yet verified against a running Omarchy shell: whether the panel draws
@@ -202,7 +210,7 @@ but that was read from source, not observed.
 The firmware project set the boundary: *"anything that writes to hardware should
 stay behind explicit human approval for now."* Sarina honours it.
 
-**Implemented** in `go/chymaera/firmware`:
+**Implemented** in `rust/sarina/src/chymaera/firmware.rs`:
 
 | Command | What it does |
 | --- | --- |
@@ -240,7 +248,7 @@ medium/high set for their tree: `scripts/version.py`,
 
 ### The BLE budget — a hard constraint on anything Sarina ingests
 
-Streaming targets **BLE to a laptop running Chymaera OS**, not USB. The
+Streaming targets **BLE to a laptop running LykanOS**, not USB. The
 firmware repo owns these numbers:
 
 | Constant | Value |
@@ -288,7 +296,7 @@ As of 2026-10-24, `scripts/version.py` composes `firmware_version` as
 commit-count suffix was dropped by maintainer choice (firmware `ebe7ab9e`), so
 the separate, exact `firmware_commit` field is what tells two builds apart.
 `firmware_origin_fork` reads `Argus`. `chymaera-device-info`
-(`go/chymaera/firmware/firmware.go`) parses this format, with `+N` still
+(`rust/sarina/src/chymaera/firmware.rs`) parses this format, with `+N` still
 accepted as optional, and notes the tracked upstream release and dev-build
 status **without failing the check**. Older devices may still report the
 interim `1.4.3-CHY-0.1.0[+N]` format (fork `Chymaera`) or the pre-2026-09-12
@@ -318,13 +326,13 @@ as a natural thing for `chymaera-merge-report` to notice, not yet implemented.
 **The App owns this contract.** Its spec is
 [`docs/SARINA_API.md`](https://github.com/Artifex-Technologies/Argus_App/blob/main/docs/SARINA_API.md),
 implemented in `backend/chymaera/sarina/sarinaserver.cpp`. Sarina implements the
-client half in `go/chymaera/console` and does not extend the protocol.
+client half in `rust/sarina/src/chymaera/console.rs` and does not extend the protocol.
 
 | Aspect | Value |
 | --- | --- |
 | Transport | Newline-delimited JSON over TCP, loopback only; non-loopback peers dropped |
 | Port | **44700** |
-| Default state | **Off.** Started from the Chymaera Console UI, `Chymaera.startServer(port, token)`, or headlessly (below) |
+| Default state | **Off.** Started from the app's console page (`ChymaeraConsole.qml`), `Chymaera.startServer(port, token)`, or headlessly (below) |
 | Auth | Optional `"token"` field on every request; mismatch → `{"ok":false,"error":"unauthorized"}` |
 | Request | `{"cmd": "status", "id": 7, "token": "optional"}` |
 | Response | `{"ok": true, "id": 7, ...}`; failures carry `"error"` |
@@ -343,7 +351,7 @@ The token may come from `CHYMAERA_CONSOLE_TOKEN` instead of the command line.
 
 **Starting the server without a GUI.** The App ships a headless CLI, which is
 how this works on a server, over SSH, or under WSL where Qt Quick may not
-render — and therefore the path that matters most on Chymaera OS:
+render — and therefore the path that matters most on LykanOS:
 
 ```bash
 qFlipper-cli chymaera serve 44700 <token>   # starts the API, streams the event log
@@ -355,13 +363,13 @@ fault or the app's.
 
 ### Capture analysis — Sarina reading, not extending
 
-`sarina chymaera-analyze` (`go/chymaera/analysis`) pulls records via
+`sarina chymaera-analyze` (`rust/sarina/src/chymaera/analysis.rs`) pulls records via
 `capture.list()` and works only with the `meta` JSON field the App already
 attaches to each one — it does not parse `.nfc`/`.sub` files itself, and never
 will; that parsing is the App's job (§4's boundary). Statistical analysis
 (duplicate NFC UIDs, rare Sub-GHz frequencies) needs only the fields the App
 already documents in "Capture record shape." An optional `--model-dir` adds
-semantic grouping via `sarina.ml` (a local embedding model, see the README) —
+semantic grouping via the ML helper's `group` request (`sarina-helpers`, a local embedding model) —
 this is Sarina-side only and adds nothing to the App's contract.
 
 **Rules Sarina follows here:**
@@ -391,7 +399,7 @@ owns the call.
 
 ### 4a. Heimdall reads Sarina's session files — **live (reader-owned)**
 
-Heimdall is a separate Go process with no import dependency on Sarina. It
+Heimdall is a separate process with no import dependency on Sarina. It
 polls the agent session files in `/var/lib/sarina/sessions/*.json`, the shared
 session folder the Sarina service writes (`agent_session_dir` in
 `/etc/heimdall/config.json`; `messages` as objects with a `role`; the API key
@@ -410,12 +418,12 @@ process's sockets or files other than this one directory.
 
 ### 4b. Sarina consults Heimdall's governance API — **live, opt-in**
 
-The reverse direction, added 2026-09-26: `go/heimdall` calls Heimdall's
+The reverse direction, added 2026-09-26: `heimdall.rs` calls Heimdall's
 `POST /v1/review` over loopback HTTP, opt-in via the `HEIMDALL_REVIEW_URL`
-environment variable. The shared scan gate in `go/guard` (used by curated-memory
+environment variable. The shared scan gate in `guard.rs` (used by curated-memory
 writes) consults it *after* its own in-process checks pass, and folds an actual
 `"deny"` response into the same blocked result those checks already produce.
-No call site outside `go/guard` consults it.
+No call site outside `guard.rs` consults it.
 
 **Renamed 2026-10-10:** the variable was `SENTRY_REVIEW_URL`. The old name is
 still read when `HEIMDALL_REVIEW_URL` is unset, so existing deployments keep
@@ -439,7 +447,7 @@ Marked **live** rather than proposed because both halves are built,
 tested, and verified working together over a real loopback connection —
 not a claim that the shape will never move. A breaking change to the
 `/v1/review` request/response JSON needs updating this section,
-`go/heimdall`, and Heimdall's own
+`heimdall.rs` (and `go/heimdall` while it exists), and Heimdall's own
 `internal/governance`/`internal/api/review.go`, together, in one commit.
 
 Full detail in both repos' 2026-09-26 Coordination Log entries — see
@@ -449,7 +457,7 @@ Full detail in both repos' 2026-09-26 Coordination Log entries — see
 ### 4b2. Heimdall's grant gate — **live, off until the owner switches it on**
 
 Sarina may ask for more than she has (a hand-off to a tier off this computer, a higher access tier) and never grant it to
-herself. She files a request with Heimdall (`POST /v1/requests` on the host of `HEIMDALL_REVIEW_URL`, `go/heimdall/grants.go`
+herself. She files a request with Heimdall (`POST /v1/requests` on the host of `HEIMDALL_REVIEW_URL`, `heimdall.rs`, Go's `go/heimdall/grants.go`
 `RequestGrant`) and reads the owner's answer from `/etc/heimdall/grants.json`, a file only root writes (`sudo heimdalld grant
 approve|deny|tier`), never from an HTTP answer. The file existing switches the gate on. Two call sites only:
 `config.AccessTierFromEnv` (the tier is the lower of `SARINA_ACCESS_TIER` and the file's cap) and `tiers.Router.attempt`
@@ -501,7 +509,7 @@ that ignores the allowlist reports every tool; a service without the tool on rep
   The service account's labyrinth quarantine folder
   (`/var/lib/sarina/.local/share/labyrinth/quarantine`) is a link to that folder, so
   labyrinth-rea shows it as `/quarantine/<sha256>.sample`, and that is the path Heimdall
-  names. `go/reverse` (and the Rust port) read a path written as the sandbox shows it
+  names. `reverse.rs` (and Go's `go/reverse`) read a path written as the sandbox shows it
   (`/quarantine/...`, `/samples/...`) as that folder, then check it like any other:
   `..` is resolved first, a link out of the folder and anything outside the two folders
   are refused as before.
@@ -592,8 +600,8 @@ WSL, USB passthrough needs `usbipd-win`. BLE: see the pairing note in §2.
 Limbo owns this contract (`Limbo/docs/QUARANTINE.md`); Sarina conforms.
 
 Sarina uses Limbo to **validate an update or install in a disposable guest
-before the real system is touched**, and to troubleshoot. `go/limbo`
-(standard library only) talks to Limbo's **agent socket** (`SARINA_LIMBO_SOCKET`, normally
+before the real system is touched**, and to troubleshoot. `limbo.rs`
+talks to Limbo's **agent socket** (`SARINA_LIMBO_SOCKET`, normally
 `/run/limbo/agent.sock`, group `limbo-agent`). Surfaces:
 
 - CLI: `sarina limbo-profiles`, `sarina limbo-validate PROFILE COMMAND...`
@@ -622,7 +630,7 @@ running something hostile: stripped of control characters, truncated, and
 rendered under a banner saying it is evidence, not instructions. A failing
 command is a *result* (that is what validation is for), not an exception.
 
-Verified against a fake agent socket in `tests/test_chymaera_limbo.py` and, from
+Verified against a fake agent socket (`rust/sarina/tests/parity_limbo.rs`, `parity_limbotools.rs`, and Go's tests before them) and, from
 Limbo's side, with a real daemon, real sockets and real unprivileged users. Not
 verified: Sarina's model actually choosing to call these tools well, since no
 model backend runs here.
@@ -696,15 +704,15 @@ Ways to use it:
 | --- | --- |
 | Members get **no tools** | Requests are built with no tool definitions; tests read the wire body, for both the OpenAI-shaped and Claude members. |
 | **Local vs online is derived from the URL**, not a flag | Only loopback hosts are local. A LAN address is online. A `claude` member with no `base_url` is online. |
-| **Online members are asked about on every `council_ask` call**, showing each member's host and the exact text | Through the dedicated `tools.RuntimeOperatorConfirm` channel, **not** the `Approver`: the GUI's "allow for this session" grant would turn a per-call question into a standing yes, and a test fails if `tool.go` touches the Approver. |
+| **Online members are asked about on every `council_ask` call**, showing each member's host and the exact text | Through the dedicated confirm channel (`tools::registry::Confirm`; Go's `tools.RuntimeOperatorConfirm`), **not** the `Approver`: the GUI's "allow for this session" grant would turn a per-call question into a standing yes. The Rust tool reads only the context's `confirm`; Go's test fails if `tool.go` touches the Approver. |
 | **No way to ask means no online contact** | Service sessions, headless runs and the GUI (not wired to this channel yet) get local members only, and the reply says online members were not asked. The interactive CLI and one-shot `sarina chat` can ask. |
-| Online members default to `allow_data: [no_secrets, no_captures]` | Same sanitiser as compute tiers (`tiers.Sanitize`); capture dumps refuse the member outright. |
+| Online members default to `allow_data: [no_secrets, no_captures]` | Same sanitiser as compute tiers (`tiers::guard::sanitize`, Go's `tiers.Sanitize`); capture dumps refuse the member outright. |
 | Keys are env-var **names** in the config | A pasted key is rejected; keys are scrubbed from error text. |
 | Answers are **untrusted text** | Control characters and terminal escapes stripped, length capped, every answer labelled; nothing is run or applied. |
 | The comparison is done by a **local** member only | The synthesizer reads every answer, so an online synthesizer is a config error. Answers are fenced and the model is told they are data. It lists agreement, disagreement and what to verify; it does not vote. |
 | Budget | At most `max_remote_members` online members per run (default 3), `max_tokens` per answer, and the token total is printed. The operator's yes is the real cost control; there is no price table. |
 | Local members share the GPU | `local_concurrency` (default 1) local members run at once, so a 2080 Ti is not asked to hold several models. |
-| Only `cmd/sarina` imports the package | Checked by a test, so no other code path can reach the members. |
+| Only the entry points reach the council | In Rust only the command table and the chat's tool list name `council`; in Go only `cmd/sarina` imports the package (checked by a test). No other code path can reach the members. |
 
 **Not built, deliberately:** provider-hosted web search or other server-side tools
 (each provider does it differently and none was verified here, so a "research"

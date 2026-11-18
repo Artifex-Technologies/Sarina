@@ -24,7 +24,7 @@
 pkgname=sarina
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="Local-model security agent for Chymaera OS (Rust core, optional ML/voice helper)"
+pkgdesc="Local-model agent for Labyrinth OS and LykanOS (Rust core, optional ML/voice helper)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Artifex-Technologies/Sarina"
 license=('MPL2')

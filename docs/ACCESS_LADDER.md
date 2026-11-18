@@ -30,7 +30,7 @@ for one run; `python3 evals/ladder.py lower N` takes a tier away at once.
 **Heimdall's grant gate.** `sarina.env` sits in a folder Sarina's own account can write, so with a shell she could raise her
 own tier. When the owner switches Heimdall's gate on (`sudo heimdalld grant tier N`, Heimdall's `docs/GRANTS.md`), the tier
 used is the lower of `SARINA_ACCESS_TIER` and the cap in `/etc/heimdall/grants.json`, a file only root can write
-(`go/heimdall/grants.go`). Raising a tier then takes both: `ladder.py apply` and `sudo heimdalld grant tier N`. Lowering takes
+(`rust/sarina/src/heimdall.rs`, Go's `go/heimdall/grants.go`). Raising a tier then takes both: `ladder.py apply` and `sudo heimdalld grant tier N`. Lowering takes
 either. With the gate on, a hand-off to a tier off this computer (the claude CLI, a cloud API, a remote machine) also needs
 the owner's approval there (`sudo heimdalld grant approve ID`); Sarina files the request and goes on without that tier. Spoken questions (Super+S) change nothing at any tier:
 the voice rules stay as they are.

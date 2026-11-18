@@ -9,7 +9,7 @@ A local AI assistant that runs on your own computer: a helper and companion for
 with its own desktop, Yggdrasil) and for [LykanOS](https://github.com/Artifex-Technologies/LykanOS) (the security
 edition, formerly Chymaera OS). She talks to any OpenAI-compatible model server (Ollama by default; vLLM, LiteLLM,
 llama.cpp), calls tools, keeps sessions and notes on disk, and can move to a bigger machine or to Claude
-when the local model is not enough. The core is one static Go binary.
+when the local model is not enough. The core is one Rust binary (since 2026-11-18; it was Go until then).
 
 Sarina is optional: on Labyrinth OS she is installed from Agora, the app store, never forced on anyone.
 
@@ -59,27 +59,31 @@ current tree is licensed MPL 2.0 (see
 [LICENSE](LICENSE)). The core has been rewritten from
 scratch in Go (`go/`) from behaviour specs (`docs/spec/`), without reference to
 the old code, and the derived Python has been deleted from the tree; see
-[docs/PROVENANCE.md](docs/PROVENANCE.md) and [NOTICE.md](NOTICE.md) for the audit. Credit
+[docs/PROVENANCE.md](docs/PROVENANCE.md) and [NOTICE.md](NOTICE.md) for the audit. That clean-room Go core was then ported
+to Rust (`rust/`) and proved against it case by case ([docs/RUST_PORT.md](docs/RUST_PORT.md)); the Rust build is the one
+installed since 2026-11-18, and the Go code stays only as the reference and rollback copy until about 2026-11-25. Credit
 to the ClawCode project and contributors for the original implementation this
 grew from. Sarina is not affiliated with or endorsed by Anthropic.
 
 ## Requirements
 
-- Go 1.27+ to build (no other build dependencies; the binary is static).
+- Rust (stable, 1.87 or newer) and cargo to build. The crates are pinned in `rust/Cargo.lock`.
 - A model server that speaks the OpenAI chat-completions API with tool calling.
   Tested with Ollama and `qwen3`. Ollama defaults to a 4096-token context, which is too small:
   Sarina needs at least 8k tokens (16k recommended). Raise it with a Modelfile line
   `PARAMETER num_ctx 16384` or `OLLAMA_CONTEXT_LENGTH=16384`, or tell Sarina the real size with `--context-window`.
 - For finding notes by meaning: the small `nomic-embed-text` model in Ollama (about 270 MB, loaded only while searching).
-- Optional: Python 3.10+ for the ML/voice helper (`python/sarina_helpers`).
-- Linux is the reference platform; Windows is supported for development.
+- Optional, for the ML/voice helper (`sarina-helpers`, Rust): `onnxruntime-cpu` (loaded at run time), and for
+  `voice-chat` `whisper-cpp`, `espeak-ng` and `alsa-utils`. The Python helper (`python/sarina_helpers`) is kept only for
+  the rollback week (`SARINA_HELPERS=python`).
+- Linux is the reference platform.
 
 ## Build and run
 
 ```bash
-cd go
-go build -o sarina ./cmd/sarina
-go test ./...
+rust/scripts/nicecargo.sh build --release --locked --bin sarina-rs   # nice 15: never competes with a game
+rust/scripts/nicecargo.sh test --locked
+cp rust/target/release/sarina-rs ./sarina
 
 export OPENAI_BASE_URL=http://127.0.0.1:11434/v1   # Ollama
 export OPENAI_API_KEY=local-token
@@ -110,6 +114,7 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
 | `SARINA_FORGE=on` | the agent forge tools (needs Limbo and its `agent-run` profile) |
 | `SARINA_LIMBO_SOCKET` | Limbo's agent socket (`/run/limbo/agent.sock`) |
 | `SARINA_PRIVATE_DIRS` | folders no file tool may read, list, search or write (`:`-separated, `~` allowed) |
+| `SARINA_HELPERS=python` | use the Python ML/voice helper instead of `sarina-helpers` (the rollback week only, until ~2026-11-25) |
 
 ## Commands
 
@@ -158,7 +163,7 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
   decide how she behaves (rules, tool connections, skills, agents). In `enforce` mode she checks each one
   before using it: an unapproved skill, section, agent or tool connection is not used, and an unapproved
   `policy.json` stops her. Files under `/usr` belong to packages and are not checked. The mode is off by
-  default (`go/trust`; Heimdall's docs/TRUST.md).
+  default (`rust/sarina/src/trust.rs`; Heimdall's docs/TRUST.md).
 - **Heimdall can contain her.** While Heimdall's lock `/etc/heimdall/contained` exists she does not start
   (only `version` and `help` answer) and says how the owner releases her (Settings > Security, or
   `sudo heimdalld contain release`). The lock survives a restart (Heimdall's docs/CONTAIN.md).
@@ -252,20 +257,25 @@ The integration contract, ports and rules are in [docs/ECOSYSTEM.md](docs/ECOSYS
 
 ## Packaging
 
-`packaging/arch/` is the source of truth for the Arch package: the Go binary,
-the `sarina-gui` / `sarina-service` symlinks, the optional helper wheel, the
-systemd unit, sysusers and env template. See its README.
+`packaging/arch/` is the source of truth for the Arch package: the Rust binary as `/usr/bin/sarina`,
+the `sarina-gui` / `sarina-service` symlinks, `sarina-tone`, the ML/voice helper (`/usr/lib/sarina/sarina-helpers`), the
+systemd unit, sysusers and env template, and for the rollback week the Go build (`/usr/lib/sarina/sarina`, which nothing
+runs) and the Python helper. See its README. Labyrinth OS and LykanOS install `sarina-git`, built by Labyrinth_OS's own
+recipe (`packages/pkgbuilds/sarina-git`), which also installs `sarina-voice` and `sarina-voiced`.
 
 ## Why Rust: measured
 
-The voice programs are ported to Rust and the Go core is being ported: a spoken question takes 4.2-7.1 ms instead of 52-80,
-a chat turn 24 ms instead of 68 (11 MB instead of 23). Every program, its numbers and where Rust is worse: [docs/RUST_MIGRATION.md](docs/RUST_MIGRATION.md).
+The voice programs, the voice service, the ML/voice helper and the core are ported to Rust: a spoken question takes 4.2-7.1 ms
+instead of 52-80, a chat turn 24 ms instead of 68 (11 MB instead of 23). Every program, its numbers and where Rust is worse:
+[docs/RUST_MIGRATION.md](docs/RUST_MIGRATION.md).
 
 ## Repository map
 
 ```text
-go/               the agent (module github.com/Artifex-Technologies/Sarina/go)
-python/           optional ML/voice helper (sarina_helpers)
+rust/             the agent (sarina-rs, installed as sarina; sarina-tone), its proofs against Go (rust/parity, testdata/parity)
+go/               the Go core: the reference and rollback copy until ~2026-11-25
+python/           the Python ML/voice helper (sarina_helpers): rollback copy until ~2026-11-25; PROTOCOL.md is the helper protocol
+docs/RUST_PORT.md the Rust port: what was proved, the differences on purpose
 docs/spec/        behaviour specs the Go core was built from
 docs/ECOSYSTEM.md cross-repo contract
 docs/PROVENANCE.md licensing audit and rewrite progress
@@ -274,7 +284,9 @@ evals/            capability evals (run_evals.py)
 tools/training/   review sheet and export of Sarina's answers for fine-tuning
 tools/voice_clone/  the tools that train Sarina's own voice (their tests are in tests/)
 packaging/arch/   Arch package, systemd unit, env template
+packaging/helpers/  sarina-helpers (Rust): the ML and voice helper
 packaging/voice/  sarina-voice (Rust): the spoken-question programs, side-by-side tests with the Python
+packaging/voiced/ sarina-voiced (Rust): the voice service
 ```
 
 ## Version

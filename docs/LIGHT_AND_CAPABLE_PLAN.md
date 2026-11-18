@@ -12,7 +12,7 @@ My goals, from the conversation of 2026-11-04:
 1. **The model thinks; the code does the work.** A tool that computes exactly (crypto, stego, Trachtenberg, crash records) works
    as well under a small model as under a big one, and costs almost nothing. Capability grows mostly through tools and checks.
 2. **Optional parts are off unless installed.** Voice, Limbo, Heimdall integration, the vault, the council: Sarina without them
-   is one Go binary and a model.
+   is one binary and a model.
 3. **Measured, not guessed.** Every model, setting or feature change runs the eval suite before and after (`evals/run_evals.py`).
 4. **Training before tools.** Homework, lessons and (later) fine-tuning come first; new tools follow.
 

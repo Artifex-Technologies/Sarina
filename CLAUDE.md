@@ -14,24 +14,34 @@ network address, SSID or MAC address.
 
 Sarina is a **local-model agent built on the Claude Code agent architecture**.
 It runs against local, open-source models over an OpenAI-compatible API. The core
-is **Go** (`go/`, standard library only): the agent loop, the tools, the
-integration service and the GUI. The legacy Python implementation (`sarina/`,
-with its FastAPI/Uvicorn GUI and service) was deleted on 2026-11-11; git history
-keeps it. The optional ML and voice helper is Rust too since 2026-11-18 (`packaging/helpers`); its Python original
-(`python/sarina_helpers/`) stays for the rollback week.
+is **Rust** since 2026-11-18 (`rust/`, the binary `sarina-rs`, installed as `/usr/bin/sarina`): the agent loop, the
+tools, the integration service and the GUI, and every command. It is a port of the clean-room Go core (`go/`), proved
+against it case by case (docs/RUST_PORT.md). The Go build stays installed at `/usr/lib/sarina/sarina` only as the rollback
+copy for one week (nothing runs it); the Go code is deleted about 2026-11-25. The legacy Python implementation (`sarina/`,
+with its FastAPI/Uvicorn GUI and service) was deleted on 2026-11-11; git history keeps it.
 
-It is one of the Artifex repos in the Artifex Ecosystem (formerly the Chymaera Ecosystem; repos renamed 2026-10-10;
-older log entries below use the old names on purpose):
+Also Rust, each in its own crate: the optional ML and voice helper (`packaging/helpers`, `sarina-helpers`; its Python
+original `python/sarina_helpers/` stays for the rollback week), the spoken-question programs (`packaging/voice`,
+`sarina-voice`), the voice service (`packaging/voiced`, `sarina-voiced`) and `sarina-tone` (a second binary of `rust/`).
+
+It is one of the Artifex repos in the Artifex Ecosystem (formerly the Chymaera Ecosystem; repos renamed 2026-10-10, and
+Chymaera OS renamed LykanOS on 2026-11-07; older log entries below use the old names on purpose):
 
 | Repo | Role |
 | --- | --- |
-| `Sarina` | this repo — the local-model agent shipped inside Chymaera OS and Labyrinth OS |
-| `Chymaera_OS` | (was Chymaera_OS) Arch-based security distro that hosts the agent and the app |
-| `Labyrinth_OS` | CachyOS-based daily-driver distro for one machine; second host for the agent (design stage) |
-| `Argus_App` | (was Argus_App) fork of qFlipper; desktop operator console (Qt6/QML) |
-| `Argus_Firmware` | (was Argus_Firmware) fork of flipperzero-firmware; runs on the hardware |
-| `Heimdall` | (was Chymaera_Sentry) Go security agent watching Sarina; reads session files, and (opt-in) answers a governance check this repo's memory gate consults |
-| `Limbo`, `Daedalus_CAD` | sandbox for guest VMs (Sarina validates in it, section 8 of ECOSYSTEM); a CAD app that is not a Sarina contract |
+| `Sarina` | this repo — the local-model agent, optional on Labyrinth OS (from Agora) and part of LykanOS |
+| `Labyrinth_OS` | CachyOS-based daily and gaming distro; owns the `sarina-git` recipe both distros install (`packages/pkgbuilds/sarina-git`) and the voice wiring (Super+S) |
+| `LykanOS` | (was Chymaera_OS, Chymaera OS) Arch-based security edition; installs `sarina-git` from Labyrinth's package repository |
+| `Yggdrasil` | the desktop of both distros (panel, Settings, Agora); shows Sarina from her integration file and reads `sarina fleet-status --json` |
+| `Heimdall` | (was Chymaera_Sentry) the security agent watching Sarina; reads her session files, answers her governance check and grant requests, signs her behaviour files, can contain her |
+| `Limbo` | sandbox for disposable guest VMs: Sarina validates in it, her agents run in it (section 8 of ECOSYSTEM) |
+| `Argus_App` | (was Chymaera_Zero_App) fork of qFlipper; desktop operator console (Qt6/QML) with the console API Sarina reads |
+| `Argus_Firmware` | (was Chymaera_Zero_Firmware) fork of flipperzero-firmware; runs on the hardware |
+| `Kairos`, `Daedalus_CAD` | frame generation for games and a CAD app: not Sarina contracts |
+
+Sarina's commands and modules named `chymaera` (`chymaera-console`, `chymaera-analyze`, `chymaera-device-info`,
+`chymaera-merge-report`; `rust/sarina/src/chymaera`, `go/chymaera`) are her Argus App and Argus firmware (Flipper Zero)
+tools; the names predate the renames and stay, because scripts call them.
 
 Sarina is the only repo that touches all the others, so it carries the
 authoritative integration contract: **[`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md)**.
@@ -42,18 +52,28 @@ Keep that attribution intact.
 
 ## 2. Build / test / run
 
-The core is Go (1.27+, standard library only), in `go/`. No other build dependency.
+The core is Rust (stable, 1.87 or newer), a cargo workspace in `rust/` with one crate, `rust/sarina`, and two binaries:
+`sarina-rs` (installed as `sarina`) and `sarina-tone`. Cargo goes through `rust/scripts/nicecargo.sh` (nice 15, so a build
+never competes with a game or the local model) and under a memory cap (a test run once took 26 GB):
 
 ```bash
-cd go
-go build -o sarina ./cmd/sarina
-go vet ./... && go test ./...        # offline: no test may need a network or a model backend
+CAP="systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0"
+$CAP rust/scripts/nicecargo.sh build -j4 --release --locked --bin sarina-rs --bin sarina-tone
+$CAP rust/scripts/nicecargo.sh test -j4 --locked        # offline: no test may need a network or a model backend
+$CAP rust/scripts/nicecargo.sh clippy -j4 --locked --all-targets -- -D warnings
+rust/scripts/nicecargo.sh fmt --all --check
+bash evals/install-dev.sh                               # the build the evals measure, as ~/.local/bin/sarina
 ```
 
-All of `go test ./...` passes on Windows (checked 2026-10-10); Linux is the
-reference platform, and a few tests are POSIX-specific. `-race` needs cgo. The
-working copy on Windows is CRLF (`core.autocrlf`), so `gofmt -l` lists every file;
-that is line endings, not a formatting problem.
+Put `CARGO_TARGET_DIR` outside the tree for throwaway builds and delete it afterwards. Never set `RUST_MIN_STACK` around
+cargo (rustc reads it too). The other Rust crates build the same way from their folders (`packaging/helpers`,
+`packaging/voice`, `packaging/voiced`). CI (`.github/workflows/rust.yml`, `helpers.yml`) runs fmt, clippy, the tests and
+the differentials; docs changes do not start it.
+
+**Go stays as the reference until it is deleted (~2026-11-25).** `go/` (Go 1.27+, standard library only) is what the Rust
+was proved against: its parity tests write the fixtures in `testdata/parity/` and `rust/sarina/src/tools/defs.json`, and
+`rust/parity/*.py` run both builds side by side (docs/RUST_PORT.md "Running the tests"). A bug the port finds is fixed in
+both until then (`cd go && go vet ./... && go test ./...`); nothing installed runs the Go build.
 
 Chatting needs an OpenAI-compatible backend (`OPENAI_BASE_URL`, `OPENAI_API_KEY`,
 `OPENAI_MODEL`); the tests do not. Ollama's default 4096-token context is too small
@@ -61,69 +81,80 @@ for Sarina: she needs at least 8k (16k recommended).
 
 The old Python (`sarina/`, its tests and the top-level
 `pyproject.toml`) was deleted on 2026-11-11: nothing installed it, and dead code is
-a security risk (`docs/PROVENANCE.md`). Optional ML and voice helpers live in
-`python/sarina_helpers/` behind a JSON-lines protocol (`go/helpers`). `tests/` now
-holds only the tests of the voice-training tools in `tools/voice_clone/` and of `blackarch_compat/`
-(`python3 -m unittest discover -s tests` from the repository root).
+a security risk (`docs/PROVENANCE.md`). The ML and voice helper speaks a JSON-lines protocol
+(`python/sarina_helpers/PROTOCOL.md`; the core's side is `rust/sarina/src/helpers.rs`); `SARINA_HELPERS=python` goes back
+to the Python package during the rollback week. `tests/` holds only the tests of the voice-training tools in
+`tools/voice_clone/` and of `blackarch_compat/` (`python3 -m unittest discover -s tests` from the repository root); the
+evals are Python too (`evals/run_evals.py`).
 
 Entry points: `sarina <command>`; the binary also answers to `sarina-gui` and
 `sarina-service` (the Arch package installs those as links).
 
 ## 3. Architecture map
 
+Each Rust module's first doc line names the Go package it was ported from; the Go names below are the same packages.
+
 ```
-go/
-  cmd/sarina/        main: blank-imports the packages that register commands/tools
-  cli/               chat and resume; cli.Register adds a subcommand by name
-  agent/  agents/    the turn loop (compaction, budgets, plan mode); read-only subagents
-  llm/               OpenAI-compatible and Anthropic clients, local-model quirks
-  tools/             registry, permissions, builtins; tools.RegisterProvider adds tools
-  tiers/             compute tiers: local, then a bigger machine, then Claude
-  council/           several models, compared; the council command and council_ask tool
-  guard/ heimdall/   the shared scan gate; the optional Heimdall second opinion
-  memory/ skills/ mcp/ policy/   curated memory, operator skills, MCP (trust-gated), hooks policy
-  session/ sessionsearch/        session files (Heimdall reads them), search
-  limbo/             limbo_* tools and commands (validate in a disposable guest)
-  chymaera/          console client (Argus_App), firmware advisories, fleet, capture analysis
-  desktop/           application-menu categorisation (reports by default)
-  doctor/            read-only checkup of the whole setup
-  service/  gui/     integration API (:8899) and operator GUI (:8765)
-  helpers/           bridge to the ML/voice helper (Rust's runs the Rust one, packaging/helpers)
+rust/
+  sarina/src/bin/    sarina-rs.rs (the entry: names, Heimdall's lock, dispatch), sarina-tone.rs
+  sarina/src/cli/    the command table (`COMMANDS`, Go's summaries) and the commands; entry.rs, chat, service, gui, doctor
+  agent/ agents.rs   the turn loop (compaction, budgets, plan mode, answer checks); read-only subagents
+  llm/               OpenAI-compatible and Anthropic clients, local-model quirks (over gohttp: TLS through rustls)
+  tools/             registry, permissions, builtins; defs.json holds every tool definition the model sees
+  tiers/             compute tiers: local, then a bigger machine, then Claude; Sanitize; Heimdall's grant gate
+  council.rs         several models, compared; the council command and council_ask tool
+  guard.rs heimdall.rs   the shared scan gate; the optional Heimdall second opinion and grant requests
+  memory/ skills/ mcp/ policy.rs   curated memory, operator skills, MCP (trust-gated), hooks policy
+  session/ sessionsearch.rs        session files (Heimdall reads them), search
+  limbo.rs           limbo_* tools and commands (validate in a disposable guest)
+  chymaera/ fleet/   Argus App console client, firmware advisories, capture analysis; the agent fleet commands
+  desktop.rs         application-menu categorisation (reports by default)
+  doctor.rs          read-only checkup of the whole setup
+  service.rs gui/ runkit.rs   integration API (:8899) and operator GUI (:8765) over gohttpd (Go's HTTP server)
+  helpers.rs         bridge to the ML/voice helper (sarina-helpers; the Python one with SARINA_HELPERS=python)
   forge/             agents Sarina writes, run only inside Limbo guests (docs/AGENT_FORGE.md)
   vault/ daily/      her linked Markdown notes; the day's note (Daily/YYYY-MM-DD.md)
   insight/           what she learns about the person she talks with (`sarina reflect`)
-  embed/ vecindex/ route/   local embeddings (Ollama); compressed vector index; sorting a spoken question
-  cryptotools/ stego/       cryptography in code (identify, decode, classical ciphers); read-only stego checks
-  trust/             her behaviour files checked against Heimdall's signed list
-  sysinfo/           read-only system_status tool
-  reverse/           reverse-engineering tool (REA with Ghidra, sandboxed)
-  quantum/ trachtenberg/    exact quantum-circuit simulator; Trachtenberg arithmetic, step by step
-  voice/ tone/       Piper text-to-speech without Python; how something was said (pace, pitch; installed
-                     as the Rust build's sarina-tone since 2026-11-18, the Go kept as the reference)
-  testguard/         under SARINA_TEST=1 nothing writes outside the test's folders
-  notes/ NOTES.md    design notes and status for the Go core
+  embed.rs vecindex.rs route.rs   local embeddings (Ollama); compressed vector index; sorting a spoken question
+  cryptotools/ stego/  cryptography in code (identify, decode, classical ciphers); read-only stego checks
+  trust.rs           her behaviour files checked against Heimdall's signed list
+  sysinfo/           system_status and crash_detail (read-only), system_fix (named, reversible repairs)
+  reverse.rs         reverse-engineering tool (REA with Ghidra, sandboxed; BSim `similar`)
+  quantum.rs trachtenberg.rs   exact quantum-circuit simulator; Trachtenberg arithmetic, step by step
+  tone.rs            how something was said (pace, pitch) for sarina-tone
+  testguard.rs       under SARINA_TEST=1 nothing writes outside the test's folders
+  go*.rs, gotext/    Go's behaviour where the answers must match byte for byte (JSON, flags, time, paths, math, ...)
+  sarina/tests/      parity_*.rs against testdata/parity/, sarina_rs.rs (the binary), fleet_invariant.rs
+  parity/            cli-, service-, gui- and tone-differential.py: Go and Rust side by side
+  fuzz/              cargo-fuzz targets (nightly, not part of the normal build)
+go/                  the Go core, the reference until ~2026-11-25 (same package names; notes/ and NOTES.md: its design notes)
 python/sarina_helpers/   the Python ML and voice helper, kept for the rollback week (goes ~2026-11-25)
 packaging/helpers/   sarina-helpers (Rust): the ML and voice helper (serve, memory-search, voice-chat); differential with the Python
+packaging/voice/     sarina-voice (Rust): labyrinth-ask-sarina, the check-up, the voice client
+packaging/voiced/    sarina-voiced (Rust): the voice service (Chatterbox through ONNX Runtime)
 packaging/arch/      source of truth for the distro's systemd unit + sysusers + PKGBUILD
-packaging/voice/     sarina-voice (Rust): labyrinth-ask-sarina, the check-up, the voice client; side-by-side tests with the Python
+packaging/skills/    the packaged skills (installed in /usr/share/sarina/skills)
+packaging/limbo/     the decompile profile's image and wrapper (limbo-decompile)
 docs/ECOSYSTEM.md    cross-repo integration contract
+docs/RUST_PORT.md    the port: what was proved, the differences on purpose, what goes with the Go deletion
 docs/spec/           the clean-room behaviour specs the Go core was written from
 ```
 
-Adding a CLI command: `cli.Register(name, summary, fn)` from the package's
-`init()`, and a blank import in `cmd/sarina/main.go`. Adding a tool:
-`tools.RegisterProvider` from `init()`; a tool must declare a `Class`, and the
-model sees its definition on every request, so keep it small (`cmd/sarina`
-`TestToolDefinitionFootprint` caps the total; an optional tool needs its own cap).
+Adding a CLI command: a function in `rust/sarina/src/cli/` (or the module it belongs to) and a row in `cli::COMMANDS`
+(name, summary, function). Adding a tool: its definition in `tools/defs.json` and its handler in the module's `tools()` list; a
+tool must declare a `Class`, and the model sees its definition on every request, so keep it small. Until the Go code is
+deleted, `defs.json` is written from the Go tools (`SARINA_PARITY_UPDATE=1 go test ./cmd/sarina -run ParityToolDefs`) and
+Go's `TestToolDefinitionFootprint` caps the total, so a new tool is added in both.
 
 ## 4. Conventions
 
-- **Match the surrounding code.** Look at a neighbouring package first: a package
-  doc comment saying what it is and what it must never do, small exported surface,
-  errors as values, `t.TempDir()` and real `httptest` servers or sockets in tests
+- **Match the surrounding code.** Look at a neighbouring module first: a module
+  doc comment saying what it is (and which Go package it came from) and what it must never do, small public surface,
+  errors as values, temporary folders and real loopback servers or sockets in tests
   rather than mocks.
-- **Standard library only.** A new module dependency in `go/` needs a real
-  justification (and, for the distro, a package in Arch's repos: flag it `CONTRACT:`).
+- **Few crates, pinned exactly.** A new crate in `rust/` needs a real justification, an exact version (`=x.y.z`, the
+  lock file pins the rest) and preferably the one Heimdall already uses; for the distro it must build from Arch's
+  toolchain: flag it `CONTRACT:`. Until the Go code goes, `go/` stays standard library only.
 - **Test what you add, offline.** Include the failure and hostile-input cases; this
   codebase treats anything from a model, a guest, a sibling repo or the network as
   untrusted data.
@@ -132,8 +163,8 @@ model sees its definition on every request, so keep it small (`cmd/sarina`
   destinations or executables. A broken config must narrow behaviour, never widen it.
 - **Sending text off the machine** goes through `tiers.Sanitize` (secrets removed,
   capture dumps refused) and an operator confirmation. A model-callable tool that
-  does so must ask on every call through `tools.RuntimeOperatorConfirm`, never the
-  `Approver` (which can carry a session-long grant), and does nothing online when no
+  does so must ask on every call through the confirm channel (`tools::registry::Confirm`, Go's
+  `tools.RuntimeOperatorConfirm`), never the `Approver` (which can carry a session-long grant), and does nothing online when no
   one can be asked. `fleet-launch` stays CLI-only; a test enforces it.
 - **Licence: MPL 2.0 for the current tree (see `LICENSE`); read `NOTICE.md`.** Do not
   copy code from the unlicensed upstream (HarnessLab/claw-code-agent); new code is
@@ -148,7 +179,8 @@ model sees its definition on every request, so keep it small (`cmd/sarina`
 
 The old agent core was derived from ClawCode, which has no license. It has been
 replaced by a clean-room Go rewrite and the current tree is MPL 2.0-licensed (chosen
-2026-10-06). See [`docs/PROVENANCE.md`](docs/PROVENANCE.md) for the audit.
+2026-10-06). See [`docs/PROVENANCE.md`](docs/PROVENANCE.md) for the audit. The Rust core (`rust/`, 2026-11) is ported from
+that clean-room Go code, which is ours, never from ClawCode.
 
 - **Do not add features to a derived file** (>=25% shared in the table). Put new
   code in a new module, with at most a one-line hook into the derived file.
@@ -176,44 +208,46 @@ other's repositories. This file is the contract + message board for this repo.
 
 Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 
-- **Sarina → Chymaera_OS:** **live.** The distro's PKGBUILD builds this repo
-  directly. `packaging/arch/*` and `README.md` must not move, and the three
-  commands (the `sarina` binary and its `sarina-gui` and `sarina-service` links)
-  must keep resolving. **Adding a runtime dependency is a cross-repo change** — it
-  must exist in Arch's repos (note: Arch's uvicorn has no `python-` prefix), so
-  flag it with `CONTRACT:` in the commit message.
-- **Sarina → Chymaera_OS, agent fleet (contract item 7):** **live.**
+- **Sarina → Labyrinth_OS and LykanOS (packaging):** **live.** Labyrinth_OS's
+  `packages/pkgbuilds/sarina-git/PKGBUILD` builds this repo directly; LykanOS installs that
+  package from Labyrinth's repository. `rust/`, `packaging/{arch,helpers,voice,voiced,skills}`,
+  `README.md` and `LICENSE` must not move (and `go/` and `python/sarina_helpers` until the
+  rollback copies go, ~2026-11-25), and the three commands (the `sarina` binary and its
+  `sarina-gui` and `sarina-service` links) must keep resolving. **Adding a runtime
+  dependency is a cross-repo change** — it must exist in Arch's repos, so flag it with
+  `CONTRACT:` in the commit message.
+- **Sarina → LykanOS, agent fleet (its contract item 7):** **live.**
   `sarina fleet-usage` writes `sarina.json` into Omarchy's agents-panel usage
   directory, `fleet-status` reads the other agents' records (untrusted data,
   sanitised; `--json` for Yggdrasil's Agents item: keep its keys), and `fleet-launch` proposes launching another agent and runs only
   after a human confirms. `fleet-launch` is CLI-only and must **never** become a
   model-callable tool; a test enforces it. Detail in `docs/ECOSYSTEM.md` §1.
 - **Sarina → Argus_Firmware:** **live, read-only.**
-  `go/chymaera/firmware` + the `chymaera-device-info` and
+  `rust/sarina/src/chymaera/firmware.rs` + the `chymaera-device-info` and
   `chymaera-merge-report` commands. Sarina does not flash, does not touch
   `assets/protobuf/`, and does not apply firmware-core patches on its own.
   **The BLE budget (~5–30 KB/s) caps anything Sarina ingests** — no raw IQ, no
   full 802.11 capture. **Merge risk is decided by upstream existence, not path**
   (their correction, not mine — see `docs/ECOSYSTEM.md` §2). Version string is
-  now `<upstream>-CHY-<ours>[+ahead]`.
+  now `ARG-<upstream>r<ours>` (since 2026-10-24; the older `-CHY-` form still parses).
 - **Sarina → Argus_App:** **live.** That repo owns the protocol
   (`docs/SARINA_API.md`: NDJSON over loopback TCP, port 44700, optional token).
-  Sarina implements the client in `go/chymaera/console` and does **not**
+  Sarina implements the client in `rust/sarina/src/chymaera/console.rs` and does **not**
   extend it — new commands get proposed on their board first. Read the datastore
   through the API only, never by opening its SQLite file.
-- **Sarina ↔ Heimdall:** (was Chymaera_Sentry) two contracts, opposite
+- **Sarina ↔ Heimdall:** two contracts, opposite
   directions, full detail in `docs/ECOSYSTEM.md` §4. **Heimdall reads Sarina
   (§4a):** **live, reader-owned.** It polls the agent session files in
   `/var/lib/sarina/sessions/*.json` (the shared session folder the service writes;
   `agent_session_dir` in `/etc/heimdall/config.json`; messages as objects with a
   `role`; the API key is never written); keep that shape stable, `sarina doctor`
   checks it. **Sarina
-  consults Heimdall (§4b):** **live, opt-in.** `go/heimdall` calls its
-  `POST /v1/review` from the shared scan gate in `go/guard`, opt-in via
+  consults Heimdall (§4b):** **live, opt-in.** `heimdall.rs` calls its
+  `POST /v1/review` from the shared scan gate in `guard.rs`, opt-in via
   `HEIMDALL_REVIEW_URL` (the old `SENTRY_REVIEW_URL` is still honoured), as an
   out-of-process second opinion *after* this repo's own checks pass. Fails open on
   Heimdall's absence, fails closed on an actual `"deny"`.
-- **Sarina → Limbo (validation runs):** **live.** `go/limbo` uses
+- **Sarina → Limbo (validation runs):** **live.** `limbo.rs` uses
   Limbo's *agent* socket (`SARINA_LIMBO_SOCKET`) to run a command in a
   disposable guest and read the result, to validate updates/installs before the
   real system is touched. Limbo owns the contract (`Limbo/docs/QUARANTINE.md`);
@@ -232,7 +266,7 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   Root's `heimdalld immunity analyze --sarina` opens a service session with
   `tool_allowlist: ["reverse_engineer"]` and sends nothing unless `tools` is 1; it names
   the file it lent as the sandbox sees it, `/quarantine/<sha256>.sample`, which
-  `go/reverse` reads as the quarantine folder. The answer is untrusted text Heimdall
+  `reverse.rs` reads as the quarantine folder. The answer is untrusted text Heimdall
   keeps with the held file; it changes nothing. **Keep the allowlist's exact names, the
   `tools` count, `reverse_engineer`'s name and the `/quarantine` reading.** Since 2026-11-18
   Heimdall also asks her to run the command `similar` when her service's similarity
@@ -249,6 +283,21 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
   registry in `docs/ECOSYSTEM.md` §6.
 
 ### Coordination Log (newest first)
+
+### 2026-11-18 (10) — Docs pass: the living docs say Rust, LykanOS and today's repo set
+- Rewritten for the Rust core: this file's §1-§4 (what runs, how to build and test with `rust/scripts/nicecargo.sh`, the
+  Rust module map, Go kept as the reference until ~2026-11-25) and the "Cross-repo contracts" summary; README (requirements,
+  build, packaging, repository map); `packaging/arch/README.md` and the PKGBUILD's description; docs/RUST_MIGRATION.md,
+  VOICE_PACKAGE_PLAN.md (status), ACCESS_LADDER.md and VAULT.md (code paths).
+- docs/ECOSYSTEM.md: the repo table names Labyrinth_OS, LykanOS (was Chymaera_OS), Yggdrasil, Heimdall, Limbo, the Argus
+  repos, Kairos and Daedalus_CAD with links to the current repositories; §1 is "Sarina ↔ Labyrinth_OS and LykanOS": the
+  packaging contract is owned by Labyrinth_OS's `sarina-git` recipe (checked against it today: `rust/`,
+  `packaging/{helpers,voice,voiced,skills}`, and `go/` and `python/sarina_helpers` as rollback copies); code paths name the
+  Rust modules, with the Go package as the reference. No contract changed: same names, paths, ports and shapes.
+- Left as they are on purpose: this log (history), `docs/spec/`, `docs/PROVENANCE.md`, the dated plans and reports, and
+  `go/notes` (they go with the Go code).
+- **For Labyrinth OS / LykanOS / Heimdall / Yggdrasil:** nothing to change.
+— Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-18 (9) — `sarina-tone` in Rust: the last Go program installed; the Go one is no longer built
 - `go/cmd/sarina-tone` with `go/tone` (how a spoken question sounded: pace, pitch, loudness, pauses) is ported to
