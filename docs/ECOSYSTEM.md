@@ -138,15 +138,12 @@ files alone. A repair rewrites one line of a *copy* of the original, preserving
 `MimeType`, desktop actions, and translated names, because a user-level file
 replaces the system one outright rather than merging.
 
-**Open question for the distro:** the emitted `Security` token is what a
-dedicated Plasma Security menu would match on, but freedesktop says `Security`
-should be paired with `Settings` or `System`, so `Network;Security;` draws an
-informational hint (validation still exits 0). Pairing every tool with `System`
-would silence it at the cost of listing every security tool in the System menu
-too. **Left as-is pending the distro's menu design** — if you want a dedicated
-Security menu, you need an XDG `.menu` file plus a `.directory`, which is Plasma
-configuration and belongs on your side. Also note the ISO's MacTahoe icon theme:
-generated entries currently set no `Icon`, so they take a generic fallback.
+**Known limitations:** the emitted `Security` token is what Yggdrasil's start
+menu files under its Security folder (it checks `Security` before any other
+category). freedesktop says `Security` should be paired with `Settings` or
+`System`, so `Network;Security;` draws an informational hint from
+`desktop-file-validate` (validation still exits 0). Generated entries set no
+`Icon`, so they take a generic fallback.
 
 ---
 
@@ -302,10 +299,10 @@ qFlipper 1.3.3). Since 2026-10-24 it warns in its Update/Install confirmation
 when `firmware_origin_fork` is not `Official`, because those channels install
 official firmware over the fork.
 
-`1.4.3` (`GitVersion.UPSTREAM_VERSION`) is a **hand-maintained constant** in
-the firmware repo, not derived from git — release tags aren't ancestors of
-`dev`. It can go stale after an upstream merge; the firmware repo flagged this
-as a natural thing for `chymaera-merge-report` to notice, not yet implemented.
+The upstream release (`GitVersion.UPSTREAM_VERSION` in the firmware's
+`scripts/version.py`) is a **hand-maintained constant**, not derived from git —
+release tags aren't ancestors of `dev`. It can go stale after an upstream merge;
+`chymaera-merge-report` does not check it.
 
 ### Hard boundaries Sarina will not cross
 
@@ -445,9 +442,9 @@ not a claim that the shape will never move. A breaking change to the
 `heimdall.rs` (and `go/heimdall` while it exists), and Heimdall's own
 `internal/governance`/`internal/api/review.go`, together, in one commit.
 
-History: Sarina's coordination log of 2026-09-26 (docs/plans/, private) and
-[`Heimdall/CLAUDE.md`](https://github.com/Artifex-Technologies/Heimdall/blob/main/CLAUDE.md)
-§5 for Heimdall's side.
+Heimdall's side of the contract:
+[`Heimdall/docs/CONTRACTS.md`](https://github.com/Artifex-Technologies/Heimdall/blob/main/docs/CONTRACTS.md)
+("Review"). The history is private.
 
 ### 4b2. Heimdall's grant gate — **live, off until the owner switches it on**
 
@@ -641,8 +638,8 @@ guest image carries radare2 and Ghidra (both run fully offline), a wrapper
 and returns only capped, cleaned, labelled text, and an operator-invoked skill,
 `static-analysis`. A human puts the sample in Limbo's sample directory; Sarina cannot
 copy files in. Heimdall cannot call the profile (its advisory sessions have no tools
-and it is kept off `agent.sock`); whether it should is an open question for the
-Limbo and Heimdall boards. Draft status: the wrapper's own behaviour is tested, the
+and it is kept off `agent.sock`); whether it should is an open question, kept in
+Limbo's and Heimdall's docs/plans/BACKLOG.md and LOG.md (private). Draft status: the wrapper's own behaviour is tested, the
 real radare2 and Ghidra invocations are not. Details and the unverified list are in
 that directory's README.
 

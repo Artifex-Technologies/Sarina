@@ -41,11 +41,26 @@ commit, flag the commit `CONTRACT:`, and tell the other side.
 ## The agent fleet (`fleet-usage`, `fleet-status --json`, `fleet-launch`)
 
 - **What:** `sarina fleet-usage` writes `sarina.json` into the agents panel's usage folder; `sarina fleet-status --json`
-  prints the agents' records with fixed keys; `fleet-launch` runs only after a person confirms and is never a tool the
-  model can call (a test enforces it).
+  prints `{"agents":[{"id","name","ready","stale","updatedAt","todayTokens","weekTokens","totalSessions","limits":[{"label",
+  "percentUsed"(null when unknown),"resetsAt"}],"statusText"}],"self":{"id","name":"Sarina","running","lastActive"}}`, with
+  `"mostHeadroom"` (an agent id, or "") added by `--suggest`; the other agents' records are untrusted and printed cleaned
+  (ASCII only, other characters escaped); `fleet-launch` runs only after a person confirms and is never a tool the model can call (a test enforces it).
 - **Who uses it:** Yggdrasil's Agents item (`packages/agent-usage`, `yggdrasil-agent-usage --agents`), LykanOS (its
   contract item 7, Omarchy's agents panel).
-- **Where:** `rust/sarina/src/fleet/`. ECOSYSTEM.md section 1, "Agent fleet".
+- **Where:** `rust/sarina/src/fleet/` (`status.rs`, `status_json`). ECOSYSTEM.md section 1, "Agent fleet".
+
+## MCP server definitions (`~/.sarina/mcp.json`, `SARINA_MCP_FILE`)
+
+- **What:** the tool servers Sarina may start, as JSON files of at most 256 KiB: `~/.sarina/mcp.json`, then each file in
+  `SARINA_MCP_FILE` (a colon-separated list); a workspace's `.sarina-mcp.json`, `.mcp.json` or `mcp.json` only with
+  `--trust-workspace-mcp`. A file holds `{"mcpServers":{"NAME":{...}}}` or `{"servers":[{"name":"NAME",...}]}`; each server
+  has `command` (required), `args`, `env`, `cwd` (relative to the file's folder; `~` allowed), `description`, `read_only`,
+  `read_only_tools` or `tools: {"TOOL":{"read_only":true}}`, `timeout_seconds`; `transport` may only be `stdio`. The first
+  file to name a server wins; every tool is treated as changing things unless marked read-only, and its output is untrusted
+  data. `sarina mcp list` shows what was loaded and every problem.
+- **Who uses it:** Icarus (`icarus mcp`, opt-in through a file named in `SARINA_MCP_FILE`); Heimdall's trust list watches
+  `~/.sarina/mcp.json` (`heimdalld trust`).
+- **Where:** `rust/sarina/src/mcp/config.rs` (`load`, `parse_server`), `mcp/manager.rs`.
 
 ## Menu categorisation (`sarina desktop-audit`)
 
