@@ -7,7 +7,7 @@ import (
 	"unicode"
 )
 
-// Lessons: the owner-approved rules she learned from her mistakes (homework, docs/VOICE_AND_TRUST_PLAN.md and the vault's
+// Lessons: the owner-approved rules she learned from her mistakes (homework, docs/plans/VOICE_AND_TRUST_PLAN.md (private) and the vault's
 // Lessons/ folder), one line each, in front of every session. The vault keeps each lesson as a linked note (the owner reads them
 // in Obsidian); this file is only the short list made from the active ones (`sarina lessons digest`), the Hermes-style memory
 // she always sees. Before this she had a lesson for exactly the mistake she made (decompile-explain, 2026-11-04) but only found

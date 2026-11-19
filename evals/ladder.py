@@ -7,7 +7,7 @@ owner moves her up (at the terminal, with a yes). Nothing here raises access by 
   python3 evals/ladder.py lower N   the owner takes a tier away (no questions asked)
 
 Full runs are the .json reports run_evals.py writes next to its .md (only=false). A tier is earned when its groups have passed at
-their rate in the last N full runs in a row. The result goes to docs/sarina-evals/ladder.json; the applied tier is the line
+their rate in the last N full runs in a row. The result goes to sarina-evals/ladder.json in the owner's private plans (Labyrinth_OS/docs/plans); the applied tier is the line
 SARINA_ACCESS_TIER=N in sarina.env, which `sarina chat` and the service read (docs/ACCESS_LADDER.md).
 """
 import glob
@@ -18,7 +18,7 @@ import sys
 import time
 
 GH = os.path.join(os.path.expanduser("~"), "Documents", "Github")
-REPORTS = os.environ.get("SARINA_EVAL_REPORTS", os.path.join(GH, "Labyrinth_OS", "docs", "sarina-evals"))
+REPORTS = os.environ.get("SARINA_EVAL_REPORTS", os.path.join(GH, "Labyrinth_OS", "docs", "plans", "sarina-evals"))
 ENV_FILE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "labyrinth", "sarina.env")
 
 # Each tier: what it allows, and the groups that must pass (rate 0-1) in `runs` full runs in a row. A group that a run did not grade

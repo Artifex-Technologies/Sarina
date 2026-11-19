@@ -2,7 +2,7 @@
 
 I want as much of the desktop in Rust as possible, and the spoken path was paying about 48 ms of Python start-up per question.
 Three programs that lived as Python in Labyrinth's image (`Labyrinth_OS/profile/airootfs/usr/local/bin`) are now one Rust binary,
-`sarina-voice`, in this repository (`packaging/voice/`, step 1 of `docs/VOICE_PACKAGE_PLAN.md`):
+`sarina-voice`, in this repository (`packaging/voice/`, step 1 of my voice package plan, in my private plans):
 
 | Program | What it is | Python | Rust |
 | --- | --- | --- | --- |

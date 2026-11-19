@@ -18,7 +18,7 @@ target/release/sarina-voiced check "Some text."   # asks the running service (Ru
 
 Sarina's repository, next to `packaging/voice` (`sarina-voice`, the client `speak_voiced` and the other spoken-question
 programs), because the voice belongs to Sarina and not to Labyrinth's image: LykanOS uses Sarina too
-(`docs/VOICE_PACKAGE_PLAN.md`). It shares `packaging/voice`'s Python-compatible pieces (JSON as Python writes it,
+(my voice package plan, in my private plans). It shares `packaging/voice`'s Python-compatible pieces (JSON as Python writes it,
 `str.isspace`, `str.lower`, `os.path.expanduser`) as a path dependency, so both sides of the socket write and read the same
 bytes. Labyrinth's `sarina-git` package builds it (on Labyrinth's main since 2026-11-17, `fd58489`: the switch below).
 

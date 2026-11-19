@@ -35,7 +35,7 @@ either. With the gate on, a hand-off to a tier off this computer (the claude CLI
 the owner's approval there (`sudo heimdalld grant approve ID`); Sarina files the request and goes on without that tier. Spoken questions (Super+S) change nothing at any tier:
 the voice rules stay as they are.
 
-`ladder.json` next to the reports (`Labyrinth_OS/docs/sarina-evals/`) holds the last computation: the earned tier, the applied
+`ladder.json` next to the reports (in my private plans, reached as `Labyrinth_OS/docs/plans/sarina-evals/`) holds the last computation: the earned tier, the applied
 tier, and for each tier what is missing. A full eval run refreshes it and prints it at the end.
 
 ## What keeps the tiers honest

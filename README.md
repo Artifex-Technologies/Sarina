@@ -2,6 +2,9 @@
 
 # Sarina
 
+[![rust](https://github.com/Artifex-Technologies/Sarina/actions/workflows/rust.yml/badge.svg)](https://github.com/Artifex-Technologies/Sarina/actions/workflows/rust.yml)
+[![helpers](https://github.com/Artifex-Technologies/Sarina/actions/workflows/helpers.yml/badge.svg)](https://github.com/Artifex-Technologies/Sarina/actions/workflows/helpers.yml)
+
 ***S***ystemic ***A***rtificial ***R***easoning & ***I***ntelligent ***N***etworked ***A***ssistant
 
 A local AI assistant that runs on your own computer: a helper and companion for
@@ -12,6 +15,12 @@ llama.cpp), calls tools, keeps sessions and notes on disk, and can move to a big
 when the local model is not enough. The core is one Rust binary (since 2026-11-18; it was Go until then).
 
 Sarina is optional: on Labyrinth OS she is installed from Agora, the app store, never forced on anyone.
+
+**How it is tested.** Every change to the core runs the `rust` workflow: formatting, clippy and the tests, then the Rust
+build and the Go build it replaced (kept as the reference) get the same command lines, service requests and console
+requests, and must answer the same. The voice programs and helpers have their own workflow. How the port was proven is in
+[docs/RUST_PORT.md](docs/RUST_PORT.md) and [docs/VOICE_RUST_PORT.md](docs/VOICE_RUST_PORT.md); what she can do with a real
+model is measured by the evals ([Evals](#evals)), which need a graphics card and run on my PC, not in CI.
 
 What she does today:
 
@@ -193,7 +202,7 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
 safety (injections, secrets, private folders), writing files, her vault, reverse engineering, Limbo,
 troubleshooting and crash help, gaming (the setup check, Proton, mods, graphics memory, the repair tool),
 spoken answers and companion talk. It writes a Markdown report and a JSON file; the
-reports of past runs are in Labyrinth_OS `docs/sarina-evals/`. `tools/training/` turns her real answers into
+reports of my own runs are kept with my private plans, not in a repository. `tools/training/` turns her real answers into
 a review sheet you tick, and exports the ticked ones for fine-tuning (nothing is trained by itself).
 
 ## Compute tiers
@@ -281,7 +290,8 @@ docs/RUST_PORT.md the Rust port: what was proved, the differences on purpose
 docs/spec/        behaviour specs the Go core was built from
 docs/ECOSYSTEM.md cross-repo contract
 docs/PROVENANCE.md licensing audit and rewrite progress
-docs/AGENT_FORGE.md, docs/MEMORY_AND_TRAINING_PLAN.md   the agent forge, and memory, routing and training
+docs/AGENT_FORGE.md the agent forge: Sarina's own agents, run in Limbo
+docs/ACCESS_LADDER.md what Sarina may do, tier by tier, and how the evals decide it
 evals/            capability evals (run_evals.py)
 tools/training/   review sheet and export of Sarina's answers for fine-tuning
 tools/voice_clone/  the tools that train Sarina's own voice (their tests are in tests/)

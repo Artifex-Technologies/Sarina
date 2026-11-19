@@ -43,7 +43,7 @@ Sarina ships *in* both distros as the package `sarina-git`, built from this repo
 `[labyrinth]` repository; LykanOS installs the same package from there (it builds nothing itself). So the packaging
 contract below serves both, and nothing in Sarina may assume one of them. On Labyrinth OS she is optional (installed from
 Agora); on LykanOS she is part of the system. What Sarina does on Labyrinth matters most day to day: troubleshooting
-drivers and updates by validating in Limbo first (`Labyrinth_OS/docs/DRIVER_LAB.md`), and not fighting games for the
+drivers and updates by validating in Limbo first (planned: the Driver Lab, in my private plans), and not fighting games for the
 graphics card's memory (the council runs local members one at a time by default for the same reason).
 
 ### The packaging contract (owned by Labyrinth_OS)

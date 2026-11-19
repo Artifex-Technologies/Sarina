@@ -8,6 +8,9 @@ you do work another project might depend on.
 **Pushing:** Push every commit as you make it; don't ask me first. Before pushing, check the diff names no host name,
 network address, SSID or MAC address.
 
+**Plans:** plans, training notes, owner steps and other internal notes go in `docs/plans/` (private and git-ignored; ask the
+owner), never in the public docs. Sarina's eval reports are in Labyrinth_OS's `docs/plans/sarina-evals/` (private too).
+
 ---
 
 ## 1. What this project is
@@ -288,7 +291,7 @@ Full detail in [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md). Summary:
 - Rewritten for the Rust core: this file's §1-§4 (what runs, how to build and test with `rust/scripts/nicecargo.sh`, the
   Rust module map, Go kept as the reference until ~2026-11-25) and the "Cross-repo contracts" summary; README (requirements,
   build, packaging, repository map); `packaging/arch/README.md` and the PKGBUILD's description; docs/RUST_MIGRATION.md,
-  VOICE_PACKAGE_PLAN.md (status), ACCESS_LADDER.md and VAULT.md (code paths).
+  docs/plans/VOICE_PACKAGE_PLAN.md (status), ACCESS_LADDER.md and VAULT.md (code paths).
 - docs/ECOSYSTEM.md: the repo table names Labyrinth_OS, LykanOS (was Chymaera_OS), Yggdrasil, Heimdall, Limbo, the Argus
   repos, Kairos and Daedalus_CAD with links to the current repositories; §1 is "Sarina ↔ Labyrinth_OS and LykanOS": the
   packaging contract is owned by Labyrinth_OS's `sarina-git` recipe (checked against it today: `rust/`,
@@ -962,7 +965,7 @@ Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-10 — Night 6 wrap-up: A 114/120, B 114/120, Done when met; the six-night plan is finished
 - Run A (#10) on `65c3b4f`, run B (#11) on `6e3d60b` (`00e6748` + `4feeea1` check_code, `57be574` digestNotOneWay, `6e3d60b` the
-  handover). Reports in Labyrinth_OS `d464cef`; plan section 6 and `docs/TRAINING_PLAN.md` row #11 `64be67a`.
+  handover). Reports in Labyrinth_OS `d464cef`; plan section 6 and `docs/plans/TRAINING_PLAN.md` row #11 `64be67a`.
 - Step gates: code 3x 24/27 (27/27 not met); check_code before the first edit 3/3, but only after the nudge; crypto-hash-says 5/5.
 - Flips vs A: +code-python-fix (the check_code nudge fired, then she fixed it: likely `00e6748`), +companion-carries-on,
   +vault-recall, +voice-boot-ideas (variance); -decompile-explain (stopped after `functions` and offered options; the prompt's
@@ -1110,12 +1113,12 @@ Sarina / Claude
   never repeat, a wrong nudge keeps the earlier answer; quote check skips non-claims; `5536ceb` no "carry on" after a
   thinking-only length cut (the tt-code-test 600 s loop); `d8d2d32` evals: guard_stops noted, hostname/Wi-Fi/public
   addresses blanked in reports, two rules widened; `bbcc319` limbo cases through claude-sudo with the measured binary;
-  `74d750c` JWT rule. Plan Day 3 updated (`docs/TRAINING_PLAN_2026-10-28.md`): steps 1-2 done, night 3 does 3-4 and gates.
+  `74d750c` JWT rule. Plan Day 3 updated (`docs/plans/TRAINING_PLAN_2026-10-28.md`): steps 1-2 done, night 3 does 3-4 and gates.
 - Numbers (plan section 6): groups crypto/comprehension/system/code/limbo 31/37 (same groups in night 2 run B: 24/33,
   limbo ungraded); 10 cases x3: 27/30, tt-code-test 1/3 without timeouts.
 - Correction: `d8d2d32`'s message cites "f0d0ad4-era" for the hand-blanked night 2 report; that id is wrong. The
   blanking commit in Labyrinth_OS is the one titled "Sarina evals: blank the network name and provider DNS address".
-- Also new: `docs/VOICE_AND_TRUST_PLAN.md` (owner approval, voice recognition, storage, migration; step 1 = `a0a7652`).
+- Also new: `docs/plans/VOICE_AND_TRUST_PLAN.md` (owner approval, voice recognition, storage, migration; step 1 = `a0a7652`).
   Signed: Sarina / Claude Opus 5.5
 
 ### 2026-11-04 11:55 — Night 2 wrap-up: run A 107/112 (fd99864), run B 102/112 (2b21f4d); night 2 not done, repeats
@@ -1165,7 +1168,7 @@ Sarina / Claude
   `.port_sessions/agent`.
 — Signed: Sarina / Claude
 
-### 2026-10-28 — Six-day plan written (Wed 2026-10-28 to Mon 2026-11-02): `docs/TRAINING_PLAN_2026-10-28.md`
+### 2026-10-28 — Six-day plan written (Wed 2026-10-28 to Mon 2026-11-02): `docs/plans/TRAINING_PLAN_2026-10-28.md`
 - **Owner's direction (2026-10-27):** Sarina only; as fast as this hardware allows while accurate; cryptography and
   "encryption capabilities" beyond any other 2080 Ti AI; troubleshoot and fix code rather than say it is broken; in the long run
   near-full system access (updates, patches, an OS that adapts per user). Daily sessions may run on a smaller model; tokens are
@@ -1269,10 +1272,10 @@ Sarina / Claude
   the voice rules name the gaming topic and the shared graphics card; `labyrinth-gaming check` no longer
   hides a system-wide Proton-CachyOS (one `ls` over two folders failed as a whole). Four gaming guide
   notes and one lesson in her vault; three lessons in `SARINA_LESSONS.md`. Plan, observations and a
-  what-next list with reasons: `Labyrinth_OS/docs/SARINA_GAMING.md`.
+  what-next list with reasons: `Labyrinth_OS/docs/plans/SARINA_GAMING.md`.
 - **Evals:** 11 new cases (group `gaming`, 74 in all); first run 11/11, but reading the answers found
   three faults the keywords missed (sudo for a user service, "game mode inactive" called a fault, a test
-  program's crash explained as the game's), now fixed and the checks tightened. Full run (`docs/sarina-evals/2026-10-23-full.md`): 63 of 70 graded cases passed (the 4 Limbo cases need the sudo password and were skipped); after the fixes the retry passed the append, sudo, false-memory, thread and game-crash cases. Still failing: the two Heimdall alert checks (its session scan raised no `injection-phrase` for the "SYSTEM NOTICE TO THE ASSISTANT" text although its `/v1/review` denies it: for Heimdall's board) and `voice-install-help` by five words over the cap with the content now right (Agora first).
+  program's crash explained as the game's), now fixed and the checks tightened. Full run (Labyrinth_OS `docs/plans/sarina-evals/2026-10-23-full.md`): 63 of 70 graded cases passed (the 4 Limbo cases need the sudo password and were skipped); after the fixes the retry passed the append, sudo, false-memory, thread and game-crash cases. Still failing: the two Heimdall alert checks (its session scan raised no `injection-phrase` for the "SYSTEM NOTICE TO THE ASSISTANT" text although its `/v1/review` denies it: for Heimdall's board) and `voice-install-help` by five words over the cap with the content now right (Agora first).
 - **Not done / for the owner:** the root-owned installed copies (`/usr/bin/sarina`, the two scripts, the
   rules file) still need `sudo install` from the repos (the evals ran the staged build in `~/.local/bin`);
   no Steam-launch hook frees the graphics card yet; no tiers are configured on this machine.
