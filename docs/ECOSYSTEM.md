@@ -19,7 +19,7 @@ the shape, not yet built), **proposed** (awaiting the owning repo's answer),
 
 | Repo | Role | Owns |
 | --- | --- | --- |
-| [`Labyrinth_OS`](https://github.com/Artifex-Technologies/Labyrinth_OS) | CachyOS-based daily and gaming distro; Sarina is optional there (Agora) | Its image and install, the signed `[labyrinth]` package repository, **the `sarina-git` recipe both distros install (the packaging contract)**, the voice wiring (Super+S). `docs/DRIVER_LAB.md` is the Sarina + Limbo driver workflow |
+| [`Labyrinth_OS`](https://github.com/Artifex-Technologies/Labyrinth_OS) | CachyOS-based daily and gaming distro; Sarina is optional there (Agora) | Its image and install, the signed `[labyrinth]` package repository, **the `sarina-git` recipe both distros install (the packaging contract)**, the voice wiring (Super+S). The Sarina + Limbo driver workflow (the Driver Lab) is planned in my private plans |
 | [`LykanOS`](https://github.com/Artifex-Technologies/LykanOS) | Arch-based security edition (formerly Chymaera OS); Sarina is part of it | ISO profile, package set, what it needs from Sarina (its `CLAUDE.md`, items 1-7) |
 | [`Yggdrasil`](https://github.com/Artifex-Technologies/Yggdrasil) | The desktop of both distros (panel, Settings, Agora) | Sarina's place in the panel and Settings (from her integration file); the Agents item that runs `sarina fleet-status --json` |
 | [`Argus_Firmware`](https://github.com/Artifex-Technologies/Argus_Firmware) | Flipper Zero firmware fork | RPC wire format (`assets/protobuf/`), the BLE budget |
