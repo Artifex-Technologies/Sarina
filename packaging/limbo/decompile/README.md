@@ -101,16 +101,12 @@ a real sample inside the 900-second cap; that `capa -q` is the right invocation.
 Run it on a harmless known binary first (for example `/usr/bin/true` copied into the
 sample directory) before trusting it on anything else.
 
-## Open questions for the other boards
+## Known limitations
 
-- **Limbo:** the exchange share is writable by the guest into a host directory (its
-  own known weakness) and Limbo's libvirt XML does not mark it read-only. A
-  read-only option for validation profiles would make the guest-side `ro` mount a
-  second lock rather than the only one. Not changed here: Limbo owns it.
-- **Heimdall:** it cannot call this profile. It reaches Sarina only through advisory
-  sessions with no tools, and Limbo's route tables keep it off `agent.sock`. If
-  Heimdall should analyse a quarantined guest's files, that is a request to put on
-  Limbo's and Heimdall's boards (who copies the file out of a quarantined guest, and
-  who triggers the run); until then a human or Sarina runs it.
-- **Dynamic analysis** (running a sample to watch it) is a different profile with a
-  different threat model; deliberately not part of this.
+- **The exchange share is the only read-only lock.** The share is writable by the guest into a host folder (a weakness Limbo
+  documents), and Limbo's libvirt XML does not mark it read-only, so the guest-side `ro` mount is the only lock. Limbo owns it.
+- **Heimdall does not call this profile.** Heimdall reaches Sarina through service sessions (an advisory with no tools, or
+  `reverse_engineer` on a held file it lends as `/quarantine/<sha256>.sample`: docs/ECOSYSTEM.md section 4d), and Limbo's
+  route tables keep it off `agent.sock`; a person or Sarina runs this profile.
+- **Dynamic analysis** (running a sample to watch it) is a different profile with a different threat model; deliberately not
+  part of this.

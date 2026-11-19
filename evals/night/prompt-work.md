@@ -1,9 +1,9 @@
 You are running unattended overnight on the owner's PC (the owner is asleep; nobody can answer a question or approve anything). This is
 night @NIGHT@ of Sarina's training plan. Work until @UNTIL@ at the latest, then stop: the night script kills this session then.
 
-1. Read `~/Documents/Github/Sarina/docs/plans/TRAINING_PLAN_2026-10-28.md`: section 0 completely (0.0 overnight mode first), then the
-   section for night @NIGHT@ (the plan's "Day @NIGHT@"). Then the last `Labyrinth_OS/docs/plans/TEAM_BOARD.md` entry titled
-   "Sarina night" and `git -C ~/Documents/Github/Sarina log --oneline -15`: if an earlier attempt at this night was cut off,
+1. Read `~/Documents/Github/Sarina/docs/plans/records/TRAINING_PLAN_2026-10-28.md`: section 0 completely (0.0 overnight mode first), then the
+   section for night @NIGHT@ (the plan's "Day @NIGHT@"). Then the newest `Sarina/docs/plans/LOG.md` entry titled
+   "SAR: night" and `git -C ~/Documents/Github/Sarina log --oneline -15`: if an earlier attempt at this night was cut off,
    carry on from its "If cut off, resume at" line instead of starting over.
 2. Tonight's full run A (the before-number, on HEAD) has already been done by the night script: `@RUNA@` (and its `.json`).
    Read its header, its per-group results and every FAIL's answer before you change any code, as the plan says.

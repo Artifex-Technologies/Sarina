@@ -5,7 +5,7 @@ the others, so this file records how they fit together **from Sarina's side**.
 
 > **Renamed 2026-10-10 and 2026-11-07.** `Chymaera_Sentry` is now `Heimdall`, `Chymaera_Zero_App` is `Argus_App`,
 > `Chymaera_Zero_Firmware` is `Argus_Firmware`, and the security distro (`Chymaera_Linux`, then `Chymaera_OS`) is
-> **`LykanOS`** since 2026-11-07. Older Coordination Log entries use the old names on purpose. Sarina's command and
+> **`LykanOS`** since 2026-11-07. Older notes use the old names on purpose. Sarina's command and
 > module names with `chymaera` in them (`chymaera-console`, `chymaera-analyze`, `chymaera-device-info`,
 > `chymaera-merge-report`, `rust/sarina/src/chymaera`) are her Argus tools and keep their names.
 >
@@ -43,7 +43,7 @@ Sarina ships *in* both distros as the package `sarina-git`, built from this repo
 `[labyrinth]` repository; LykanOS installs the same package from there (it builds nothing itself). So the packaging
 contract below serves both, and nothing in Sarina may assume one of them. On Labyrinth OS she is optional (installed from
 Agora); on LykanOS she is part of the system. What Sarina does on Labyrinth matters most day to day: troubleshooting
-drivers and updates by validating in Limbo first (planned: the Driver Lab, in my private plans), and not fighting games for the
+drivers and updates by validating in Limbo first (the Driver Lab is not built), and not fighting games for the
 graphics card's memory (the council runs local members one at a time by default for the same reason).
 
 ### The packaging contract (owned by Labyrinth_OS)
@@ -79,27 +79,22 @@ whisper.cpp and espeak-ng are optional and loaded at run time). A dependency Arc
 Labyrinth's repository first, so **adding a dependency here is a cross-repo change**: say so in the commit message with
 `CONTRACT:` so the distro side can grep for it.
 
-### What LykanOS needs from Sarina — **open, not built**
+### What LykanOS asks of Sarina
 
 The distro ships a **small hand-picked tool core**, not `blackarch-*` category
 groups. The groups were tried and abandoned (thousands of packages, unresolvable
 `lib32-*` deps, provider menus, an ISO too large for CI). Everything past that
-core is explicitly Sarina's job:
+core is Sarina's job. What its contract asks for, and what exists:
 
-1. **Install-time tool selection** — ask what the machine is for and install
-   accordingly, instead of a guess baked into the ISO.
-2. ~~**Categorisation**~~ — **built, see below.**
-3. **Data analysis** — making sense of scan and capture output in place. This is
-   the reason the agent is in the OS at all.
-4. **`blackarch_compat` against a real Docker daemon** — it is unit-tested only
-   and has *never* run against real Docker. It is the safety check behind (1);
-   until it has actually run, treat any category it reports as unvalidated.
-   (The 2026-11-11 dead-code clean-up deleted it by mistake and put it back the
-   same day: LykanOS's contract names it as Sarina's to provide.)
-
-5. **Crash diagnosis** and 6. **Proton VPN lifecycle** — added by the distro,
-   **open, not built** (see LykanOS's `CLAUDE.md`).
-7. **Agent manager** — **built**, see "Agent fleet" below.
+| # | What | State |
+| --- | --- | --- |
+| 1 | **Install-time tool selection**: ask what the machine is for and install accordingly, instead of a guess baked into the ISO | not built |
+| 2 | **Categorisation** | built: "Menu categorisation" below |
+| 3 | **Data analysis**: making sense of scan and capture output in place (the reason the agent is in the OS at all) | captures: `chymaera-analyze` (section 3); other scan output: not built |
+| 4 | **`blackarch_compat` against a real Docker daemon**: the safety check behind (1) | unit-tested only, never run against real Docker: treat any category it reports as unvalidated. (The 2026-11-11 dead-code clean-up deleted it by mistake and put it back the same day: LykanOS's contract names it as Sarina's to provide.) |
+| 5 | **Crash diagnosis** | `crash_detail` and `system_status` (read-only), `system_fix` (named, reversible repairs) |
+| 6 | **Proton VPN lifecycle** | not built |
+| 7 | **Agent manager** | built: "Agent fleet" below |
 
 Do not add tools to the distro's `packages.x86_64` to work around the gap; that
 re-creates the problem the categories caused.
@@ -409,7 +404,7 @@ is not what the live Heimdall reads. Heimdall's `agentsource` is the reader; `sa
 
 The shape is Sarina's persistence format, kept stable on purpose because
 something outside the repo now reads it. A change to it needs a
-Coordination Log entry and a matching change on Heimdall's board.
+handoff note (docs/plans/LOG.md, private) and a matching change in Heimdall.
 (The legacy Python `session_store.py` layout, a flat `messages` list directly
 under `.port_sessions/`, is no longer what Heimdall reads.)
 
@@ -450,7 +445,7 @@ not a claim that the shape will never move. A breaking change to the
 `heimdall.rs` (and `go/heimdall` while it exists), and Heimdall's own
 `internal/governance`/`internal/api/review.go`, together, in one commit.
 
-Full detail in both repos' 2026-09-26 Coordination Log entries — see
+History: Sarina's coordination log of 2026-09-26 (docs/plans/, private) and
 [`Heimdall/CLAUDE.md`](https://github.com/Artifex-Technologies/Heimdall/blob/main/CLAUDE.md)
 §5 for Heimdall's side.
 
@@ -583,8 +578,9 @@ WSL, USB passthrough needs `usbipd-win`. BLE: see the pairing note in §2.
 
 ## 7. Change protocol
 
-1. Changing anything another repo depends on means updating **this file** and the
-   affected repo's `CLAUDE.md`, in the same commit.
+1. Changing anything another repo depends on means updating **this file** and
+   `docs/CONTRACTS.md` in the same commit, with a handoff note in `docs/plans/LOG.md`
+   (private) and an item in the affected repo's backlog.
 2. Use `CONTRACT:` in the commit message for anything on a contract list, so the
    other side can grep for it.
 3. A contract marked **proposed** is not a licence to build against it.

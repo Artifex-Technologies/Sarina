@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-dev.sh: build the checked-out Sarina into ~/.local/bin/sarina, the one binary the evals measure (docs/plans/TRAINING_PLAN_2026-10-28.md, private;
+# install-dev.sh: build the checked-out Sarina into ~/.local/bin/sarina, the one binary the evals measure (docs/plans/records/TRAINING_PLAN_2026-10-28.md, private;
 # rule 6): the Rust build, sarina-rs (rust/, `cargo build --release --locked --bin sarina-rs`), as the package installs it as
 # /usr/bin/sarina (since 2026-11-18; the Go build is no longer measured). Only the name `sarina` is installed: the evals run no
 # other (sarina-gui and sarina-service are the package's links to the same program). Cargo's output goes to $CARGO_TARGET_DIR,

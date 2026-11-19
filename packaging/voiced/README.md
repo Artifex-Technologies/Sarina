@@ -190,72 +190,30 @@ Different in rare cases:
   errors (a missing file, the reference recording) are worded differently.
 - The socket's listen backlog is the standard library's (128), not 4.
 
-## The switch, the check on the card, and the way back
+## The switch and the way back
 
-**Merged into Labyrinth_OS's main on 2026-11-17** (`fd58489`, after a week of the drop-in below; my answer
-`voiced-merge = y`): `sarina-git` (the image's recipe and the store's) builds and installs `/usr/bin/sarina-voiced`, and the
-image's `labyrinth-voiced.service` starts it; the Python files stay in the image one week after the switched package runs
-on my PC, for a rollback. An installed system gets the new unit with the next image (no package owns it): on my PC the
-to-do's step puts it in place, removes the drop-in and the home copy. What follows is how it was checked before the merge.
+**Merged into Labyrinth_OS's main on 2026-11-17** (`fd58489`, after a week of running it through a user drop-in):
+`sarina-git` (the image's recipe and the store's) builds and installs `/usr/bin/sarina-voiced`, and the image's
+`labyrinth-voiced.service` starts it. The Python service stays in the image for a rollback for a week after the switch; going
+back is a drop-in with the old `ExecStart` (Labyrinth_OS's docs/SARINA_VOICE.md, "The voice service in Rust").
 
 **What the card needs:** nothing new. The Rust service loads the voice venv's own `libonnxruntime.so.1.31.0` (onnxruntime-gpu
 1.31.0; `libonnxruntime_providers_cuda.so` and `_shared.so` beside it) and, before the first session, the venv's CUDA 13 and
 cuDNN 9 libraries from `site-packages/nvidia/` (`cu13/lib`, `cudnn/lib`), as `onnxruntime.preload_dlls()` did. Checked
 without the card (`sarina-voiced-parity gpuprobe`, which only runs with `CUDA_VISIBLE_DEVICES` empty): the provider library,
-CUDA and the rest load, and the CUDA provider stops where it needs a device ("no CUDA-capable device is detected"). What was
-not checked tonight: a session on the card (the card was nearly full and I was asleep), so its speed and memory there.
+CUDA and the rest load, and the CUDA provider stops where it needs a device ("no CUDA-capable device is detected").
 
-**Check it on the card (no logout; works over the stream; plays nothing):** a user drop-in, so no root and no package:
+`sarina-voiced check` asks the running service to say three sentences, deletes each file unplayed, and prints when each
+arrived, the time to the first sentence and the gaps a listener would have heard (run it twice and take the second: the first
+loads the voice). If the journal says "graphics card not usable", the card path failed (the message says why) and the service
+runs on the processor.
 
-```bash
-cd ~/Documents/Github/Sarina && git pull --ff-only
-cd packaging/voiced && cargo build --release --locked
-./target/release/sarina-voiced check            # 1) the Python service as it runs now: times on the card, nothing played
-install -Dm755 target/release/sarina-voiced ~/.local/lib/sarina-voiced/sarina-voiced
-mkdir -p ~/.config/systemd/user/labyrinth-voiced.service.d
-printf '[Service]\nExecStart=\nExecStart=%%h/.local/lib/sarina-voiced/sarina-voiced\n' > ~/.config/systemd/user/labyrinth-voiced.service.d/rust.conf
-systemctl --user daemon-reload && systemctl --user restart labyrinth-voiced
-./target/release/sarina-voiced check            # 2) the Rust service: same text, compare the times
-journalctl --user -u labyrinth-voiced -n 5      # "voice ready in N s (CUDAExecutionProvider,CPUExecutionProvider)"
-nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
-# 3) the pipeline off, for comparison on the card (it is on with the card by default):
-printf '[Service]\nEnvironment=LABYRINTH_VOICE_PIPELINE=0\n' > ~/.config/systemd/user/labyrinth-voiced.service.d/pipeline.conf
-systemctl --user daemon-reload && systemctl --user restart labyrinth-voiced
-./target/release/sarina-voiced check; ./target/release/sarina-voiced check
-rm ~/.config/systemd/user/labyrinth-voiced.service.d/pipeline.conf && systemctl --user daemon-reload && systemctl --user restart labyrinth-voiced
-```
+## Known limitations
 
-Run each `check` twice and take the second (the first one loads the voice). Pipelined against in turn on the card decides
-the default: on the processor the pipeline made sentences later (measured below), so it is on only with the card, where the
-language model's small steps leave the card idle much of the time; whether that turns into earlier sentences is what step 3
-shows.
-
-`check` asks the service to say three sentences, deletes each file unplayed, and prints when each arrived, the time to the
-first sentence and the gaps a listener would have heard. If the journal says "graphics card not usable", the card path failed
-(the message says why) and the service runs on the processor: undo, or keep it while I look. To hear it: Super+S, or
-`labyrinth-sarina-speak "..."`, when I am at the speakers.
-
-**Undo** (back to the Python at once):
-
-```bash
-rm -f ~/.config/systemd/user/labyrinth-voiced.service.d/rust.conf ~/.config/systemd/user/labyrinth-voiced.service.d/pipeline.conf
-systemctl --user daemon-reload && systemctl --user restart labyrinth-voiced
-```
-
-After a week without trouble: merge `voiced-rust-switch`, rebuild `sarina-git`, remove the drop-in and
-`~/.local/lib/sarina-voiced` (done 2026-11-17: merged; the package and the unit wait in my to-do). Later, once the Python is gone, the venv only needs onnxruntime and the NVIDIA packages:
-numpy, SciPy, soundfile and tokenizers (about 225 MB of it) are the Python's alone.
-
-## Resume here
-
-Status 2026-11-11, end of the night: done on the processor, not yet run on the card.
-
-- Done and pushed: the crate (clippy clean with `-D warnings`), `tests/parity.py` (every group the same on the processor),
-  `tests/bench.py` and its numbers above, `sarina-voiced check`, the switch branch `voiced-rust-switch` in Labyrinth_OS (unit,
-  `sarina-git`, `docs/SARINA_VOICE.md`), Sarina's coordination log.
-- Next, with me at the PC (or over the stream; nothing needs a logout): the card check above (steps 1-3), then a few days of
-  Super+S with the drop-in, then merge the branch. Card numbers go into "Why Rust: measured" (time to first sentence, gaps,
-  card memory against the Python's).
-- Open questions for me: the chuckle (fix it, or leave it), and the pipeline's default once the card is measured.
-- Not done: fp16 on the processor was not compared (the card's dtype; its graphs differ only in the cache's type, which the
-  Rust passes through untouched); the 225 MB of the venv only the Python needs stays until the Python is removed.
+- The numbers in "Why Rust: measured" are from the processor. On the card, the time to the first sentence, the gaps and the
+  card memory have not been measured against the Python's, and neither has the pipeline (on with the card by default, off on
+  the processor, where it made sentences later).
+- fp16 on the processor (the card's dtype) was not compared; its graphs differ only in the cache's type, which the Rust passes
+  through untouched.
+- The voice venv still carries what only the Python service needs (numpy, SciPy, soundfile and tokenizers, about 225 MB);
+  the Rust service needs only onnxruntime and the NVIDIA packages from it.

@@ -135,7 +135,7 @@ before the switch (`git worktree add DIR 1c905fe`).
 
 Found while measuring: on my PC `~/.local/bin` comes first in the desktop's PATH, and it still held a Python
 `labyrinth-ask-sarina` (and a dev `sarina`) from 2026-11-10. So Super+S ran those, not `/usr/bin/sarina-voice`: the voice test
-of 2026-11-11 tried the old ask program. They are to move to a dated backup folder (Labyrinth_OS docs/SARINA_VOICE.md, "The Rust programs").
+of 2026-11-11 tried the old ask program. They have since been taken out of `~/.local/bin` (Labyrinth_OS docs/SARINA_VOICE.md, "The Rust programs").
 
 The first changes that make the Rust differ from the originals on purpose (each Python original changed the same way, the 72
 side-by-side tests pass again, except the one that checks the old wording):
@@ -148,7 +148,7 @@ side-by-side tests pass again, except the one that checks the old wording):
   tool) 15.3 s with thinking, 6.8 s without. In October thinking off made companion talk a little worse (A1 in the backlog);
   the answers are short now, and `LABYRINTH_VOICE_THINK=computer` or `on` in `sarina.env` brings it back.
 
-## Not ported yet
+## Not ported, on purpose
 
 - `-warm` runs while I am still talking, and `-setting` is not on the spoken path: no gain. (`labyrinth-sarina-ask` and
   `labyrinth-sarina-speak` are ported in Labyrinth_OS's labyrinth-tools.)

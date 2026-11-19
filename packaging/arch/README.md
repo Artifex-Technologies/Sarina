@@ -49,11 +49,10 @@ installs it. To enable the service afterward:
 sudo systemctl enable --now sarina-service
 ```
 
-## What's not done yet
+## Known limitations
 
 - `pkgver`/`source`/`sha256sums` in the PKGBUILD are placeholders — there's
-  no tagged GitHub release yet. Fill these in (and regenerate the sha256sum)
-  once a real `vX.Y.Z` tag exists.
+  no tagged GitHub release yet ("Publishing to the AUR" below says what a release fills in).
 - `license=('MPL2')` — chosen 2026-10-06 for the clean-room tree. The old derived
   code has been removed from git history (see `NOTICE.md`).
 - This PKGBUILD's Go build step (same flags, `CGO_ENABLED=0`) was run on

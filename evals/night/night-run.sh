@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# night-run.sh: one night of the training plan (docs/plans/TRAINING_PLAN_2026-10-28.md, private; section 0.0), started by the user timer
+# night-run.sh: one night of the training plan (docs/plans/records/TRAINING_PLAN_2026-10-28.md, private; section 0.0), started by the user timer
 # sarina-night.timer. The full eval runs are done here, not by a model session, so no tokens are spent waiting on them:
 #
 #   1. wait for an idle graphics card (up to 60 min; otherwise the night is skipped and the report says why)
@@ -18,7 +18,7 @@ CHECK=0; [[ ${1:-} == --check ]] && CHECK=1
 REPO=$HOME/Documents/Github/Sarina
 HERE=$REPO/evals/night
 STATE=${XDG_STATE_HOME:-$HOME/.local/state}/sarina-night
-REPORTS=$HOME/Documents/Github/Labyrinth_OS/docs/plans/sarina-evals
+REPORTS=$HOME/Documents/Github/Labyrinth_OS/docs/plans/records/evals
 MORNING=$HOME/Desktop/sarina-morning.md
 CLAUDE=${SARINA_NIGHT_CLAUDE:-$HOME/.local/bin/claude}
 MODEL=${SARINA_NIGHT_MODEL:-opus}
@@ -115,5 +115,5 @@ else say "the session left uncommitted changes: no run B on a tree that is not c
 
 # ---- 5. wrap-up and the morning report
 session "$HERE/prompt-wrap.md" $(( $(left) > 1500 ? 1500 : $(left) - 60 ))
-[[ -s $MORNING && $(stat -c %Y "$MORNING") -gt $(( $(date +%s) - 21600 )) ]] || morning "no report" "The wrap-up session wrote no morning report. Read the log and the last TEAM_BOARD entry."
+[[ -s $MORNING && $(stat -c %Y "$MORNING") -gt $(( $(date +%s) - 21600 )) ]] || morning "no report" "The wrap-up session wrote no morning report. Read the log and the newest entry in Sarina's docs/plans/LOG.md."
 say "night done"

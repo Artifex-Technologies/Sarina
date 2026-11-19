@@ -31,10 +31,8 @@ as a separate package with no code derived from the old core. Go reaches them th
 - Tests: `go/helpers/fakehelper` lets a test binary act as the helper (set `SARINA_HELPERS_PYTHON` to
   `os.Executable()` and `SARINA_FAKE_HELPER=1`; call `fakehelper.MaybeRun()` from `TestMain`). No Python needed.
 
-## Not done / caveats
+## Caveats
 
 - Not run against a real ONNX model or real audio hardware here; the Python tests use fakes, as the originals did.
 - `voice-chat` does not mirror the agent's backend/permission flags; they go through `--agent-arg=...`.
 - The prototype list exists twice (Python `classify.py`, Go `desktop/semantic.go`); the fingerprint check catches drift.
-- `docs/ECOSYSTEM.md` and the repo-level pyproject/PKGBUILD packaging of the helper were not touched (the Arch
-  package for `sarina-helpers` is a Chymaera_Linux follow-up).

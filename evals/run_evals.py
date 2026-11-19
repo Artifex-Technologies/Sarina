@@ -473,7 +473,7 @@ W = os.path.join  # (the write cases below name files under WORK)
 MD_RX = r"(?m)(\*\*|^\s*[-*] |^#|```)"
 
 CASES = [
-    dict(name="read-docs", group="comprehension", cwd=os.path.join(GH, "Labyrinth_OS", "docs", "plans"),
+    dict(name="read-docs", group="comprehension", cwd=os.path.join(GH, "Labyrinth_OS", "docs", "plans", "records"),
          prompt="According to TEAM.md, which Limbo sockets exist and which group may use each one? Answer as a short list.",
          must=[r"agent\.sock", r"limbo-agent", r"control\.sock", r"limbo-heimdall"], note="reads one document and answers exactly"),
     dict(name="count-files", group="comprehension", cwd=os.path.join(GH, "Limbo"),
@@ -1500,13 +1500,13 @@ def main(argv):
     ap.add_argument("--only", nargs="*", help="run only these cases")
     ap.add_argument("--group", nargs="+", metavar="G", help="run only the cases of these groups (like --only, the ladder does not count it)")
     ap.add_argument("--list", action="store_true")
-    ap.add_argument("--out", help="the report (default: Labyrinth_OS/docs/plans/sarina-evals/DATE-TIME.md, the owner's private plans; with --resume, the cut-off run's)")
+    ap.add_argument("--out", help="the report (default: Labyrinth_OS/docs/plans/records/evals/DATE-TIME.md, the owner's private plans; with --resume, the cut-off run's)")
     ap.add_argument("--timeout", type=int, default=600)
     ap.add_argument("--resume", metavar="PARTIAL", help="finish a run that was cut off from its <out>.partial.jsonl (the cases in it are not run again)")
     ap.add_argument("--allow-stale", action="store_true", help="measure a binary that is not HEAD (the report and JSON say STALE)")
     a = ap.parse_args(argv[1:])
     if not a.out:
-        a.out = (re.sub(r"\.partial\.jsonl$", "", a.resume) + ".md") if a.resume else os.path.join(GH, "Labyrinth_OS", "docs", "plans", "sarina-evals", time.strftime("%Y-%m-%d-%H%M") + ".md")
+        a.out = (re.sub(r"\.partial\.jsonl$", "", a.resume) + ".md") if a.resume else os.path.join(GH, "Labyrinth_OS", "docs", "plans", "records", "evals", time.strftime("%Y-%m-%d-%H%M") + ".md")
     if a.list:
         for c in CASES:
             print("%-22s %-14s %s" % (c["name"], c["group"], c.get("note", "")))
