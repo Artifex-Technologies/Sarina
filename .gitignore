@@ -43,8 +43,8 @@ tools/voice_clone/*
 # Local progress notes
 progress.md
 
-# My private plans (a link to a private checkout on my computers)
-docs/plans/
+# My private plans (a link to a private checkout on my computers; no trailing slash, so the link itself matches)
+/docs/plans
 
 # Audio is personal/private -- never committed, anywhere in the tree
 *.wav
