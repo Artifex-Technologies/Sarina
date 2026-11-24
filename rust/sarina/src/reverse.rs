@@ -277,8 +277,11 @@ fn rule_tool() -> Tool {
             let s = |k: &str| gotext::trim_space(&sarg(a, k)).to_owned();
             match draft_rule(&gotext::to_lower(&s("sample_sha256")), &s("rule"), &s("note")) {
                 Err(e) => crate::tools::files::fail(e),
-                Ok((id, next)) => Output {
-                    content: format!("Draft {id} is with Heimdall. It is not active: the owner tests it first ({next})."),
+                Ok((id, next, warnings)) => Output {
+                    content: format!(
+                        "Draft {id} is with Heimdall. It is not active: the owner tests it first ({next}).{}",
+                        draft_notes(&warnings)
+                    ),
                     metadata: BTreeMap::from([
                         ("action".to_string(), Any::String("draft_yara_rule".into())),
                         ("id".to_string(), Any::String(id)),
@@ -290,9 +293,19 @@ fn rule_tool() -> Tool {
     )
 }
 
+/// Go's `draftNotes`: Heimdall's warnings on a draft (its lint's and YARA-X's), one per line under a heading; "" when it gave
+/// none.
+pub fn draft_notes(warnings: &[String]) -> String {
+    let lines: String = warnings.iter().map(|w| gotext::trim_space(w)).filter(|w| !w.is_empty()).map(|w| format!("\n- {w}")).collect();
+    if lines.is_empty() {
+        return String::new();
+    }
+    format!("\nHeimdall's notes on it (the draft is kept):{lines}")
+}
+
 /// Go's `heimdall.DraftRule`: `POST /v1/rules/drafts` on Heimdall (the scheme and host of HEIMDALL_REVIEW_URL, else
-/// 127.0.0.1:8930); the draft's id and the owner's next step.
-pub fn draft_rule(sample_sha256: &str, rule: &str, note: &str) -> Result<(String, String), String> {
+/// 127.0.0.1:8930); the draft's id, the owner's next step and Heimdall's warnings on it.
+pub fn draft_rule(sample_sha256: &str, rule: &str, note: &str) -> Result<(String, String, Vec<String>), String> {
     let mut base = "http://127.0.0.1:8930".to_string();
     let getenv = |k: &str| std::env::var(k).unwrap_or_default();
     if let Some(u) = crate::gourl::parse(&crate::heimdall::url(&getenv)) {
@@ -314,19 +327,31 @@ pub fn draft_rule(sample_sha256: &str, rule: &str, note: &str) -> Result<(String
         return Err(format!("Heimdall answered {}: {}", reply.status_text, lossy(gotext::trim_space_bytes(&reply.body))));
     }
     use crate::gostruct::{unmarshal, Field, Ty, Val};
-    static DRAFT: Ty = Ty::Struct("struct { ID string; Next string }", "", &[Field("ID", &Ty::Str), Field("Next", &Ty::Str)]);
+    static DRAFT: Ty = Ty::Struct(
+        "struct { ID string; Next string; Warnings []string }",
+        "",
+        &[Field("ID", &Ty::Str), Field("Next", &Ty::Str), Field("Warnings", &Ty::Slice(&Ty::Str))],
+    );
     let (v, err) = unmarshal(&DRAFT, &reply.body);
-    let (id, next) = match v {
-        Val::Struct(f) => match (&f[0], &f[1]) {
-            (Val::Str(i), Val::Str(n)) => (i.clone(), n.clone()),
-            _ => (String::new(), String::new()),
+    let (id, next, warnings) = match v {
+        Val::Struct(f) => match (&f[0], &f[1], &f[2]) {
+            (Val::Str(i), Val::Str(n), w) => {
+                let w = match w {
+                    Val::Slice(Some(items)) => {
+                        items.iter().filter_map(|x| if let Val::Str(s) = x { Some(s.clone()) } else { None }).collect()
+                    }
+                    _ => vec![],
+                };
+                (i.clone(), n.clone(), w)
+            }
+            _ => (String::new(), String::new(), vec![]),
         },
-        _ => (String::new(), String::new()),
+        _ => (String::new(), String::new(), vec![]),
     };
     if err.is_some() || id.is_empty() {
         return Err("Heimdall's answer could not be read".into());
     }
-    Ok((id, next))
+    Ok((id, next, warnings))
 }
 
 fn stage_tool() -> Tool {
@@ -726,4 +751,21 @@ pub fn own_functions(nm: &[u8]) -> String {
 /// Go's `cutRunes`: `string([]rune(s)[:n])` when s has more than n characters.
 pub fn cut_runes(s: &[u8], n: usize) -> Option<Vec<u8>> {
     crate::sysinfo::rune_prefix(s, n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Go's TestDraftNotes (SAR-5).
+    #[test]
+    fn heimdalls_warnings_on_a_draft_are_passed_on() {
+        let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(draft_notes(&[]), "");
+        assert_eq!(draft_notes(&v(&[" ", ""])), "");
+        assert_eq!(
+            draft_notes(&v(&["the string $a is short", " YARA-X: slow pattern\n"])),
+            "\nHeimdall's notes on it (the draft is kept):\n- the string $a is short\n- YARA-X: slow pattern"
+        );
+    }
 }

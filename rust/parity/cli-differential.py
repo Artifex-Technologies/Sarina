@@ -3336,8 +3336,13 @@ def reverse_cases():
     # draft_yara_rule: a draft for Heimdall (the stand-in), never active until the owner approves it
     draft = {"sample_sha256": " ABCDEF0123 ", "rule": " rule x { strings: $a = \"<b>\" condition: $a } ", "note": " a note & more \u2028 "}
     ok = resp({"id": "draft-1", "next": "sudo heimdalld immunity rule test draft-1"})
+    # Heimdall's warnings on a draft (its lint's and YARA-X's) are passed on (SAR-5); a blank one is dropped
+    warned = resp({"id": "draft-2", "next": "sudo heimdalld immunity rule test draft-2", "status": "draft",
+                   "warnings": ["the string $a is short", " ", " YARA-X: slow pattern \u2028"]})
     for name, answer in [("accepted", ok), ("refused", resp("no such sample\n", "404 Not Found", ctype="text/plain")),
-                         ("not JSON", resp("<html>")), ("no id", resp({"next": "x"})), ("server error", resp("", "500 Internal Server Error"))]:
+                         ("not JSON", resp("<html>")), ("no id", resp({"next": "x"})), ("server error", resp("", "500 Internal Server Error")),
+                         ("with warnings", warned), ("warnings not text", resp({"id": "draft-3", "next": "x", "warnings": [1, 2]})),
+                         ("warnings null", resp({"id": "draft-4", "next": "x", "warnings": None}))]:
         add(f"draft_yara_rule {name}", ["chat", "draft it"], files=base, routes={"/v1/rules/drafts": answer},
             http=call("draft_yara_rule", draft))
     add("draft_yara_rule base from HEIMDALL_REVIEW_URL", ["chat", "draft it"], files=base, env={"HEIMDALL_REVIEW_URL": "{H}/some/path?q=1"},

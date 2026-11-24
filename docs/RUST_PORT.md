@@ -765,7 +765,9 @@ relative, `..`, missing; LABYRINTH_REA_SAMPLES and LABYRINTH_REA; labyrinth-rea 
 among the other sets in the request. `stage_binary` on the made-up home's program folders (a copy named by its SHA-256,
 read-only), links in and out, folders, missing files, outside the roots, twice, without write permission.
 `draft_yara_rule` accepted, refused, an answer that is not JSON or has no id, a server error, the base taken from
-HEIMDALL_REVIEW_URL, Heimdall unreachable (the rule's `<`, `&` and U+2028 escaped as Go's json.Marshal escapes them).
+HEIMDALL_REVIEW_URL, Heimdall unreachable (the rule's `<`, `&` and U+2028 escaped as Go's json.Marshal escapes them);
+Heimdall's warnings on the draft passed on one per line (a blank one dropped, U+2028 trimmed as Go's TrimSpace trims it),
+warnings that are not text (the answer cannot be read) and `null` (2026-11-24, SAR-5).
 testdata/parity/reverse.json: `net.ParseIP` and `SplitHostPort` on 59 inputs, the network map of 15 texts (bytes that are
 not UTF-8, exactly 61 and 70 entries), the condensed overview, nm's functions (40, 41, 45), the calls, the cut: 101
 comparisons. Mutation run: 11 of 12 caught after the boundaries were added, the other equivalent.

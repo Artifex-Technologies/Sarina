@@ -298,14 +298,28 @@ func ruleTool() tools.Tool {
 		},
 		Handler: func(ctx context.Context, a map[string]any, tc *tools.Context) (string, map[string]any, error) {
 			str := func(k string) string { v, _ := a[k].(string); return strings.TrimSpace(v) }
-			id, next, err := heimdall.DraftRule(strings.ToLower(str("sample_sha256")), str("rule"), str("note"))
+			id, next, warnings, err := heimdall.DraftRule(strings.ToLower(str("sample_sha256")), str("rule"), str("note"))
 			if err != nil {
 				return "", nil, err
 			}
-			return "Draft " + id + " is with Heimdall. It is not active: the owner tests it first (" + next + ").",
+			return "Draft " + id + " is with Heimdall. It is not active: the owner tests it first (" + next + ")." + draftNotes(warnings),
 				map[string]any{"action": "draft_yara_rule", "id": id}, nil
 		},
 	}
+}
+
+// draftNotes is Heimdall's warnings on a draft (its lint's and YARA-X's), one per line under a heading; "" when it gave none.
+func draftNotes(warnings []string) string {
+	var b strings.Builder
+	for _, w := range warnings {
+		if w = strings.TrimSpace(w); w != "" {
+			b.WriteString("\n- " + w)
+		}
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "\nHeimdall's notes on it (the draft is kept):" + b.String()
 }
 
 func stageTool() tools.Tool {

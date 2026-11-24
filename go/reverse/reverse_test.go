@@ -252,3 +252,19 @@ func TestSimilarRunsOnlyWithALibraryAndShowsOnlyTheReport(t *testing.T) {
 		t.Errorf("throwaway folders left: %v", left)
 	}
 }
+
+// Heimdall's warnings on a draft are passed on, one per line; blank ones are dropped and none gives no heading (SAR-5).
+func TestDraftNotes(t *testing.T) {
+	for _, c := range []struct {
+		in   []string
+		want string
+	}{
+		{nil, ""},
+		{[]string{" ", ""}, ""},
+		{[]string{"the string $a is short", " YARA-X: slow pattern\n"}, "\nHeimdall's notes on it (the draft is kept):\n- the string $a is short\n- YARA-X: slow pattern"},
+	} {
+		if got := draftNotes(c.in); got != c.want {
+			t.Errorf("draftNotes(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
