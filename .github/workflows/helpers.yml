@@ -16,11 +16,14 @@ jobs:
       matrix:
         runner: [ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: packaging/helpers
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0, pinned by commit
+        with:
+          persist-credentials: false
       - run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets --features parity -- -D warnings

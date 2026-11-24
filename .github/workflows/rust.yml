@@ -7,14 +7,19 @@ on:
     paths: ["rust/**", "go/**", "testdata/**", ".github/workflows/rust.yml"]
   pull_request:
     paths: ["rust/**", "go/**", "testdata/**", ".github/workflows/rust.yml"]
+  schedule:
+    - cron: "29 5 * * 1" # the audit weekly, for advisories published after the last change
 permissions:
   contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0, pinned by commit
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0, pinned by commit
         with:
           go-version: "1.27"
       - name: the Go fixtures are current
@@ -48,3 +53,18 @@ jobs:
           (cd go && go build -o "$RUNNER_TEMP/sarina-tone-go" ./cmd/sarina-tone)
           (cd rust && cargo build --locked --bin sarina-tone)
           python3 -I rust/parity/tone-differential.py --go "$RUNNER_TEMP/sarina-tone-go" --rs rust/target/debug/sarina-tone
+  # every Rust lock file of the repository against RustSec's advisories
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0, pinned by commit
+        with:
+          persist-credentials: false
+      - run: cargo install --locked cargo-audit
+      # RUSTSEC-2024-0436: paste is unmaintained (no vulnerability); it comes with tokenizers in the ML helpers and the
+      # voice service. Revisit when tokenizers drops it.
+      - run: |
+          for lock in rust/Cargo.lock packaging/helpers/Cargo.lock packaging/voice/Cargo.lock packaging/voiced/Cargo.lock; do
+            cargo audit --file "$lock" --deny warnings --ignore RUSTSEC-2024-0436
+          done
