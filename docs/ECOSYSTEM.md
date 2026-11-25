@@ -405,6 +405,16 @@ handoff note (docs/plans/LOG.md, private) and a matching change in Heimdall.
 (The legacy Python `session_store.py` layout, a flat `messages` list directly
 under `.port_sessions/`, is no longer what Heimdall reads.)
 
+Since 2026-11-24 (Heimdall's HEI-9) Heimdall also reads, by name, the
+arguments of the file-writing tool calls in an assistant message:
+`write_file` and `vault_write` (`path`, `content`), `edit_file` (`path`,
+`new_text`) and `forge_write` (`name`, `files[].path`, `files[].content`).
+Its `agent-watermark` detector looks through the written text for the marks
+`stego_inspect`'s watermark scan finds (invisible characters, variation
+selectors, look-alike letters, trailing whitespace that spells something). A
+renamed tool or argument is simply not seen there, so renaming one of these is
+a contract change on both sides.
+
 Heimdall never writes into the session folder and never opens a Sarina
 process's sockets or files other than this one directory.
 

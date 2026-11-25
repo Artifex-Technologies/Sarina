@@ -20,7 +20,8 @@ commit, flag the commit `CONTRACT:`, and tell the other side.
 
 - **What:** the agent's sessions as JSON in the shared folder `/var/lib/sarina/sessions/*.json` (the service writes them),
   messages as objects with a `role`; the API key is never written. `sarina doctor` checks the shape.
-- **Who uses it:** Heimdall polls them (`agent_session_dir` in its config).
+- **Who uses it:** Heimdall polls them (`agent_session_dir` in its config), and reads the file-writing tool calls'
+  arguments by name (`write_file`, `vault_write`, `edit_file`, `forge_write`) for its watermark scan.
 - **Where:** `rust/sarina/src/session/`. ECOSYSTEM.md section 4a.
 
 ## The integration service (port 8899)
