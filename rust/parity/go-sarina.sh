@@ -4,7 +4,8 @@
 # VERSION is put over the old one, so both builds report the same version (`sarina version`, the MCP handshake). Nothing
 # is installed. Needs Go 1.27 and the full history (a shallow clone: git fetch --depth=1 origin GO_REV first).
 #
-#   sh rust/parity/go-sarina.sh /tmp/sarina-go                    # the core (cli-, service- and gui-differential.py)
+#   sh rust/parity/go-sarina.sh /tmp/sarina-go                    # the core (cli-, service- and gui-differential.py;
+#                                                                 # name it sarina-go: voice-chat's cases normalise that name)
 #   sh rust/parity/go-sarina.sh /tmp/sarina-tone-go sarina-tone   # sarina-tone (tone-differential.py, run by hand)
 #
 # The fixtures in testdata/parity and rust/sarina/src/tools/defs.json were written by that commit's Go tests; to write
