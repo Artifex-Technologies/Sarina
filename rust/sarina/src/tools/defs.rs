@@ -1,8 +1,8 @@
 //! The tool definitions the model sees on every request (name, description, parameter schema), with each tool's
 //! permission and plan-mode class, for every built-in and provider tool of the Go build with its optional tool sets on.
-//! `defs.json` is written by go/cmd/sarina's parity test from the Go tools themselves (`SARINA_PARITY_UPDATE=1 go test
-//! ./cmd/sarina -run ParityToolDefs`), so the two cannot drift; testdata/parity/tooldefs.json holds what Go sends for
-//! each, which tests/parity_tooldefs.rs compares with what this port writes. Which of them a session offers (the
+//! `defs.json` was written by go/cmd/sarina's parity test from the Go tools themselves (the tag go-final; a tool added
+//! since is added here by hand); testdata/parity/tooldefs.json holds what Go sent for each, which
+//! tests/parity_tooldefs.rs compares with what this port writes. Which of them a session offers (the
 //! SARINA_CRYPTO, SARINA_MATH, ... switches and their order) comes with the providers.
 
 use super::registry::{Class, Permission};

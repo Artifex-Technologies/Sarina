@@ -894,10 +894,12 @@ def other_cases():
     return cs
 
 
-# the toolchain a build names in `sarina version` (Go's `go1.27.4`, sarina-rs's `rustc 1.x.y`, under the same key): the
-# one part of the answer that differs on purpose (docs/RUST_PORT.md "Differences"); commit, time and the uncommitted flag
-# are compared as they are, so both builds must come from the same tree
-TOOLCHAIN_NORM = [(r'go1\.[0-9][^)"]*|rustc [0-9][^)"]*', "TOOLCHAIN")]
+# the parts of `sarina version` that differ on purpose (docs/RUST_PORT.md "Differences", "The Go side"): the toolchain
+# (Go's `go1.27.4`, sarina-rs's `rustc 1.x.y`, under the same key), and the build stamp (commit, time, the uncommitted
+# flag): the Go referee is built from an archive of the pinned commit and names none
+TOOLCHAIN_NORM = [(r'go1\.[0-9][^)"]*|rustc [0-9][^)"]*', "TOOLCHAIN"),
+                  (r'\(commit [^,)]*(?:, committed [^,)]*)?', "(commit STAMP"),
+                  (r'"commit":"[^"]*","time":"[^"]*","modified":(?:true|false)', '"commit":STAMP')]
 
 
 def usage_cases():

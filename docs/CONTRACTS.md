@@ -8,7 +8,7 @@ commit, flag the commit `CONTRACT:`, and tell the other side.
 ## The package's inputs (`sarina-git`)
 
 - **What:** Labyrinth_OS's recipe builds this repository as it is. `rust/`, `packaging/{arch,helpers,voice,voiced,skills}`,
-  `README.md` and `LICENSE` stay where they are (and `go/` while the rollback copy is built).
+  `README.md` and `LICENSE` stay where they are.
   The binary answers to `sarina`, `sarina-gui` and `sarina-service`; the package also installs `sarina-tone`, `sarina-voice`,
   `sarina-voiced` and `/usr/lib/sarina/sarina-helpers`. A new run-time dependency must exist in Arch's repositories.
 - **Who uses it:** Labyrinth_OS (`packages/pkgbuilds/sarina-git`, both copies), LykanOS (installs the package from

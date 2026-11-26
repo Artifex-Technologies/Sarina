@@ -17,7 +17,7 @@ equal.
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **done** (2026-11-12 and -13): the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **done** (2026-11-12 to -17): `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego on 2026-11-16 (every part proved against Go fixtures, then wired: `sarina crypto` and `sarina stego` in sarina-rs, the seven tools and both prefetches; `needs_go` no longer names SARINA_CRYPTO), the vault on 2026-11-16 (reading, recall with and without meaning, writing, its tools and commands: `needs_go` no longer names SARINA_VAULT), daily (`sarina trends`, `sarina daily-report`); insight on 2026-11-16 and -17 (`sarina vault-tidy`; `sarina reflect` and `sarina vault-ingest`, which ask the model, under SARINA_RS_TRY); the forge on 2026-11-17 (its tools and forge-list, forge-approve, forge-remove): every optional set is ported and `needs_go` is gone |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), and `mcp` and `agents` with them, then `version` and the usage (no command, `help`, an unknown one: "The last Go commands", 7), so **no command reaches the Go build any more**, and since the same day **nothing does**: a command with an argument that is not UTF-8 is refused ("The switch", 2026-11-18 (8)); the evals measure sarina-rs; the Go build goes after the rollback week, ~2026-11-25 and Labyrinth's `sarina-rs-switch` is merged; begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; moved on 2026-11-18); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), and `mcp` and `agents` with them, then `version` and the usage (no command, `help`, an unknown one: "The last Go commands", 7), so **no command reaches the Go build any more**, and since the same day **nothing does**: a command with an argument that is not UTF-8 is refused ("The switch", 2026-11-18 (8)); the evals measure sarina-rs; the Go build and its source left the packages and the tree on 2026-11-26 ("The Go side"); begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; moved on 2026-11-18); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -174,10 +174,9 @@ that are not UTF-8 as `\xHH`), exit status 2, nothing run (no request, no file, 
 lock still comes first, and no command, `help` and an unknown command keep Go's answers (a `help` or an unknown name
 with such bytes after it too). The hand-over code is gone with it (`hand_over`, `SARINA_GO_BINARY`, `SARINA_RS_NO_GO`,
 the SIGPIPE record kept for the `execve`): sarina-rs no longer knows where a Go build is. sarina-rs needs no Go build at
-run time, so the recipes (packaging/arch/PKGBUILD, Labyrinth's two sarina-git copies) keep building and installing
-`/usr/lib/sarina/sarina` only as the rollback copy until the Go code is deleted (~2026-11-25); nothing runs it. Their
-check() still runs `tests/sarina_rs.rs`, whose name stays (its comment there still says "the hand-over to the Go build":
-changed with the deletion).
+run time; the recipes (packaging/arch/PKGBUILD, Labyrinth's two sarina-git copies) installed the Go build at
+`/usr/lib/sarina/sarina` for one more week, which nothing ran, and stopped on 2026-11-26 when the Go code was
+deleted ("The Go side"). Their check() still runs `tests/sarina_rs.rs`.
 
 ### The plan for `sarina-rs` (written 2026-11-12; the binary is built once the agent loop is equal)
 
@@ -655,7 +654,7 @@ argument; `version`, `note` with a vault Go writes into, `vault-init`, `chat` wi
 `--rs` naming the same file; sarina-rs has no way to reach a Go build, so the Go build is only ever the reference.
 
 ```bash
-(cd go && go build -o /tmp/sarina-go ./cmd/sarina) && (cd rust && cargo build -j4 --offline --bin sarina-rs)
+sh rust/parity/go-sarina.sh /tmp/sarina-go && (cd rust && cargo build -j4 --offline --bin sarina-rs)
 python3 -I rust/parity/cli-differential.py --go /tmp/sarina-go --rs rust/target/debug/sarina-rs [--only NAME] [--show]
 ```
 
@@ -1165,8 +1164,9 @@ whisper.cpp; faster-whisper is not used.
 The last Go program installed: `go/cmd/sarina-tone` with `go/tone` (about 620 lines), how a spoken question sounded
 (pace, pitch, loudness, pauses, brightness) against the voice's own usual, for the spoken-question path. It is now the
 Rust build's second binary, `sarina-tone`, installed as `/usr/bin/sarina-tone` by all three recipes; the Go one is no
-longer built or installed. Its source (`go/tone`, `go/cmd/sarina-tone`, `tone_test.go`) stays in the repository as the
-reference the proof runs against until the Go code is deleted (~2026-11-25), and goes with it.
+longer built or installed. Its source (`go/tone`, `go/cmd/sarina-tone`, `tone_test.go`) went with the rest of the Go code
+on 2026-11-26; `testdata/parity/tone.json` stays (its writer is in the tag `go-final`), and the differential runs by hand
+against the Go sarina-tone of that commit (`sh rust/parity/go-sarina.sh OUT sarina-tone`); CI no longer runs it.
 
 **Where, and why there:** a `[[bin]]` in `rust/sarina` beside `sarina-rs`, not a crate of its own like packaging/voice:
 everything it needs is already proved there (Go's JSON reading into a struct with its tolerance, `gojson`'s float and
@@ -1195,7 +1195,7 @@ written through `.tmp` and a rename; old files read as Go read them.
   line limit of Go's bufio.Scanner on both sides, 605 entries, a byte order mark): what is read and the file after one
   append; Pattern for 768 histories in 8 made-up zones (summer time starting at midnight, half-hour and 45-minute
   offsets) at 16 times each, the 7- and 14-day edges, midnight and the evening hours exactly.
-- `rust/parity/tone-differential.py` (CI runs it): the Go and Rust programs side by side, 207 cases (349 runs), no
+- `rust/parity/tone-differential.py` (CI ran it until the Go code was deleted; by hand since): the Go and Rust programs side by side, 207 cases (349 runs), no
   difference: Go's flag syntax and messages (unknown flags, bad booleans, `-h`, `--`, bytes that are not UTF-8, the
   usage with odd $HOME values and program names), `--forget` (folders, links, errors, no $HOME), `--pattern` (40 made-up
   histories in five real zones and odd files), every recording kind with and without learning, a voice learned over 14
@@ -1279,6 +1279,24 @@ not a leak); my guess is glibc's per-thread malloc arenas (a thread per connecti
 interactive or one-shot `sarina` command starts in about a third of the time and half the memory; the model's own time
 (seconds) is untouched by either build.
 
+## The Go side
+
+The Go core left the tree on 2026-11-26, after one more week in which the package still installed it and nothing ran
+it. Its last commit is the tag `go-final` (GO_REV in `rust/parity/go-sarina.sh`), where it stays browsable;
+there is no separate Go repository. That commit's Go also starts only `sarina-helpers` (the Python helper went in the same
+commit), so the referee and sarina-rs agree there too.
+
+- **The referee:** `sh rust/parity/go-sarina.sh OUT` builds that commit's `go/cmd/sarina` with the current `VERSION` put over
+  the old one (`OUT sarina-tone` builds `go/cmd/sarina-tone`); nothing is installed. It needs Go 1.27 and the full history
+  (CI checks out with `fetch-depth: 0`). CI builds it for the CLI, service and GUI differentials; the sarina-tone
+  differential runs by hand.
+- **The fixtures** in `testdata/parity/` and `rust/sarina/src/tools/defs.json` were written by that commit's Go tests and are
+  read as they are by the Rust tests. To write one again after a deliberate change, check `go-final` out elsewhere and run
+  `SARINA_PARITY_UPDATE=1 go test ./... -run Parity` in its `go/`, then copy the file over; a change Go cannot make is a
+  Rust test of its own instead.
+- **On purpose:** the referee is built from an archive of that commit, so its `sarina version` names no commit (`unknown`,
+  no time); the CLI differential's version cases compare everything else (the build stamp is the Rust unit tests').
+
 ## Running the tests
 
 Every build, test and fixture run goes under a memory cap (a fixture writer once took 26 GB and the kernel's OOM killer
@@ -1289,9 +1307,11 @@ CAP="systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 nice -n 19
 cd rust
 $CAP cargo test -j4 --offline                 # every fixture, the properties, the fuzz bodies
 $CAP cargo clippy -j4 --offline --all-targets -- -D warnings
-cd ../go && $CAP go test -p 4 ./... -run Parity               # the fixtures are current with the Go code
-$CAP env SARINA_PARITY_UPDATE=1 go test -p 4 ./... -run Parity  # after a deliberate change: rewrite them, review the diff
-cd .. && go -C go build -o /tmp/sarina-tone-go ./cmd/sarina-tone && (cd rust && cargo build --bin sarina-tone)
+cd .. && sh rust/parity/go-sarina.sh /tmp/sarina-go       # the Go referee, from the pinned commit ("The Go side")
+$CAP python3 -I rust/parity/cli-differential.py --go /tmp/sarina-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-rs"
+$CAP python3 -I rust/parity/service-differential.py --go /tmp/sarina-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-rs"
+$CAP python3 -I rust/parity/gui-differential.py --go /tmp/sarina-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-rs"
+sh rust/parity/go-sarina.sh /tmp/sarina-tone-go sarina-tone && (cd rust && cargo build --bin sarina-tone)
 $CAP python3 -I rust/parity/tone-differential.py --go /tmp/sarina-tone-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-tone"
 ```
 

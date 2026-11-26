@@ -19,4 +19,4 @@ scripts).
 
 Also ported on 2026-11-18, proved for equal answers but not timed: the ML and voice helper (the Python package
 `sarina_helpers` → `sarina-helpers`, [packaging/helpers](../packaging/helpers/README.md)) and `sarina-tone` (Go → Rust, RUST_PORT.md
-"sarina-tone"). The Go core stays installed as a rollback copy until about 2026-11-25; the Python package was removed after its week.
+"sarina-tone"). The Go core and the Python package were removed on 2026-11-26.
