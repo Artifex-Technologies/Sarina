@@ -656,7 +656,7 @@ security agent. Do not reimplement.
 ESSENTIAL set: `agent`, `agent-chat`, `agent-resume`, `agent-bg` family (one
 copy, not two), `agent-prompt`, `agents*`, `memory-status`, `memory-show`,
 `memory-review*`, `session-search`, `chymaera-*`, `fleet-*`, `limbo-*`, `voice-chat`
-(via the Python helper), `desktop-audit` (via the Python helper); slash mechanism
+(via the ML helper), `desktop-audit` (via the ML helper); slash mechanism
 plus `help, compact, model, permissions, tools, status, cost, stats, export, diff,
 rewind, add-dir, doctor, version, voice, config, tasks, plan, init, btw, commit,
 exit/quit`. Everything marked DROP-CANDIDATE in sections 3, 5 and 6 can be left out

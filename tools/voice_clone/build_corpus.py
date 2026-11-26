@@ -1,7 +1,7 @@
 """Build a synthetic training corpus for fine-tuning a cloned Piper voice.
 
 Pipeline: for each sentence in sentences.txt, synthesize base audio with
-Piper's own stock voice (reusing sarina_helpers.tts.TextToSpeech), then run
+Piper's own stock voice (piper_tts.TextToSpeech, next to this file), then run
 OpenVoice's tone color conversion to reshape it toward the reference
 speaker(s) in samples/. Writes corpus/wavs/<NNNN>.wav and
 corpus/metadata.csv in the `filename.wav|text` format Piper's own trainer
@@ -75,7 +75,7 @@ def build_corpus(
     it toward `target_se`, and write the result plus a metadata.csv line.
 
     `tts` needs only a `.synthesize(text) -> bytes` method (matching
-    sarina_helpers.tts.TextToSpeech) and `converter` only a `.convert(...)`
+    piper_tts.TextToSpeech) and `converter` only a `.convert(...)`
     method (matching openvoice.api.ToneColorConverter) - both are injected
     so this function can be tested without loading a real model.
     """
@@ -111,9 +111,9 @@ def _load_real_dependencies(args: argparse.Namespace):
     from openvoice import se_extractor
     from openvoice.api import ToneColorConverter
 
-    # Sarina's own Piper wrapper, from the helper package (python/sarina_helpers); found in place, nothing to install.
-    sys.path.insert(0, str(_SCRIPT_DIR.parents[1] / 'python' / 'sarina_helpers'))
-    from sarina_helpers.tts import TextToSpeech
+    # Piper, a sentence at a time (piper_tts.py, next to this file)
+    sys.path.insert(0, str(_SCRIPT_DIR))
+    from piper_tts import TextToSpeech
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     converter = ToneColorConverter(str(args.converter_config), device=device)

@@ -1,11 +1,11 @@
-//! testdata/parity/helpers.json: the helper client against the same shell stand-in for the interpreter the Go test runs
-//! (start, classify, group, errors, damaged and over-long answers, a helper that dies, Close, the requests sent), and
-//! Available and Passthrough.
+//! testdata/parity/helpers.json: the helper client against the same shell stand-in for sarina-helpers the Go test ran
+//! (start, classify, group, errors, damaged and over-long answers, a helper that dies or is not there, Close, the requests
+//! sent), and Available and Passthrough.
 
 mod common;
 
 use sarina::goany::Any;
-use sarina::helpers::{available, passthrough, Server, PATH_ENV, PYTHON_ENV};
+use sarina::helpers::{available, passthrough, Server, BIN_ENV};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
@@ -19,12 +19,13 @@ fn helpers_matches_go() {
     let rs = root.to_str().unwrap().to_string();
     let cases = common::cases("helpers");
     let scripts = &cases.iter().find(|c| c["fn"] == "scripts").unwrap()["in"];
-    for (name, key) in [("python", "python"), ("nomodule", "nomodule")] {
+    for (name, key) in [("sarina-helpers", "sarina-helpers"), ("other", "other")] {
         let p = root.join(name);
         std::fs::write(&p, scripts[key].as_str().unwrap()).unwrap();
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
-    let py = format!("{rs}/python");
+    let helper = format!("{rs}/sarina-helpers");
+    let missing = format!("{rs}/no-such-helper");
     let clean = |s: &str| s.replace(&rs, "{DIR}");
     for c in &cases {
         let input = &c["in"];
@@ -36,9 +37,9 @@ fn helpers_matches_go() {
                 let replies: Vec<String> =
                     input["replies"].as_array().unwrap().iter().map(|r| String::from_utf8(common::bytes(r)).unwrap()).collect();
                 std::fs::write(dir.join("replies"), format!("{}\n", replies.join("\n"))).unwrap();
+                let bin = if input["dir"] == "missing" { missing.clone() } else { helper.clone() };
                 let getenv = |k: &str| match k {
-                    PYTHON_ENV => py.clone(),
-                    PATH_ENV => String::new(),
+                    BIN_ENV => bin.clone(),
                     other => std::env::var(other).unwrap_or_default(),
                 };
                 let r = Server::start_with(dir.to_str().unwrap(), input["maxLine"].as_u64().unwrap() as usize, &getenv);
@@ -77,12 +78,11 @@ fn helpers_matches_go() {
                 Value::Object(out)
             }
             "passthrough" => {
-                let python = input[0].as_str().unwrap().replace("{DIR}", &rs);
+                let bin = input[0].as_str().unwrap().replace("{DIR}", &rs);
                 let args: Vec<String> = input[1].as_array().unwrap().iter().map(|a| a.as_str().unwrap().to_string()).collect();
                 std::env::set_var("FAKE_EXIT", input[2].as_str().unwrap());
                 let getenv = |k: &str| match k {
-                    PYTHON_ENV => python.clone(),
-                    PATH_ENV => String::new(),
+                    BIN_ENV => bin.clone(),
                     other => std::env::var(other).unwrap_or_default(),
                 };
                 let (mut sin, mut sout, mut serr) = (std::io::empty(), Vec::new(), Vec::new());

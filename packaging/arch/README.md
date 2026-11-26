@@ -7,19 +7,13 @@ there is a manual step described below.
 
 Contents:
 
-- `PKGBUILD` — builds the Rust build (`rust/`, `sarina-rs`) and the Go build
-  (`go/cmd/sarina`): the Rust one is `/usr/bin/sarina`, with `sarina-gui` and
-  `sarina-service` as symlinks (the command comes from the name it was started
-  as); it runs every command itself and hands nothing to the Go build (since
-  2026-11-18; a command with an argument that is not UTF-8 is refused). The Go
-  build is still installed at `/usr/lib/sarina/sarina` only as the rollback copy
-  (docs/RUST_PORT.md "The switch"; it goes after the rollback week). Also builds
+- `PKGBUILD` — builds the Rust core (`rust/`, `sarina-rs`) as `/usr/bin/sarina`,
+  with `sarina-gui` and `sarina-service` as symlinks (the command comes from the
+  name it was started as). Also builds
   and installs `sarina-tone` (`/usr/bin/sarina-tone`, the Rust build's second program)
   and the optional ML/voice helper `sarina-helpers` (Rust, `packaging/helpers`,
   `/usr/lib/sarina/sarina-helpers`; it needs `onnxruntime-cpu`, and for voice-chat
-  `whisper-cpp`, `espeak-ng` and `alsa-utils`). The Python helper wheel
-  (`python/sarina_helpers`) is still installed for the rollback week
-  (`SARINA_HELPERS=python`).
+  `whisper-cpp`, `espeak-ng` and `alsa-utils`).
 - The distros do not use this PKGBUILD: Labyrinth OS and LykanOS install
   `sarina-git`, built by Labyrinth_OS's recipe (`packages/pkgbuilds/sarina-git`),
   which also builds `sarina-voice` and `sarina-voiced`.

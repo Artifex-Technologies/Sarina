@@ -17,6 +17,6 @@ is a gain):
 Every case gave the same output in both. **Worse in Rust:** the size on disk of `sarina-voice` (2.3 MB against 74 KB of
 scripts).
 
-Also ported on 2026-11-18, proved for equal answers but not timed: the ML and voice helper (`python/sarina_helpers` →
-`sarina-helpers`, [packaging/helpers](../packaging/helpers/README.md)) and `sarina-tone` (Go → Rust, RUST_PORT.md
-"sarina-tone"). The Go core and the Python helper stay installed as rollback copies until about 2026-11-25.
+Also ported on 2026-11-18, proved for equal answers but not timed: the ML and voice helper (the Python package
+`sarina_helpers` → `sarina-helpers`, [packaging/helpers](../packaging/helpers/README.md)) and `sarina-tone` (Go → Rust, RUST_PORT.md
+"sarina-tone"). The Go core and the Python package were removed on 2026-11-26.

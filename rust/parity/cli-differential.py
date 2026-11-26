@@ -894,10 +894,12 @@ def other_cases():
     return cs
 
 
-# the toolchain a build names in `sarina version` (Go's `go1.27.4`, sarina-rs's `rustc 1.x.y`, under the same key): the
-# one part of the answer that differs on purpose (docs/RUST_PORT.md "Differences"); commit, time and the uncommitted flag
-# are compared as they are, so both builds must come from the same tree
-TOOLCHAIN_NORM = [(r'go1\.[0-9][^)"]*|rustc [0-9][^)"]*', "TOOLCHAIN")]
+# the parts of `sarina version` that differ on purpose (docs/RUST_PORT.md "Differences", "The Go side"): the toolchain
+# (Go's `go1.27.4`, sarina-rs's `rustc 1.x.y`, under the same key), and the build stamp (commit, time, the uncommitted
+# flag): the Go referee is built from an archive of the pinned commit and names none
+TOOLCHAIN_NORM = [(r'go1\.[0-9][^)"]*|rustc [0-9][^)"]*', "TOOLCHAIN"),
+                  (r'\(commit [^,)]*(?:, committed [^,)]*)?', "(commit STAMP"),
+                  (r'"commit":"[^"]*","time":"[^"]*","modified":(?:true|false)', '"commit":STAMP')]
 
 
 def usage_cases():
@@ -1524,11 +1526,10 @@ def wrapper_cases():
     return cs
 
 
-HELPER_PY = r"""#!/bin/sh
-# a stand-in Python with the helper package: its usage when run bare, else it logs how it was called and answers
-printf '%s|%s\n' "$*" "$PYTHONPATH" >> {W}/helper.log
-if [ "$*" = "-P -m sarina_helpers" ]; then echo "usage: python -m sarina_helpers {serve,memory-search,voice-chat,...}" >&2; exit 2; fi
-shift 3
+HELPER = r"""#!/bin/sh
+# a stand-in sarina-helpers: its usage when run bare, else it logs how it was called and answers
+printf '%s\n' "$*" >> {W}/helper.log
+if [ $# -eq 0 ]; then echo "usage: sarina-helpers {serve|memory-search|voice-chat} ..." >&2; exit 2; fi
 if [ -t 0 ]; then echo "standard input is a terminal"; fi
 case "$1" in
   memory-search) shift; echo "memory-search for: $*"; while IFS= read -r l; do echo "stdin: $l"; done; echo "a warning" >&2;;
@@ -1540,9 +1541,9 @@ exit 0
 
 
 def helper_cases():
-    """memory-search and voice-chat: the Python helper run with the caller's own standard streams, against a stand-in
-    interpreter on the case's PATH (never a real Python). voice-chat names the binary to run per turn (--sarina-bin): the
-    build's own file, which differs between the two builds by design and is normalised."""
+    """memory-search and voice-chat: the helper run with the caller's own standard streams, against a stand-in
+    sarina-helpers (SARINA_HELPERS_BIN, {W}/bin/sarina-helpers for every case). voice-chat names the binary to run per
+    turn (--sarina-bin): the build's own file, which differs between the two builds by design and is normalised."""
     cs = []
     binnorm = [(r"/[^\s|]*/sarina-(?:go|rs)\b", "SARINA_BIN")]
 
@@ -1550,34 +1551,29 @@ def helper_cases():
         c = C(name, args, files=files, env=env, stdin=stdin, norm=binnorm)
         c.update(k)
         cs.append(c)
-    py = state(**{"bin/python3*": HELPER_PY})
+    hb = state(**{"bin/sarina-helpers*": HELPER})
     for cmd in ["memory-search", "voice-chat"]:
-        add(f"{cmd} no Python", [cmd, "--model-dir", "m", "q"])
-        add(f"{cmd} usual", [cmd, "--model-dir", "{W}/m", "where", "is", "the", "widget"], files=py, stdin=b"one\ntwo\n")
-        add(f"{cmd} no arguments", [cmd], files=py)
-        add(f"{cmd} helper fails", [cmd, "--fail"], files=py)
-        add(f"{cmd} helper killed", [cmd, "--die"], files=py)
-        add(f"{cmd} long answer", [cmd, "--big"], files=py)
-        add(f"{cmd} not importable", [cmd, "q"], files=state(**{"bin/python3*": sh(
-            'echo "Traceback (most recent call last):" >&2; echo "ModuleNotFoundError: No module named \'sarina_helpers\'" >&2; exit 1\n')}))
-        add(f"{cmd} not importable, nothing said", [cmd, "q"], files=state(**{"bin/python3*": sh("exit 1\n")}))
-        add(f"{cmd} only python", [cmd, "q"], files=state(**{"bin/python*": HELPER_PY}))
-        add(f"{cmd} SARINA_HELPERS_PYTHON", [cmd, "q"], files=state(**{"py/mypy*": HELPER_PY}),
-            env={"SARINA_HELPERS_PYTHON": "{W}/py/mypy"})
-        add(f"{cmd} SARINA_HELPERS_PYTHON missing", [cmd, "q"], files=py, env={"SARINA_HELPERS_PYTHON": "{W}/py/none"})
-        add(f"{cmd} SARINA_HELPERS_PYTHON a bare name", [cmd, "q"], files=py, env={"SARINA_HELPERS_PYTHON": "python3"})
-        add(f"{cmd} SARINA_HELPERS_PATH", [cmd, "q"], files=py, env={"SARINA_HELPERS_PATH": "{W}/helpers"})
-        add(f"{cmd} SARINA_HELPERS_PATH and PYTHONPATH", [cmd, "q"], files=py,
-            env={"SARINA_HELPERS_PATH": "{W}/helpers", "PYTHONPATH": "/old/a:/old/b"})
-        add(f"{cmd} PYTHONPATH alone", [cmd, "q"], files=py, env={"PYTHONPATH": "/old"})
-        add(f"{cmd} -h", [cmd, "-h"], files=py)
-        add(f"{cmd} stdout closed", [cmd, "--big"], files=py, closed_stdout=True)
+        add(f"{cmd} no helper", [cmd, "--model-dir", "m", "q"])
+        add(f"{cmd} usual", [cmd, "--model-dir", "{W}/m", "where", "is", "the", "widget"], files=hb, stdin=b"one\ntwo\n")
+        add(f"{cmd} no arguments", [cmd], files=hb)
+        add(f"{cmd} helper fails", [cmd, "--fail"], files=hb)
+        add(f"{cmd} helper killed", [cmd, "--die"], files=hb)
+        add(f"{cmd} long answer", [cmd, "--big"], files=hb)
+        add(f"{cmd} not the helper", [cmd, "q"], files=state(**{"bin/sarina-helpers*": sh(
+            'echo "loading" >&2; echo "error: libonnxruntime.so: cannot open shared object file" >&2; exit 1\n')}))
+        add(f"{cmd} not the helper, nothing said", [cmd, "q"], files=state(**{"bin/sarina-helpers*": sh("exit 1\n")}))
+        add(f"{cmd} SARINA_HELPERS_BIN elsewhere", [cmd, "q"], files=state(**{"opt/myhelper*": HELPER}),
+            env={"SARINA_HELPERS_BIN": "{W}/opt/myhelper"})
+        add(f"{cmd} SARINA_HELPERS_BIN missing", [cmd, "q"], files=hb, env={"SARINA_HELPERS_BIN": "{W}/opt/none"})
+        add(f"{cmd} SARINA_HELPERS_BIN a bare name", [cmd, "q"], files=hb, env={"SARINA_HELPERS_BIN": "sarina-helpers"})
+        add(f"{cmd} -h", [cmd, "-h"], files=hb)
+        add(f"{cmd} stdout closed", [cmd, "--big"], files=hb, closed_stdout=True)
         # push-to-talk reads the terminal: the helper is given the caller's own standard input, not a pipe
-        add(f"{cmd} at a terminal", [cmd, "q"], files=py, stdin=b"spoken\n\x04", tty=True)
-    add("voice-chat --sarina-bin given", ["voice-chat", "--sarina-bin", "/opt/other", "--tts-model", "v.onnx"], files=py)
-    add("voice-chat --sarina-bin= given", ["voice-chat", "--tts-model", "v.onnx", "--sarina-bin=/opt/other"], files=py)
-    add("voice-chat --sarina-bin= empty", ["voice-chat", "--sarina-bin="], files=py)
-    add("voice-chat --sarina-binary is not it", ["voice-chat", "--sarina-binary", "x"], files=py)
+        add(f"{cmd} at a terminal", [cmd, "q"], files=hb, stdin=b"spoken\n\x04", tty=True)
+    add("voice-chat --sarina-bin given", ["voice-chat", "--sarina-bin", "/opt/other", "--tts-model", "v.onnx"], files=hb)
+    add("voice-chat --sarina-bin= given", ["voice-chat", "--tts-model", "v.onnx", "--sarina-bin=/opt/other"], files=hb)
+    add("voice-chat --sarina-bin= empty", ["voice-chat", "--sarina-bin="], files=hb)
+    add("voice-chat --sarina-binary is not it", ["voice-chat", "--sarina-binary", "x"], files=hb)
     return cs
 
 
@@ -1874,7 +1870,7 @@ DESKTOP_FP = hashlib.sha256("\n".join(f"{c}|{t}" for c, t in DESKTOP_PROTOTYPES)
 
 
 def desktop_helper(fp=DESKTOP_FP, protocol=1, die=False):
-    """A stand-in Python whose helper serves the classify protocol: each description's label by a word in it (the
+    """A stand-in sarina-helpers that serves the classify protocol: each description's label by a word in it (the
     request logged), the prototypes' fingerprint on ping."""
     return ("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {W}/helper.log\n"
             "while IFS= read -r line; do printf '%s\\n' \"$line\" >> {W}/helper.log; case \"$line\" in\n"
@@ -2096,7 +2092,7 @@ def desktop_cases():
     add("desktop-audit --remove-generated read-only folder", ["desktop-audit", "--remove-generated"] + tgt, files=gen,
         env={"__chmod": "out=555"})
     # --model-dir: the stand-in helper
-    helper = dict(base, **{"bin/python3*": desktop_helper()})
+    helper = dict(base, **{"bin/sarina-helpers*": desktop_helper()})
     md = ["--model-dir", "{W}/model"]
     add("desktop-audit --model-dir", ["desktop-audit"] + md, files=helper)
     add("desktop-audit --model-dir --apply", ["desktop-audit", "--apply"] + md + tgt, files=helper)
@@ -2118,12 +2114,12 @@ def desktop_cases():
     add("desktop-audit --model-dir a damaged cache", ["desktop-audit"] + md, files=dict(helper, **{cache: "{"}))
     add("desktop-audit --model-dir a pipe at the cache", ["desktop-audit"] + md, files=dict(helper, **{cache + "|": ""}))
     add("desktop-audit --model-dir the cache folder a file", ["desktop-audit"] + md, files=dict(helper, **{"home/.sarina/cache": "x"}))
-    add("desktop-audit --model-dir other prototypes", ["desktop-audit"] + md, files=dict(base, **{"bin/python3*": desktop_helper(fp="0" * 64)}))
-    add("desktop-audit --model-dir another protocol", ["desktop-audit"] + md, files=dict(base, **{"bin/python3*": desktop_helper(protocol=2)}))
-    add("desktop-audit --model-dir the helper dies", ["desktop-audit"] + md, files=dict(base, **{"bin/python3*": desktop_helper(die=True)}))
-    add("desktop-audit --model-dir no Python", ["desktop-audit"] + md, files=base)
-    add("desktop-audit --model-dir SARINA_HELPERS_PYTHON", ["desktop-audit"] + md,
-        files=dict(base, **{"py/mypy*": desktop_helper()}), env={"SARINA_HELPERS_PYTHON": "{W}/py/mypy", "SARINA_HELPERS_PATH": "{W}/hp"})
+    add("desktop-audit --model-dir other prototypes", ["desktop-audit"] + md, files=dict(base, **{"bin/sarina-helpers*": desktop_helper(fp="0" * 64)}))
+    add("desktop-audit --model-dir another protocol", ["desktop-audit"] + md, files=dict(base, **{"bin/sarina-helpers*": desktop_helper(protocol=2)}))
+    add("desktop-audit --model-dir the helper dies", ["desktop-audit"] + md, files=dict(base, **{"bin/sarina-helpers*": desktop_helper(die=True)}))
+    add("desktop-audit --model-dir no helper", ["desktop-audit"] + md, files=base)
+    add("desktop-audit --model-dir SARINA_HELPERS_BIN elsewhere", ["desktop-audit"] + md,
+        files=dict(base, **{"opt/myhelper*": desktop_helper()}), env={"SARINA_HELPERS_BIN": "{W}/opt/myhelper"})
     for bad in (["-h"], ["--nope"], ["--similarity-threshold", "x"], ["--min-confidence"], ["--apply=2"], ["extra", "--apply"]):
         add(f"desktop-audit {' '.join(bad)}", ["desktop-audit"] + bad, files=base)
     return cs
@@ -2273,16 +2269,16 @@ def chymaera_cases():
                 " *) echo '{\"ok\":false,\"error\":\"?\"}';; esac; done\n")
     md = ["--model-dir", "{W}/model"]
     add("chymaera-analyze --model-dir", ["chymaera-analyze", "--similarity-threshold", "0.6"] + md + port, console=[caps],
-        files=state(**{"bin/python3*": group_py}))
+        files=state(**{"bin/sarina-helpers*": group_py}))
     add("chymaera-analyze --model-dir no groups", ["chymaera-analyze"] + md + port, console=[caps],
-        files=state(**{"bin/python3*": group_py.replace('[[\\"gate.sub\\",\\"gate2.sub\\"],[\\"badge.nfc\\"]]', "[]")}))
+        files=state(**{"bin/sarina-helpers*": group_py.replace('[[\\"gate.sub\\",\\"gate2.sub\\"],[\\"badge.nfc\\"]]', "[]")}))
     add("chymaera-analyze --model-dir groups null", ["chymaera-analyze"] + md + port, console=[caps],
-        files=state(**{"bin/python3*": group_py.replace('[[\\"gate.sub\\",\\"gate2.sub\\"],[\\"badge.nfc\\"]]', "null")}))
+        files=state(**{"bin/sarina-helpers*": group_py.replace('[[\\"gate.sub\\",\\"gate2.sub\\"],[\\"badge.nfc\\"]]', "null")}))
     add("chymaera-analyze --model-dir the helper refuses", ["chymaera-analyze"] + md + port, console=[caps],
-        files=state(**{"bin/python3*": group_py.replace('*\'"op":"group"\'*', "*nothing-matches*")}))
-    add("chymaera-analyze --model-dir no Python", ["chymaera-analyze"] + md + port, console=[caps])
+        files=state(**{"bin/sarina-helpers*": group_py.replace('*\'"op":"group"\'*', "*nothing-matches*")}))
+    add("chymaera-analyze --model-dir no helper", ["chymaera-analyze"] + md + port, console=[caps])
     add("chymaera-analyze --model-dir the helper dies", ["chymaera-analyze"] + md + port, console=[caps],
-        files=state(**{"bin/python3*": "#!/bin/sh\necho 'cannot load the model' >&2\nexit 4\n"}))
+        files=state(**{"bin/sarina-helpers*": "#!/bin/sh\necho 'cannot load the model' >&2\nexit 4\n"}))
     for bad in (["-h"], ["--similarity-threshold", "high"], ["--limit=x"]):
         add(f"chymaera-analyze {' '.join(bad)}", ["chymaera-analyze"] + bad)
     # ---- chymaera-device-info
@@ -3689,8 +3685,8 @@ def run_one(binary, case, base, limbo, http, hurl):
         os.utime(os.path.join(work, path), (t0 - ago, t0 - ago), follow_symlinks=False)
     env = {"PATH": os.path.join(work, "bin"), "LANG": "C.UTF-8", "HOME": os.path.join(work, "home"), "USER": "tester",
            "SARINA_CONTAINED_PATH": os.path.join(work, "no-lock"),
-           # the Python helper for both builds (Go knows no other), also where the Rust helper is installed
-           "SARINA_HELPERS": "python"}
+           # the case's stand-in helper for both builds, never one installed on this computer
+           "SARINA_HELPERS_BIN": os.path.join(work, "bin", "sarina-helpers")}
     chmods = []
     for k, v in case["env"].items():
         if k == "__chmod":

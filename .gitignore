@@ -62,7 +62,3 @@ progress.md
 packaging/voice/target/
 packaging/voiced/target/
 packaging/helpers/target/
-
-# the Go builds a recipe makes in go/ (sarina-git builds them before the Rust build, whose stamp must not count them as changes)
-/go/sarina
-/go/sarina-tone

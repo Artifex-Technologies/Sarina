@@ -3,19 +3,13 @@
 # Source of truth for the Arch/AUR package. See packaging/arch/README.md
 # for how to build/install locally and how to publish this to the AUR.
 #
-# Sarina's core is two builds of one program (docs/RUST_PORT.md "The switch"): the Rust
-# build (rust/, sarina-rs) is /usr/bin/sarina and answers to three names, `sarina`,
-# `sarina-gui` and `sarina-service` (the last two are symlinks; the command comes from
-# the name it was started as). It runs every command itself and hands nothing to the Go
-# build (since 2026-11-18; a command with an argument that is not UTF-8 is refused). The Go
-# build (go/cmd/sarina) is still built and installed as /usr/lib/sarina/sarina, only as the
-# rollback copy until the Go code is deleted (~2026-11-25); nothing runs it.
+# Sarina's core is Rust (rust/, sarina-rs; docs/RUST_PORT.md): /usr/bin/sarina, which answers
+# to three names, `sarina`, `sarina-gui` and `sarina-service` (the last two are symlinks; the
+# command comes from the name it was started as).
 # sarina-tone (how a spoken question sounded: pace, pitch; the voice runs it) is the Rust
 # build's second program, /usr/bin/sarina-tone (docs/RUST_PORT.md "sarina-tone").
 # The optional ML/voice helper is sarina-helpers (Rust, packaging/helpers) at
-# /usr/lib/sarina/sarina-helpers, which the core runs when it is there; the Python package
-# (python/sarina_helpers) it replaces stays installed for the rollback week (SARINA_HELPERS=python),
-# then goes (docs/RUST_PORT.md "The ML and voice helper").
+# /usr/lib/sarina/sarina-helpers (docs/RUST_PORT.md "The ML and voice helper").
 #
 # pkgver is the release this builds: the tag v$pkgver, the version in the VERSION file
 # (Labyrinth_OS's scripts/release.sh writes both; its docs/VERSIONING.md). sha256sums is
@@ -34,29 +28,20 @@ optdepends=(
   'alsa-utils: arecord/aplay, required by `sarina voice-chat` for audio I/O'
   'whisper-cpp: speech-to-text for `sarina voice-chat` (whisper-cli and a ggml model)'
   'espeak-ng: phonemes for `sarina voice-chat` speech (a Piper voice)'
-  'python: the Python ML/voice helper, during the rollback week only (SARINA_HELPERS=python)'
   'claude-code: hand off tasks to the real Claude Code CLI when local resources are insufficient'
 )
-makedepends=('go' 'cargo' 'python-build' 'python-installer' 'python-wheel' 'python-setuptools')
+makedepends=('cargo')
 # ring (TLS for the Rust build's model clients) does not link from GCC's LTO objects (makepkg's lto option)
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/Artifex-Technologies/Sarina/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() {
-  cd "Sarina-$pkgver/go"
-  export CGO_ENABLED=0 GOFLAGS="-trimpath -mod=readonly -modcacherw"
-  go build -ldflags "-s -w" -o sarina ./cmd/sarina
-
-  cd ../rust
+  cd "Sarina-$pkgver/rust"
   cargo build --release --locked --bin sarina-rs --bin sarina-tone --target-dir "$srcdir/target"
 
   cd ../packaging/helpers
   cargo build --release --locked --target-dir "$srcdir/target"
-  cd ../..
-
-  cd python/sarina_helpers
-  python -m build --wheel --no-isolation
 }
 
 package() {
@@ -64,12 +49,9 @@ package() {
 
   install -Dm755 "$srcdir/target/release/sarina-rs" "$pkgdir/usr/bin/sarina"
   install -Dm755 "$srcdir/target/release/sarina-tone" "$pkgdir/usr/bin/sarina-tone"
-  install -Dm755 go/sarina "$pkgdir/usr/lib/sarina/sarina"
   install -Dm755 "$srcdir/target/release/sarina-helpers" "$pkgdir/usr/lib/sarina/sarina-helpers"
   ln -s sarina "$pkgdir/usr/bin/sarina-gui"
   ln -s sarina "$pkgdir/usr/bin/sarina-service"
-
-  python -m installer --destdir="$pkgdir" python/sarina_helpers/dist/*.whl
 
   install -Dm644 packaging/arch/sarina-service.service \
     "$pkgdir/usr/lib/systemd/system/sarina-service.service"

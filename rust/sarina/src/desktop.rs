@@ -1,7 +1,7 @@
 //! Go: `desktop`: the application menu's categories. `sarina desktop-audit` repairs .desktop entries that carry no
 //! registered Main Category and proposes entries for installed tools that ship none; everything is a proposal until
 //! `--apply`. Signals, cheapest and most reliable first: the pacman group, description keyword rules, then the optional
-//! semantic classifier (the Python helper's embeddings, with a content-hash cache). Proved by the CLI differential's
+//! semantic classifier (the ML helper's embeddings, with a content-hash cache). Proved by the CLI differential's
 //! desktop cases (rust/parity), against a stand-in pacman and helper and made-up application folders.
 //!
 //! Go's `EmbeddingScorer` (`semantic.go`) is not ported: nothing but Go's own tests uses it.
@@ -1220,11 +1220,11 @@ pub fn command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
     let model_dir = fs.str("model-dir");
     if !model_dir.is_empty() {
         let started = crate::helpers::Server::start(&model_dir, &*getenv)
-            .map_err(|e| format!("semantic classification needs the Python helper ({}): {e}", crate::helpers::INSTALL_HINT));
+            .map_err(|e| format!("semantic classification needs the ML helper ({}): {e}", crate::helpers::INSTALL_HINT));
         let started = started.and_then(|srv| {
             if srv.prototypes != prototypes_fingerprint() {
                 let _ = srv.close();
-                return Err("the Python helper's category prototypes differ from this build's; update python/sarina_helpers".into());
+                return Err("the ML helper's category prototypes differ from this build's; update sarina-helpers".into());
             }
             Ok(srv)
         });

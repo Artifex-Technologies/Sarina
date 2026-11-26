@@ -190,12 +190,12 @@ Different in rare cases:
   errors (a missing file, the reference recording) are worded differently.
 - The socket's listen backlog is the standard library's (128), not 4.
 
-## The switch and the way back
+## The switch
 
 **Merged into Labyrinth_OS's main on 2026-11-17** (`fd58489`, after a week of running it through a user drop-in):
 `sarina-git` (the image's recipe and the store's) builds and installs `/usr/bin/sarina-voiced`, and the image's
-`labyrinth-voiced.service` starts it. The Python service stays in the image for a rollback for a week after the switch; going
-back is a drop-in with the old `ExecStart` (Labyrinth_OS's docs/SARINA_VOICE.md, "The voice service in Rust").
+`labyrinth-voiced.service` starts it. The Python service it replaced left the image after its rollback week (Labyrinth_OS's
+docs/SARINA_VOICE.md, "The voice service in Rust").
 
 **What the card needs:** nothing new. The Rust service loads the voice venv's own `libonnxruntime.so.1.31.0` (onnxruntime-gpu
 1.31.0; `libonnxruntime_providers_cuda.so` and `_shared.so` beside it) and, before the first session, the venv's CUDA 13 and

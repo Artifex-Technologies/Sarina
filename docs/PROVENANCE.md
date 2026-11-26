@@ -85,6 +85,13 @@ left in the tree is `python/sarina_helpers`, `evals/`, `tools/training/`,
 side-by-side tests in `packaging/voice/tests/`. The tables below describe the tree
 as I audited it in October, so most files they name are gone.
 
+## The Python package sarina_helpers removed (2026-11-26)
+
+`python/sarina_helpers` went after its rollback week: the Rust `sarina-helpers` (`packaging/helpers`, written from its
+protocol and behaviour, our own code) replaced it on 2026-11-18. `tools/voice_clone/build_corpus.py` has its own small
+Piper wrapper now (`tools/voice_clone/piper_tts.py`, from the same code of ours). The helper's side-by-side test reads the
+Python package from the last commit that had it.
+
 ## Re-audit after the rewrite (2026-10-05)
 
 Method: every 10-word sequence in the current files compared against upstream

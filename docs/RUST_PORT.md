@@ -17,7 +17,7 @@ equal.
 | 3 | the clients: Heimdall review, embed, llm (OpenAI-compatible and Anthropic), Limbo, MCP, helpers | **done** (2026-11-12) but MCP's definitions loader and manager (with step 4's tools): `gohttp` (a small Go-like HTTP/1.1 client, TLS through rustls), Heimdall's review (`Consult`), `embed`, `helpers`, `limbo`'s client, llm's wire format, transport (`Complete`), Anthropic client and context-window discovery, the MCP stdio client |
 | 4 | tools, memory, tiers, the agent loop, runkit, service, cli chat/resume, gui | **done** (2026-11-12 and -13): the file tools (read, list, write, edit, glob, grep), bash with background processes, git_read, the plan-mode tools, the to-do and plan tools, the checks after a code change and check_code; skills' discovery, the skill tool and the long-skill library, MCP's loader and manager, the limbo tools, memory with its review queue and the memory commands, compute tiers (the router, the claude CLI hand-off, wake, Heimdall's grant gate), StateDir; the agent loop (its answer checks, secret redactor and pure helpers, and the loop itself with notes, summaries, plan decisions, resume and sub-agents, against a scripted model); runkit, cli chat/resume, the service with Go's HTTP server (`gohttpd`); Go's local time zone (`tz.rs`) for the prompt's date; the GUI (2026-11-12, night) |
 | 5 | the optional packages (crypto, stego, quantum, vault, daily, insight, sysinfo, doctor, forge, ...) | **done** (2026-11-12 to -17): `doctor` (the command and the `sarina_doctor` tool, 2026-11-12, night); the system set `sysinfo` (`system_status`, `crash_detail`, `system_fix`, the skills' "status" and "security" prefetches with `route`) and the math set `trachtenberg` (with SARINA_MATH=auto and SARINA_CRYPTO=auto decided in sarina-rs) on 2026-11-13: `needs_go` no longer hands a chat to Go for SARINA_SYSTEM=on, SARINA_MATH=on or auto, or a SARINA_CRYPTO=auto whose words ask for no crypto; the quantum set (`quantum_sim`, `sarina quantum`), the reverse-engineering set (`reverse_engineer`, `stage_binary`, `draft_yara_rule`) and the council (`sarina council` under SARINA_RS_TRY, `council_ask`) on 2026-11-16: `needs_go` no longer names SARINA_QUANTUM, SARINA_REVERSE or a council file; crypto and stego on 2026-11-16 (every part proved against Go fixtures, then wired: `sarina crypto` and `sarina stego` in sarina-rs, the seven tools and both prefetches; `needs_go` no longer names SARINA_CRYPTO), the vault on 2026-11-16 (reading, recall with and without meaning, writing, its tools and commands: `needs_go` no longer names SARINA_VAULT), daily (`sarina trends`, `sarina daily-report`); insight on 2026-11-16 and -17 (`sarina vault-tidy`; `sarina reflect` and `sarina vault-ingest`, which ask the model, under SARINA_RS_TRY); the forge on 2026-11-17 (its tools and forge-list, forge-approve, forge-remove): every optional set is ported and `needs_go` is gone |
-| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), and `mcp` and `agents` with them, then `version` and the usage (no command, `help`, an unknown one: "The last Go commands", 7), so **no command reaches the Go build any more**, and since the same day **nothing does**: a command with an argument that is not UTF-8 is refused ("The switch", 2026-11-18 (8)); the evals measure sarina-rs; the Go build goes after the rollback week, ~2026-11-25 and Labyrinth's `sarina-rs-switch` is merged; begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; moved on 2026-11-18); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
+| switch | `sarina-rs` as `/usr/bin/sarina`, the Go build at `/usr/lib/sarina/sarina` for what is not ported | **made** (2026-11-18): the commands below always run in Rust; the same day the last Go-only commands followed (system-status, crash-detail, system-fix, route, trachtenberg, memory-search, voice-chat, fleet-*, desktop-audit, chymaera-*: "The last Go commands"), and `mcp` and `agents` with them, then `version` and the usage (no command, `help`, an unknown one: "The last Go commands", 7), so **no command reaches the Go build any more**, and since the same day **nothing does**: a command with an argument that is not UTF-8 is refused ("The switch", 2026-11-18 (8)); the evals measure sarina-rs; the Go build and its source left the packages and the tree on 2026-11-26 ("The Go side"); begun (2026-11-12): the `sarina-rs` binary (names, Heimdall's lock, unported commands handed to the Go build by execve); the commands without a model run in Rust (memory-*, session-search, session-migrate, limbo-profiles, limbo-validate, tiers status; proved by `rust/parity/cli-differential.py`); chat, resume, skill, memory-review, service, gui and doctor ported and proving (run in Rust only under `SARINA_RS_TRY`; 566 CLI cases, 35 service scenarios and 59 GUI scenarios without a difference; moved on 2026-11-18); packaged on Labyrinth's branch `sarina-rs-switch` (not on main, not installed) |
 
 ## Inventory
 
@@ -174,10 +174,9 @@ that are not UTF-8 as `\xHH`), exit status 2, nothing run (no request, no file, 
 lock still comes first, and no command, `help` and an unknown command keep Go's answers (a `help` or an unknown name
 with such bytes after it too). The hand-over code is gone with it (`hand_over`, `SARINA_GO_BINARY`, `SARINA_RS_NO_GO`,
 the SIGPIPE record kept for the `execve`): sarina-rs no longer knows where a Go build is. sarina-rs needs no Go build at
-run time, so the recipes (packaging/arch/PKGBUILD, Labyrinth's two sarina-git copies) keep building and installing
-`/usr/lib/sarina/sarina` only as the rollback copy until the Go code is deleted (~2026-11-25); nothing runs it. Their
-check() still runs `tests/sarina_rs.rs`, whose name stays (its comment there still says "the hand-over to the Go build":
-changed with the deletion).
+run time; the recipes (packaging/arch/PKGBUILD, Labyrinth's two sarina-git copies) installed the Go build at
+`/usr/lib/sarina/sarina` for one more week, which nothing ran, and stopped on 2026-11-26 when the Go code was
+deleted ("The Go side"). Their check() still runs `tests/sarina_rs.rs`.
 
 ### The plan for `sarina-rs` (written 2026-11-12; the binary is built once the agent loop is equal)
 
@@ -429,7 +428,7 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   answer: Sarina embeds at most 32 texts at a time, and even 256 texts of a 4096-number model at 24 bytes a number in
   JSON is about 24 MiB, so a real answer never comes near it. The rule for the clients still to come (llm, limbo, mcp,
   helpers): every read from another process gets a bound, in both languages.
-- **The Python helper's pipes are bounded and its failures reported reliably, in Go and Rust (2026-11-12).** Go read an
+- **The ML helper's pipes are bounded and its failures reported reliably, in Go and Rust (2026-11-12).** Go read an
   answer line without a limit and kept all of the helper's error output for its whole life; both now read at most
   `MaxAnswerBytes` (64 MiB) a line (a longer one stops the helper) and keep the last 64 KiB of its error output. Go
   could also name a dying helper's reason before its error output was copied (a race: "helper exited: EOF" instead of
@@ -655,7 +654,7 @@ argument; `version`, `note` with a vault Go writes into, `vault-init`, `chat` wi
 `--rs` naming the same file; sarina-rs has no way to reach a Go build, so the Go build is only ever the reference.
 
 ```bash
-(cd go && go build -o /tmp/sarina-go ./cmd/sarina) && (cd rust && cargo build -j4 --offline --bin sarina-rs)
+sh rust/parity/go-sarina.sh /tmp/sarina-go && (cd rust && cargo build -j4 --offline --bin sarina-rs)
 python3 -I rust/parity/cli-differential.py --go /tmp/sarina-go --rs rust/target/debug/sarina-rs [--only NAME] [--show]
 ```
 
@@ -863,12 +862,11 @@ set), no question, only spaces, `--scores` alone, twice, after the question, OLL
 fresh, stale and a planted pipe, XDG_STATE_HOME, the embedder failing and not answering; `trachtenberg` on every rule,
 a learner's answer right and wrong, bad numbers, the 40-digit wrap, an extra argument, too few. Mutation run 7 of 7.
 
-**2. The helper's commands** (40 cases, `helper_cases`): `memory-search` and `voice-chat` against a stand-in
-interpreter on the case's PATH (it prints the helper's usage when run bare, else logs its arguments and PYTHONPATH and
-answers): no Python, the usual call with standard input passed on, no arguments, the helper failing (exit 3) and killed
-(Go's -1, exit 255), a long answer, the module not importable with and without a reason, only `python` on PATH,
-SARINA_HELPERS_PYTHON absolute, missing and a bare name, SARINA_HELPERS_PATH with and without PYTHONPATH, `-h`, standard
-output closed, and **standard input a terminal**: Go's commands give the helper the process's own files (`env.Stdin` is
+**2. The helper's commands** (32 cases, `helper_cases`): `memory-search` and `voice-chat` against a stand-in
+sarina-helpers (SARINA_HELPERS_BIN; it prints the helper's usage when run bare, else logs its arguments and answers): no
+helper, the usual call with standard input passed on, no arguments, the helper failing (exit 3) and killed (Go's -1, exit
+255), a long answer, a program that is not the helper with and without a reason, SARINA_HELPERS_BIN elsewhere, missing and
+a bare name, `-h`, standard output closed, and **standard input a terminal**: Go's commands give the helper the process's own files (`env.Stdin` is
 `os.Stdin`), so push-to-talk reads the terminal; the Rust commands do the same (`helpers::passthrough_inherit`), not the
 pipes of `passthrough`. voice-chat's `--sarina-bin` given as two words, as `--sarina-bin=`, empty, and a longer flag that
 is not it. On purpose: the binary voice-chat names for each turn is the build's own file, so it is now sarina-rs (the
@@ -915,7 +913,7 @@ an unreadable entry; pacman missing or failing; `--apply` to the default, XDG_DA
 an entry's name, the target a file or read-only; `--remove-generated` (markers empty, in a later group, through a link,
 a pipe, a .txt; no folder, a file, read-only); `--model-dir` with thresholds below, at and above a score, the cache
 (hits, a null label, a score that is not a number, another prototype set, damaged, a pipe at its name, its folder a
-file), `--no-cache`, other prototypes, another protocol, the helper dying, no Python, SARINA_HELPERS_PYTHON; flags.
+file), `--no-cache`, other prototypes, another protocol, the helper dying, no helper, SARINA_HELPERS_BIN; flags.
 Found and fixed in Go and Rust (Go tests that failed before: `go/desktop/planted_test.go`,
 `go/analysiscache/planted_test.go`): a named pipe named *.desktop held the scan and `--remove-generated` for ever;
 **`--apply` wrote an entry through a link planted at its name** (into whatever file it named; now only a regular file
@@ -1124,7 +1122,7 @@ The last Python of Sarina's runtime: `python/sarina_helpers` (about 1,200 lines:
 classifier and Argus capture grouping, speech to text, text to speech, audio I/O, the JSON-lines `serve` protocol) is now
 `sarina-helpers`, a Rust binary in its own crate beside packaging/voice and packaging/voiced, installed as
 `/usr/lib/sarina/sarina-helpers`. The design, the module map and the measurements are in `packaging/helpers/README.md`;
-the protocol is unchanged (`python/sarina_helpers/PROTOCOL.md`).
+the protocol is unchanged (`packaging/helpers/PROTOCOL.md`).
 
 **Who calls what** (grepped in Go and Rust): `serve` from desktop-audit's `--model-dir` (ping, classify) and
 chymaera-analyze's `--model-dir` (ping, group); nothing calls `embed` (kept, as the protocol has it); `memory-search` and
@@ -1139,7 +1137,8 @@ terminal), Piper through ONNX Runtime with espeak-ng's library loaded at run tim
 and the ggml model Super+S uses do: no download). Light: 4.5 MB, a server answers its first request in 0.03 s with 38 MB
 (the Python: 0.13 s, 71 MB) on the stand-in model; aarch64 builds and tests in CI.
 
-**Proof** (`packaging/helpers/tests/differential.py`, the Python under the venvs that have its extras): 340 cases, no
+**Proof** (`packaging/helpers/tests/differential.py`, the Python package read from the last commit that had it and run
+under the venvs that have its extras): 340 cases, no
 difference. serve 264 (byte for byte with the same ONNX Runtime build, then within 6.8e-8 with the system's 1.29:
 tolerance 1e-6, the reasoning is in the script), memory-search 34 (stdout, stderr, status), text to speech 9 (WAVs byte for
 byte; phonemes identical for 1,221 of 1,228 texts, the rest where piper's own espeak-ng build pronounces differently),
@@ -1154,23 +1153,20 @@ memory-search skips pipes, dangling links and files over 256 MiB, and prints an 
 a traceback; voice-chat's speech to text is whisper.cpp (its `--stt-model-dir` names a ggml model) and its "missing" line
 names whisper-cpp and espeak-ng.
 
-**The switch** (made with this commit): the core's `helpers` runs the Rust helper when `/usr/lib/sarina/sarina-helpers` is
-installed (`SARINA_HELPERS_BIN` names another); `SARINA_HELPERS=python` or `SARINA_HELPERS_PYTHON` goes back to the Python
-package. The CLI differential sets `SARINA_HELPERS=python`, since the Go build only knows the Python one.
-
-**The rollback copy:** `python/sarina_helpers` stays in the tree and in both PKGBUILDs (its wheel; `makedepends`
-python-build, -installer, -wheel, -setuptools; the `python` optdepends) until the Go build is deleted, together with the
-core's Python branch (`python()`, `PYTHON_ENV`, `PATH_ENV`) and the texts that still name the Python helper (`INSTALL_HINT`,
-desktop-audit's and chymaera-analyze's "needs the Python helper", their Go-made fixtures in `testdata/parity/helpers.json`
-and the CLI differential's stand-in interpreter cases). Speech to text is whisper.cpp; faster-whisper is not used.
+**The switch** (2026-11-18): the core's `helpers` runs `/usr/lib/sarina/sarina-helpers` (`SARINA_HELPERS_BIN` names
+another). After a week with the Python package as the rollback copy, it left the tree and the packages (2026-11-26), with
+the core's way back to it; Go and Rust both start only `sarina-helpers` since then (the Go fixtures in
+`testdata/parity/helpers.json` and the CLI differential's stand-ins are a stand-in `sarina-helpers`). Speech to text is
+whisper.cpp; faster-whisper is not used.
 
 ## sarina-tone (`rust/sarina/src/tone.rs`, `src/bin/sarina-tone.rs`, 2026-11-18)
 
 The last Go program installed: `go/cmd/sarina-tone` with `go/tone` (about 620 lines), how a spoken question sounded
 (pace, pitch, loudness, pauses, brightness) against the voice's own usual, for the spoken-question path. It is now the
 Rust build's second binary, `sarina-tone`, installed as `/usr/bin/sarina-tone` by all three recipes; the Go one is no
-longer built or installed. Its source (`go/tone`, `go/cmd/sarina-tone`, `tone_test.go`) stays in the repository as the
-reference the proof runs against until the Go code is deleted (~2026-11-25), and goes with it.
+longer built or installed. Its source (`go/tone`, `go/cmd/sarina-tone`, `tone_test.go`) went with the rest of the Go code
+on 2026-11-26; `testdata/parity/tone.json` stays (its writer is in the tag `go-final`), and the differential runs by hand
+against the Go sarina-tone of that commit (`sh rust/parity/go-sarina.sh OUT sarina-tone`); CI no longer runs it.
 
 **Where, and why there:** a `[[bin]]` in `rust/sarina` beside `sarina-rs`, not a crate of its own like packaging/voice:
 everything it needs is already proved there (Go's JSON reading into a struct with its tolerance, `gojson`'s float and
@@ -1199,7 +1195,7 @@ written through `.tmp` and a rename; old files read as Go read them.
   line limit of Go's bufio.Scanner on both sides, 605 entries, a byte order mark): what is read and the file after one
   append; Pattern for 768 histories in 8 made-up zones (summer time starting at midnight, half-hour and 45-minute
   offsets) at 16 times each, the 7- and 14-day edges, midnight and the evening hours exactly.
-- `rust/parity/tone-differential.py` (CI runs it): the Go and Rust programs side by side, 207 cases (349 runs), no
+- `rust/parity/tone-differential.py` (CI ran it until the Go code was deleted; by hand since): the Go and Rust programs side by side, 207 cases (349 runs), no
   difference: Go's flag syntax and messages (unknown flags, bad booleans, `-h`, `--`, bytes that are not UTF-8, the
   usage with odd $HOME values and program names), `--forget` (folders, links, errors, no $HOME), `--pattern` (40 made-up
   histories in five real zones and odd files), every recording kind with and without learning, a voice learned over 14
@@ -1283,6 +1279,24 @@ not a leak); my guess is glibc's per-thread malloc arenas (a thread per connecti
 interactive or one-shot `sarina` command starts in about a third of the time and half the memory; the model's own time
 (seconds) is untouched by either build.
 
+## The Go side
+
+The Go core left the tree on 2026-11-26, after one more week in which the package still installed it and nothing ran
+it. Its last commit is the tag `go-final` (GO_REV in `rust/parity/go-sarina.sh`), where it stays browsable;
+there is no separate Go repository. That commit's Go also starts only `sarina-helpers` (the Python helper went in the same
+commit), so the referee and sarina-rs agree there too.
+
+- **The referee:** `sh rust/parity/go-sarina.sh OUT` builds that commit's `go/cmd/sarina` with the current `VERSION` put over
+  the old one (`OUT sarina-tone` builds `go/cmd/sarina-tone`); nothing is installed. It needs Go 1.27 and the full history
+  (CI checks out with `fetch-depth: 0`). CI builds it for the CLI, service and GUI differentials; the sarina-tone
+  differential runs by hand.
+- **The fixtures** in `testdata/parity/` and `rust/sarina/src/tools/defs.json` were written by that commit's Go tests and are
+  read as they are by the Rust tests. To write one again after a deliberate change, check `go-final` out elsewhere and run
+  `SARINA_PARITY_UPDATE=1 go test ./... -run Parity` in its `go/`, then copy the file over; a change Go cannot make is a
+  Rust test of its own instead.
+- **On purpose:** the referee is built from an archive of that commit, so its `sarina version` names no commit (`unknown`,
+  no time); the CLI differential's version cases compare everything else (the build stamp is the Rust unit tests').
+
 ## Running the tests
 
 Every build, test and fixture run goes under a memory cap (a fixture writer once took 26 GB and the kernel's OOM killer
@@ -1293,9 +1307,11 @@ CAP="systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 nice -n 19
 cd rust
 $CAP cargo test -j4 --offline                 # every fixture, the properties, the fuzz bodies
 $CAP cargo clippy -j4 --offline --all-targets -- -D warnings
-cd ../go && $CAP go test -p 4 ./... -run Parity               # the fixtures are current with the Go code
-$CAP env SARINA_PARITY_UPDATE=1 go test -p 4 ./... -run Parity  # after a deliberate change: rewrite them, review the diff
-cd .. && go -C go build -o /tmp/sarina-tone-go ./cmd/sarina-tone && (cd rust && cargo build --bin sarina-tone)
+cd .. && sh rust/parity/go-sarina.sh /tmp/sarina-go       # the Go referee, from the pinned commit ("The Go side")
+$CAP python3 -I rust/parity/cli-differential.py --go /tmp/sarina-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-rs"
+$CAP python3 -I rust/parity/service-differential.py --go /tmp/sarina-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-rs"
+$CAP python3 -I rust/parity/gui-differential.py --go /tmp/sarina-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-rs"
+sh rust/parity/go-sarina.sh /tmp/sarina-tone-go sarina-tone && (cd rust && cargo build --bin sarina-tone)
 $CAP python3 -I rust/parity/tone-differential.py --go /tmp/sarina-tone-go --rs "${CARGO_TARGET_DIR:-rust/target}/debug/sarina-tone"
 ```
 

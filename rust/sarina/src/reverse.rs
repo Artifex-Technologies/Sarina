@@ -101,8 +101,8 @@ fn from_sandbox(p: &[u8]) -> Vec<u8> {
 }
 
 /// Go's `bsimScript`: the Ghidra script that compares the analysed program with the similarity library and then adds it
-/// there (go/reverse/LabyrinthBSim.java, the same file).
-pub const BSIM_SCRIPT: &str = include_str!("../../../go/reverse/LabyrinthBSim.java");
+/// there (reverse/LabyrinthBSim.java beside this file; Go's go/reverse/LabyrinthBSim.java, the same file).
+pub const BSIM_SCRIPT: &str = include_str!("reverse/LabyrinthBSim.java");
 
 /// Go's `similarScript`: the comparison inside labyrinth-rea's sandbox ($1 the file as the sandbox sees it, $2 the Ghidra
 /// script); the library is /work/bsim/library.mv.db, made once at setup; without it nothing runs.

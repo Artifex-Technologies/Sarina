@@ -1,9 +1,6 @@
-//! Go: `helpers`: the optional ML and voice helper, run as a program and talked to over pipes (JSON lines, protocol 1;
-//! python/sarina_helpers/PROTOCOL.md). Two builds answer the same: the Rust one, `sarina-helpers` (packaging/helpers,
-//! installed as /usr/lib/sarina/sarina-helpers), and the Python package (`python -P -m sarina_helpers ...`). The Rust one
-//! runs when it is installed; the Python one when it is not, when `SARINA_HELPERS=python` (the switch back, kept for the
-//! week after the switch: docs/RUST_PORT.md "The ML and voice helper") or when `SARINA_HELPERS_PYTHON` names an
-//! interpreter. `SARINA_HELPERS_BIN` names another Rust helper.
+//! Go: `helpers`: the optional ML and voice helper, `sarina-helpers` (packaging/helpers, installed as
+//! /usr/lib/sarina/sarina-helpers; `SARINA_HELPERS_BIN` names another), run as a program and talked to over pipes (JSON
+//! lines, protocol 1; packaging/helpers/PROTOCOL.md).
 //!
 //! Every read from the helper is bounded (as in Go since 2026-11-12): an answer line of at most `MAX_ANSWER_BYTES` (a
 //! longer one stops the helper), and only the last 64 KiB of its error output is kept. Once the helper is gone or
@@ -18,82 +15,33 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-/// The interpreter to use (default: python3, then python, on PATH); set, it also chooses the Python helper.
-pub const PYTHON_ENV: &str = "SARINA_HELPERS_PYTHON";
-/// "python": the Python helper even when the Rust one is installed.
-pub const CHOICE_ENV: &str = "SARINA_HELPERS";
-/// The Rust helper's program (default `RUST_HELPER`).
+/// Another helper program (as given).
 pub const BIN_ENV: &str = "SARINA_HELPERS_BIN";
-/// Where the package installs the Rust helper.
+/// Where the package installs the helper.
 pub const RUST_HELPER: &str = "/usr/lib/sarina/sarina-helpers";
-/// A folder holding the sarina_helpers package (put on PYTHONPATH).
-pub const PATH_ENV: &str = "SARINA_HELPERS_PATH";
 /// The JSON-lines protocol version this build speaks.
 pub const PROTOCOL_VERSION: i64 = 1;
 /// How the operator gets the helper.
-pub const INSTALL_HINT: &str = "pip install python/sarina_helpers[ml,voice] (or set SARINA_HELPERS_PYTHON / SARINA_HELPERS_PATH)";
+pub const INSTALL_HINT: &str = "/usr/lib/sarina/sarina-helpers from the sarina package, with onnxruntime-cpu (or set SARINA_HELPERS_BIN)";
 /// One answer line from the helper at most (64 MiB; its answers are small: a label, groups of names, a few vectors).
 pub const MAX_ANSWER_BYTES: usize = 64 << 20;
 const STDERR_KEEP: usize = 64 << 10;
 
-/// Go's `exec.LookPath` for a bare name: the first executable regular file of that name on PATH whose path is absolute.
-fn look_path(name: &str, path_var: &str) -> Option<String> {
-    use std::os::unix::fs::PermissionsExt;
-    for dir in path_var.split(':') {
-        let dir = if dir.is_empty() { "." } else { dir };
-        let p = format!("{dir}/{name}");
-        if std::fs::metadata(&p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0) && p.starts_with('/') {
-            return Some(p);
-        }
-    }
-    None
-}
-
-/// Go's `Python`: the interpreter.
-pub fn python(getenv: &dyn Fn(&str) -> String) -> Result<String, String> {
-    let p = getenv(PYTHON_ENV);
-    if !p.is_empty() {
-        return Ok(p);
-    }
-    for name in ["python3", "python"] {
-        if let Some(p) = look_path(name, &getenv("PATH")) {
-            return Ok(p);
-        }
-    }
-    Err(format!("no Python interpreter found (set {PYTHON_ENV})"))
-}
-
-/// The Rust helper to run, if it is the one: `SARINA_HELPERS_BIN` (as given), else `RUST_HELPER` when it is installed;
-/// never when the Python one is asked for.
-pub fn rust_helper(getenv: &dyn Fn(&str) -> String) -> Option<String> {
-    use std::os::unix::fs::PermissionsExt;
-    if !getenv(PYTHON_ENV).is_empty() || getenv(CHOICE_ENV) == "python" {
-        return None;
-    }
+/// Go's `Program`: the helper to run, `SARINA_HELPERS_BIN` when set, else `RUST_HELPER`.
+pub fn program(getenv: &dyn Fn(&str) -> String) -> String {
     let bin = getenv(BIN_ENV);
-    if !bin.is_empty() {
-        return Some(bin);
+    if bin.is_empty() {
+        RUST_HELPER.to_string()
+    } else {
+        bin
     }
-    std::fs::metadata(RUST_HELPER).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).then(|| RUST_HELPER.to_string())
 }
 
-/// Go's `Command`: the Rust helper with these arguments, else `python -P -m sarina_helpers args...` with
-/// SARINA_HELPERS_PATH put first on PYTHONPATH.
-pub fn command(getenv: &dyn Fn(&str) -> String, args: &[String]) -> Result<Command, String> {
-    if let Some(bin) = rust_helper(getenv) {
-        let mut cmd = Command::new(bin);
-        cmd.args(args);
-        return Ok(cmd);
-    }
-    let py = python(getenv)?;
-    let mut cmd = Command::new(py);
-    cmd.args(["-P", "-m", "sarina_helpers"]).args(args);
-    let dir = getenv(PATH_ENV);
-    if !dir.is_empty() {
-        let old = getenv("PYTHONPATH");
-        cmd.env("PYTHONPATH", if old.is_empty() { dir } else { format!("{dir}:{old}") });
-    }
-    Ok(cmd)
+/// Go's `Command`: the helper with these arguments.
+pub fn command(getenv: &dyn Fn(&str) -> String, args: &[String]) -> Command {
+    let mut cmd = Command::new(program(getenv));
+    cmd.args(args);
+    cmd
 }
 
 /// The last `max` bytes written (the helper's error output).
@@ -133,10 +81,10 @@ fn read_tail(mut r: impl Read, max: usize) -> Tail {
     t
 }
 
-/// Go's `Available`: whether the helper runs, with the reason if not (either build prints its usage line when run without
-/// arguments, which tells "importable" from "the interpreter ran but has no such module").
+/// Go's `Available`: whether the helper runs, with the reason if not (it prints its usage line when run without
+/// arguments).
 pub fn available(getenv: &dyn Fn(&str) -> String) -> Result<(), String> {
-    let mut cmd = command(getenv, &[])?;
+    let mut cmd = command(getenv, &[]);
     // one pipe for both, as Go gives the same writer to both
     let out = match std::io::pipe() {
         Ok((r, w)) => {
@@ -155,13 +103,10 @@ pub fn available(getenv: &dyn Fn(&str) -> String) -> Result<(), String> {
         }
         Err(_) => String::new(),
     };
-    if out.contains("usage: python -m sarina_helpers") || out.contains("usage: sarina-helpers ") {
+    if out.contains("usage: sarina-helpers ") {
         return Ok(());
     }
-    if rust_helper(getenv).is_some() {
-        return Err(format!("the helper does not run: {}", last_line(&out)));
-    }
-    Err(format!("the Python helper is not importable: {}", last_line(&out)))
+    Err(format!("the helper does not run: {}", last_line(&out)))
 }
 
 /// Go's `*exec.ExitError` text for a status.
@@ -197,13 +142,7 @@ pub fn passthrough(
         let _ = write!(stderr, "sarina: {e}\n  install: {INSTALL_HINT}\n");
         return 1;
     }
-    let mut cmd = match command(getenv, args) {
-        Ok(c) => c,
-        Err(e) => {
-            let _ = writeln!(stderr, "sarina: {e}");
-            return 1;
-        }
-    };
+    let mut cmd = command(getenv, args);
     let mut child = match cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -250,13 +189,7 @@ pub fn passthrough_inherit(env: &mut crate::cli::Env, args: &[String]) -> i32 {
         env.flush();
         return 1;
     }
-    let mut cmd = match command(&getenv, args) {
-        Ok(c) => c,
-        Err(e) => {
-            env.eprintln(&format!("sarina: {e}"));
-            return 1;
-        }
-    };
+    let mut cmd = command(&getenv, args);
     let program = cmd.get_program().to_owned();
     let st = cmd.stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn().and_then(|mut c| c.wait());
     match st {
@@ -308,7 +241,7 @@ static RESPONSE: Ty = Ty::Struct(
     ],
 );
 
-/// A running `sarina_helpers serve --model-dir D` (Go's `Server`).
+/// A running `sarina-helpers serve --model-dir D` (Go's `Server`).
 pub struct Server {
     child: Mutex<Child>,
     inner: Mutex<Inner>,
@@ -365,8 +298,14 @@ impl Server {
 
     /// `start` with an answer line limit (0: MAX_ANSWER_BYTES).
     pub fn start_with(model_dir: &str, max_line: usize, getenv: &dyn Fn(&str) -> String) -> Result<Server, String> {
-        let mut cmd = command(getenv, &["serve".into(), "--model-dir".into(), model_dir.into()])?;
-        let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
+        let mut cmd = command(getenv, &["serve".into(), "--model-dir".into(), model_dir.into()]);
+        let program = cmd.get_program().to_owned();
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| crate::goerr::path("fork/exec", program.as_encoded_bytes(), &e))?;
         let stdin = child.stdin.take();
         let stdout = BufReader::with_capacity(1 << 20, child.stdout.take().ok_or("no stdout")?);
         let err_pipe = child.stderr.take();
@@ -545,13 +484,11 @@ mod tests {
         let b = bin.to_str().unwrap();
         // named: the Rust helper, and it is accepted by its usage line
         let e = env(&[(BIN_ENV, b), ("PATH", "/nonexistent")]);
-        assert_eq!(rust_helper(&e).as_deref(), Some(b));
-        assert_eq!(command(&e, &["serve".into()]).unwrap().get_program(), b);
+        assert_eq!(program(&e), b);
+        assert_eq!(command(&e, &["serve".into()]).get_program(), b);
         assert_eq!(available(&e), Ok(()));
-        // the Python one asked for: never the Rust helper
-        for e in [env(&[(BIN_ENV, b), (CHOICE_ENV, "python")]), env(&[(BIN_ENV, b), (PYTHON_ENV, "/usr/bin/python3")])] {
-            assert_eq!(rust_helper(&e), None);
-        }
+        // not named: the installed one
+        assert_eq!(program(&env(&[])), RUST_HELPER);
         // a named helper that does not run says so
         let e = env(&[(BIN_ENV, "/nonexistent/sarina-helpers")]);
         assert_eq!(available(&e), Err("the helper does not run: no output".to_string()));

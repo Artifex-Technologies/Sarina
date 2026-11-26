@@ -1,14 +1,14 @@
 //! Go: `http.StripPrefix("/static/", http.FileServerFS(static))` as the console serves its embedded page (Go 1.27's
-//! `net/http/fs.go`): the files of `go/gui/static` (the same files, built in), the redirects for `index.html`, a folder
+//! `net/http/fs.go`): the files of `static/` beside this one (Go's `go/gui/static`, the same files, built in), the redirects for `index.html`, a folder
 //! without its slash and a file with one, the conditions (If-Match, If-None-Match; the files have no time and no ETag),
 //! byte ranges (one range, or several as multipart/byteranges) and the errors with their headers dropped.
 
 use crate::gohttpd::{Request, Response};
 use crate::gopath;
 
-pub const INDEX_HTML: &[u8] = include_bytes!("../../../../go/gui/static/index.html");
-const APP_CSS: &[u8] = include_bytes!("../../../../go/gui/static/app.css");
-const APP_JS: &[u8] = include_bytes!("../../../../go/gui/static/app.js");
+pub const INDEX_HTML: &[u8] = include_bytes!("static/index.html");
+const APP_CSS: &[u8] = include_bytes!("static/app.css");
+const APP_JS: &[u8] = include_bytes!("static/app.js");
 
 /// The embedded folder: a name (Go's fs path, "." the folder itself) and its file, None for the folder.
 fn open(name: &str) -> Option<Option<&'static [u8]>> {

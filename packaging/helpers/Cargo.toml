@@ -3,7 +3,7 @@ name = "sarina-helpers"
 version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
-description = "Sarina's ML and voice helper (embeddings, memory search, desktop-audit's classifier, voice chat), the port of python/sarina_helpers"
+description = "Sarina's ML and voice helper (embeddings, memory search, desktop-audit's classifier, voice chat), the port of the Python package sarina_helpers"
 publish = false
 
 [lib]
@@ -18,7 +18,7 @@ path = "src/main.rs"
 # Python's str.isspace, repr(float) and repr(str), shared with the voice programs (packaging/voice)
 sarina-voice = { path = "../voice" }
 # ONNX Runtime, loaded at run time from the system's onnxruntime (or ORT_DYLIB_PATH): nothing is downloaded or linked at
-# build time, as in packaging/voiced. The processor only, as the Python helper asked for (CPUExecutionProvider).
+# build time, as in packaging/voiced. The processor only, as the Python package asked for (CPUExecutionProvider).
 ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic"] }
 # the library Python's tokenizers package binds (the same version as packaging/voiced), with the same regular-expression engine
 tokenizers = { version = "0.23", default-features = false, features = ["onig"] }

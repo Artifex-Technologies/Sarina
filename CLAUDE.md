@@ -7,10 +7,9 @@ CLAUDE.md follows: what this is, build and test, rules, contracts, open work, kn
 
 Sarina is a local-model agent built on the Claude Code agent architecture: she runs against local, open-source models over
 an OpenAI-compatible API, optional on Labyrinth OS (from Agora) and part of LykanOS. The core is **Rust** (`rust/`, the
-binary `sarina-rs`, installed as `/usr/bin/sarina` since 2026-11-18), ported from the clean-room Go core (`go/`), which
-stays in the tree as the reference and rollback copy until about 2026-11-25. Also Rust, each in its own crate: the ML and
-voice helper (`packaging/helpers`, `sarina-helpers`; its Python original `python/sarina_helpers/` is the rollback copy until
-then), the spoken-question programs (`packaging/voice`, `sarina-voice`), the voice service (`packaging/voiced`,
+binary `sarina-rs`, installed as `/usr/bin/sarina` since 2026-11-18), ported from the clean-room Go core, which left the
+tree on 2026-11-26 (the tag `go-final` is its last commit). Also Rust, each in its own crate: the ML and
+voice helper (`packaging/helpers`, `sarina-helpers`), the spoken-question programs (`packaging/voice`, `sarina-voice`), the voice service (`packaging/voiced`,
 `sarina-voiced`) and `sarina-tone` (a second binary of `rust/`). It is a fork of
 [ClawCode](https://github.com/HarnessLab/claw-code-agent); keep that attribution intact. Sarina touches every other Artifex
 repository; the integration detail is [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md).
@@ -35,10 +34,11 @@ cargo (rustc reads it too). The other Rust crates build the same way from their 
 `packaging/voice`, `packaging/voiced`). CI (`.github/workflows/rust.yml`, `helpers.yml`) runs fmt, clippy, the tests and
 the differentials; docs changes do not start it.
 
-**Go stays as the reference until it is deleted (~2026-11-25).** `go/` (Go 1.27+, standard library only) is what the Rust
-was proved against: its parity tests write the fixtures in `testdata/parity/` and `rust/sarina/src/tools/defs.json`, and
-`rust/parity/*.py` run both builds side by side (docs/RUST_PORT.md "Running the tests"). A bug the port finds is fixed in
-both until then (`cd go && go vet ./... && go test ./...`); nothing installed runs the Go build.
+**The Go referee.** The Rust was proved against the Go core, whose last commit is the tag `go-final`: its parity tests
+wrote the fixtures in `testdata/parity/` and `rust/sarina/src/tools/defs.json`, and `rust/parity/*.py` run the Go build
+of that commit beside the Rust one (`sh rust/parity/go-sarina.sh OUT` builds it; Go 1.27 and the full history needed;
+docs/RUST_PORT.md "The Go side"). A deliberate change to an answer the differentials compare becomes a case marked
+`intended` there.
 
 Chatting needs an OpenAI-compatible backend (`OPENAI_BASE_URL`, `OPENAI_API_KEY`,
 `OPENAI_MODEL`); the tests do not. Ollama's default 4096-token context is too small
@@ -47,8 +47,7 @@ for Sarina: she needs at least 8k (16k recommended).
 The old Python (`sarina/`, its tests and the top-level
 `pyproject.toml`) was deleted on 2026-11-11: nothing installed it, and dead code is
 a security risk (`docs/PROVENANCE.md`). The ML and voice helper speaks a JSON-lines protocol
-(`python/sarina_helpers/PROTOCOL.md`; the core's side is `rust/sarina/src/helpers.rs`); `SARINA_HELPERS=python` goes back
-to the Python package during the rollback week. `tests/` holds only the tests of the voice-training tools in
+(`packaging/helpers/PROTOCOL.md`; the core's side is `rust/sarina/src/helpers.rs`). `tests/` holds only the tests of the voice-training tools in
 `tools/voice_clone/` and of `blackarch_compat/` (`python3 -m unittest discover -s tests` from the repository root); the
 evals are Python too (`evals/run_evals.py`).
 
@@ -69,7 +68,6 @@ Entry points: `sarina <command>`; the binary also answers to `sarina-gui` and
   made-up owner name. Never raise Sarina's access tier, write `SARINA_ACCESS_TIER`, or change sudoers or Heimdall's
   configuration: only the owner does that, at a terminal.
 - **One thing on the graphics card at a time**, and every build or test under the memory cap (section 2).
-- **A bug the port finds is fixed in Go and Rust both** while the Go code exists, each with a test that failed before.
 - **A change another repository relies on** (a format, port, path, command name or `--json` key, a new run-time dependency)
   updates `docs/CONTRACTS.md` and `docs/ECOSYSTEM.md` in the same commit, is flagged `CONTRACT:` in the commit message, and
   gets a handoff note in `docs/plans/LOG.md` (private). A contract marked **proposed** in ECOSYSTEM.md is not settled: do
@@ -80,7 +78,7 @@ Entry points: `sarina <command>`; the binary also answers to `sarina-gui` and
   rather than mocks.
 - **Few crates, pinned exactly.** A new crate in `rust/` needs a real justification, an exact version (`=x.y.z`, the
   lock file pins the rest) and preferably the one Heimdall already uses; for the distro it must build from Arch's
-  toolchain: flag it `CONTRACT:`. Until the Go code goes, `go/` stays standard library only.
+  toolchain: flag it `CONTRACT:`.
 - **Test what you add, offline.** Include the failure and hostile-input cases; this
   codebase treats anything from a model, a guest, a sibling repo or the network as
   untrusted data.
@@ -132,7 +130,7 @@ docs/plans/BACKLOG.md and docs/plans/LOG.md (private; ask the owner).
 
 ### Architecture map
 
-Each Rust module's first doc line names the Go package it was ported from; the Go names below are the same packages.
+Each Rust module's first doc line names the Go package it was ported from (`go/...` paths are in the tag `go-final`).
 
 ```
 rust/
@@ -151,7 +149,7 @@ rust/
   desktop.rs         application-menu categorisation (reports by default)
   doctor.rs          read-only checkup of the whole setup
   service.rs gui/ runkit.rs   integration API (:8899) and operator GUI (:8765) over gohttpd (Go's HTTP server)
-  helpers.rs         bridge to the ML/voice helper (sarina-helpers; the Python one with SARINA_HELPERS=python)
+  helpers.rs         bridge to the ML/voice helper (sarina-helpers; SARINA_HELPERS_BIN names another)
   forge/             agents Sarina writes, run only inside Limbo guests (docs/AGENT_FORGE.md)
   vault/ daily/      her linked Markdown notes; the day's note (Daily/YYYY-MM-DD.md)
   insight/           what she learns about the person she talks with (`sarina reflect`)
@@ -165,31 +163,30 @@ rust/
   testguard.rs       under SARINA_TEST=1 nothing writes outside the test's folders
   go*.rs, gotext/    Go's behaviour where the answers must match byte for byte (JSON, flags, time, paths, math, ...)
   sarina/tests/      parity_*.rs against testdata/parity/, sarina_rs.rs (the binary), fleet_invariant.rs
-  parity/            cli-, service-, gui- and tone-differential.py: Go and Rust side by side
+  parity/            cli-, service-, gui- and tone-differential.py: the Go referee and Rust side by side; go-sarina.sh
+                     builds the referee from the pinned commit (go-final)
   fuzz/              cargo-fuzz targets (nightly, not part of the normal build)
-go/                  the Go core, the reference until ~2026-11-25 (same package names; notes/ and NOTES.md: its design notes)
-python/sarina_helpers/   the Python ML and voice helper, kept for the rollback week (goes ~2026-11-25)
-packaging/helpers/   sarina-helpers (Rust): the ML and voice helper (serve, memory-search, voice-chat); differential with the Python
+packaging/helpers/   sarina-helpers (Rust): the ML and voice helper (serve, memory-search, voice-chat), PROTOCOL.md; its
+                     differential against the Python it was ported from (read from a pinned commit)
 packaging/voice/     sarina-voice (Rust): labyrinth-ask-sarina, the check-up, the voice client
 packaging/voiced/    sarina-voiced (Rust): the voice service (Chatterbox through ONNX Runtime)
 packaging/arch/      source of truth for the distro's systemd unit + sysusers + PKGBUILD
 packaging/skills/    the packaged skills (installed in /usr/share/sarina/skills)
 packaging/limbo/     the decompile profile's image and wrapper (limbo-decompile)
 docs/ECOSYSTEM.md    cross-repo integration contract
-docs/RUST_PORT.md    the port: what was proved, the differences on purpose, what goes with the Go deletion
+docs/RUST_PORT.md    the port: what was proved, the differences on purpose, the Go referee
 docs/spec/           the clean-room behaviour specs the Go core was written from
 ```
 
 Adding a CLI command: a function in `rust/sarina/src/cli/` (or the module it belongs to) and a row in `cli::COMMANDS`
 (name, summary, function). Adding a tool: its definition in `tools/defs.json` and its handler in the module's `tools()` list; a
-tool must declare a `Class`, and the model sees its definition on every request, so keep it small. Until the Go code is
-deleted, `defs.json` is written from the Go tools (`SARINA_PARITY_UPDATE=1 go test ./cmd/sarina -run ParityToolDefs`) and
-Go's `TestToolDefinitionFootprint` caps the total, so a new tool is added in both.
+tool must declare a `Class`, and the model sees its definition on every request, so keep it small. `defs.json` was written
+from the Go tools (go-final); a new tool's definition is added to it by hand.
 
 ### Names and gotchas
 
 - Commands and modules named `chymaera` (`chymaera-console`, `chymaera-analyze`, `chymaera-device-info`,
-  `chymaera-merge-report`; `rust/sarina/src/chymaera`, `go/chymaera`) are the Argus App and Argus firmware (Flipper Zero)
+  `chymaera-merge-report`; `rust/sarina/src/chymaera`) are the Argus App and Argus firmware (Flipper Zero)
   tools; the names predate the renames (Chymaera OS is LykanOS since 2026-11-07) and stay, because scripts call them.
 - Older notes and history use the old repository names (Chymaera_Sentry is Heimdall, Chymaera_Linux and Chymaera_OS are
   LykanOS, Chymaera_Zero_App and _Firmware are the Argus repositories).
@@ -197,8 +194,6 @@ Go's `TestToolDefinitionFootprint` caps the total, so a new tool is added in bot
   expected string); build such strings from parts or check them with grep.
 - A mutation script that restores a file with `cp` or `mv` leaves it older than the last build, so cargo does not rebuild:
   touch the file after restoring it.
-- The timed client fixtures take about a minute of the Go parity run; keep fixtures small and bounded (no input that makes
-  Go allocate by a count it reads).
 - The service and GUI differentials do not run in a network namespace of their own (their servers take ports from the
   kernel, so nothing reaches 8899 or 8765); a scenario that dials a fixed port needs the CLI differential's `run_case`
   wrapper first.

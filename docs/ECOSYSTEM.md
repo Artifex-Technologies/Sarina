@@ -10,8 +10,8 @@ the others, so this file records how they fit together **from Sarina's side**.
 > `chymaera-merge-report`, `rust/sarina/src/chymaera`) are her Argus tools and keep their names.
 >
 > **Sarina's core is Rust since 2026-11-18** (`rust/`, `sarina-rs` installed as `/usr/bin/sarina`). Code paths below
-> name the Rust module; the Go package of the same name (`go/...`) is the reference it was proved against, kept until
-> about 2026-11-25.
+> name the Rust module; the Go package of the same name (`go/...`, in the tag `go-final`) is the reference it was proved
+> against.
 
 Status keys: **live** (implemented and verified), **agreed** (both sides accepted
 the shape, not yet built), **proposed** (awaiting the owning repo's answer),
@@ -49,7 +49,7 @@ graphics card's memory (the council runs local members one at a time by default 
 ### The packaging contract (owned by Labyrinth_OS)
 
 `Labyrinth_OS/packages/pkgbuilds/sarina-git/PKGBUILD` builds this repo directly and **breaks if any of these move**.
-Checked against that recipe on 2026-11-18:
+Checked against that recipe on 2026-11-26:
 
 | Path here | Used for |
 | --- | --- |
@@ -57,8 +57,6 @@ Checked against that recipe on 2026-11-18:
 | `packaging/helpers/` | `sarina-helpers` → `/usr/lib/sarina/sarina-helpers` (the ML/voice helper) |
 | `packaging/voice/` | `sarina-voice` → `/usr/bin/sarina-voice` (the spoken-question programs; the image's `labyrinth-ask-sarina` and friends link to it) |
 | `packaging/voiced/` | `sarina-voiced` → `/usr/bin/sarina-voiced` (the voice service) |
-| `go/` | `go build ./cmd/sarina` → `/usr/lib/sarina/sarina`, the rollback copy nothing runs (until ~2026-11-25) |
-| `python/sarina_helpers/pyproject.toml` | the Python helper wheel, the rollback copy (until ~2026-11-25) |
 | `packaging/skills/*/` | → `/usr/share/sarina/skills/` (with their `sections/`) |
 | `packaging/arch/sarina-service.service` | → `/usr/lib/systemd/system/` |
 | `packaging/arch/sarina.sysusers` | → `/usr/lib/sysusers.d/sarina.conf` |
@@ -449,7 +447,7 @@ Marked **live** rather than proposed because both halves are built,
 tested, and verified working together over a real loopback connection —
 not a claim that the shape will never move. A breaking change to the
 `/v1/review` request/response JSON needs updating this section,
-`heimdall.rs` (and `go/heimdall` while it exists), and Heimdall's own
+`heimdall.rs`, and Heimdall's own
 `internal/governance`/`internal/api/review.go`, together, in one commit.
 
 Heimdall's side of the contract:

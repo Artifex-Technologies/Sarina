@@ -2,8 +2,7 @@
 //! the command lines a contained Sarina refuses (message and exit status byte for byte) and those it answers (`version`,
 //! `help`: in Rust since 2026-11-18), the usage and `version` answered here, and a command with an argument that is not
 //! UTF-8: refused (one line on standard error naming the command, the argument's position and the argument as `%q`
-//! quotes it, exit status 2, nothing run; Go ran the command: a difference on purpose since 2026-11-18). Nothing is
-//! handed to the Go build.
+//! quotes it, exit status 2, nothing run; Go ran the command: a difference on purpose since 2026-11-18).
 
 mod common;
 

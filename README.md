@@ -70,7 +70,8 @@ scratch in Go (`go/`) from behaviour specs (`docs/spec/`), without reference to
 the old code, and the derived Python has been deleted from the tree; see
 [docs/PROVENANCE.md](docs/PROVENANCE.md) and [NOTICE.md](NOTICE.md) for the audit. That clean-room Go core was then ported
 to Rust (`rust/`) and proved against it case by case ([docs/RUST_PORT.md](docs/RUST_PORT.md)); the Rust build is the one
-installed since 2026-11-18, and the Go code stays only as the reference and rollback copy until about 2026-11-25. Credit
+installed since 2026-11-18, and the Go code left the tree on 2026-11-26 (its last commit is the tag `go-final`, which the
+side-by-side tests build their Go referee from). Credit
 to the ClawCode project and contributors for the original implementation this
 grew from. Sarina is not affiliated with or endorsed by Anthropic.
 
@@ -83,8 +84,7 @@ grew from. Sarina is not affiliated with or endorsed by Anthropic.
   `PARAMETER num_ctx 16384` or `OLLAMA_CONTEXT_LENGTH=16384`, or tell Sarina the real size with `--context-window`.
 - For finding notes by meaning: the small `nomic-embed-text` model in Ollama (about 270 MB, loaded only while searching).
 - Optional, for the ML/voice helper (`sarina-helpers`, Rust): `onnxruntime-cpu` (loaded at run time), and for
-  `voice-chat` `whisper-cpp`, `espeak-ng` and `alsa-utils`. The Python helper (`python/sarina_helpers`) is kept only for
-  the rollback week (`SARINA_HELPERS=python`).
+  `voice-chat` `whisper-cpp`, `espeak-ng` and `alsa-utils`.
 - Linux is the reference platform.
 
 ## Build and run
@@ -123,7 +123,7 @@ Read from the environment (Labyrinth keeps them in `~/.config/labyrinth/sarina.e
 | `SARINA_FORGE=on` | the agent forge tools (needs Limbo and its `agent-run` profile) |
 | `SARINA_LIMBO_SOCKET` | Limbo's agent socket (`/run/limbo/agent.sock`) |
 | `SARINA_PRIVATE_DIRS` | folders no file tool may read, list, search or write (`:`-separated, `~` allowed) |
-| `SARINA_HELPERS=python` | use the Python ML/voice helper instead of `sarina-helpers` (the rollback week only, until ~2026-11-25) |
+| `SARINA_HELPERS_BIN` | another ML/voice helper program instead of `/usr/lib/sarina/sarina-helpers` |
 
 ## Commands
 
@@ -229,7 +229,7 @@ executable). `allow_data` controls what may be sent to a tier: secret-shaped tex
 is redacted, and capture data is refused outright for `no_captures`. Each
 escalation is printed and recorded in the session file. The old flags
 (`--escalate-to-claude-code`, `--claude-code-cli-path`, `--escalation-trigger`,
-`--disable-resource-check`) still work; see `go/notes/escalation.md`.
+`--disable-resource-check`) still work (`rust/sarina/src/tiers/`).
 
 ## Context management
 
@@ -270,8 +270,7 @@ The integration contract, ports and rules are in [docs/ECOSYSTEM.md](docs/ECOSYS
 
 `packaging/arch/` is the source of truth for the Arch package: the Rust binary as `/usr/bin/sarina`,
 the `sarina-gui` / `sarina-service` symlinks, `sarina-tone`, the ML/voice helper (`/usr/lib/sarina/sarina-helpers`), the
-systemd unit, sysusers and env template, and for the rollback week the Go build (`/usr/lib/sarina/sarina`, which nothing
-runs) and the Python helper. See its README. Labyrinth OS and LykanOS install `sarina-git`, built by Labyrinth_OS's own
+systemd unit, sysusers and env template. See its README. Labyrinth OS and LykanOS install `sarina-git`, built by Labyrinth_OS's own
 recipe (`packages/pkgbuilds/sarina-git`), which also installs `sarina-voice` and `sarina-voiced`.
 
 ## Why Rust: measured
@@ -283,9 +282,8 @@ instead of 52-80, a chat turn 24 ms instead of 68 (11 MB instead of 23). Every p
 ## Repository map
 
 ```text
-rust/             the agent (sarina-rs, installed as sarina; sarina-tone), its proofs against Go (rust/parity, testdata/parity)
-go/               the Go core: the reference and rollback copy until ~2026-11-25
-python/           the Python ML/voice helper (sarina_helpers): rollback copy until ~2026-11-25; PROTOCOL.md is the helper protocol
+rust/             the agent (sarina-rs, installed as sarina; sarina-tone), its proofs against Go (rust/parity, testdata/parity;
+                  the Go referee is built from the tag go-final)
 docs/RUST_PORT.md the Rust port: what was proved, the differences on purpose
 docs/spec/        behaviour specs the Go core was built from
 docs/ECOSYSTEM.md cross-repo contract
@@ -296,7 +294,7 @@ evals/            capability evals (run_evals.py)
 tools/training/   review sheet and export of Sarina's answers for fine-tuning
 tools/voice_clone/  the tools that train Sarina's own voice (their tests are in tests/)
 packaging/arch/   Arch package, systemd unit, env template
-packaging/helpers/  sarina-helpers (Rust): the ML and voice helper
+packaging/helpers/  sarina-helpers (Rust): the ML and voice helper; PROTOCOL.md is the helper protocol
 packaging/voice/  sarina-voice (Rust): the spoken-question programs, side-by-side tests with the Python
 packaging/voiced/ sarina-voiced (Rust): the voice service
 ```
