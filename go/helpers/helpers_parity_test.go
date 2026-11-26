@@ -10,15 +10,11 @@ import (
 	"github.com/Artifex-Technologies/Sarina/go/internal/parity"
 )
 
-// fakeScript is a stand-in for the Python interpreter that both languages' tests run, so the helper client is compared
-// on the same process: it answers `serve` with the lines in <model dir>/replies, in order ("@big": a 5,000-byte line,
+// fakeScript is a stand-in for sarina-helpers that both languages' tests run, so the helper client is compared on the
+// same process: it answers `serve` with the lines in <model dir>/replies, in order ("@big": a 5,000-byte line,
 // "@exit": a last error line and exit 3; "@late": its output closed first, the error line 0.3 s later, exit 4), and logs each request to <model dir>/requests.
 const fakeScript = `#!/bin/sh
-if [ "$1" != "-P" ]; then echo "not the helper: no -P"; exit 2; fi
-shift
-if [ "$1" != "-m" ] || [ "$2" != "sarina_helpers" ]; then echo "not the helper"; exit 2; fi
-shift 2
-if [ $# -eq 0 ]; then echo "usage: python -m sarina_helpers {serve|memory-search|voice-chat} ..."; exit 2; fi
+if [ $# -eq 0 ]; then echo "usage: sarina-helpers {serve|memory-search|voice-chat} ..."; exit 2; fi
 if [ "$1" != "serve" ]; then
   printf 'fake-helper'; for a in "$@"; do printf '|%s' "$a"; done; echo
   echo "to stderr" >&2
@@ -44,8 +40,8 @@ while IFS= read -r line; do
 done
 `
 
-// noModule is an interpreter without the helper package.
-const noModule = "#!/bin/sh\necho \"Traceback (most recent call last):\" >&2\necho \"ModuleNotFoundError: No module named 'sarina_helpers'\" >&2\nexit 1\n"
+// notHelper is a program that runs but is not the helper (no usage line).
+const notHelper = "#!/bin/sh\necho \"loading the models\" >&2\necho \"error: libonnxruntime.so: cannot open shared object file\" >&2\nexit 1\n"
 
 type helperOp struct {
 	op        string // classify, group
@@ -59,12 +55,10 @@ type helperOp struct {
 // status, the requests sent; and Available and Passthrough. {DIR} is the test folder.
 func TestParityHelpers(t *testing.T) {
 	root := t.TempDir()
-	py := filepath.Join(root, "python")
-	os.WriteFile(py, []byte(fakeScript), 0o755)
-	nomod := filepath.Join(root, "nomodule")
-	os.WriteFile(nomod, []byte(noModule), 0o755)
-	t.Setenv(PythonEnv, py)
-	t.Setenv(PathEnv, "")
+	bin := filepath.Join(root, "sarina-helpers")
+	os.WriteFile(bin, []byte(fakeScript), 0o755)
+	other := filepath.Join(root, "other")
+	os.WriteFile(other, []byte(notHelper), 0o755)
 	ping := `{"ok":true,"protocol":1,"prototypes":"abc"}`
 	ops := []helperOp{{op: "classify", text: "draw <pictures> é"}, {op: "group", captures: []map[string]any{{"name": "a.nfc", "size": 12.5}}, threshold: 0.7},
 		{op: "classify", text: "second"}, {op: "classify", text: "third"}, {op: "classify", text: "fourth"}}
@@ -84,11 +78,15 @@ func TestParityHelpers(t *testing.T) {
 		{"proto2", []string{`{"ok":true,"protocol":2,"prototypes":"abc"}`}, 0},
 		{"pingfail", []string{`{"ok":false,"error":"model folder unreadable"}`}, 0},
 		{"pingjunk", []string{`garbage`}, 0},
-		{"bad", nil, 0}, {"noisy", nil, 0}, {"silent", nil, 0},
+		{"bad", nil, 0}, {"noisy", nil, 0}, {"silent", nil, 0}, {"missing", nil, 0},
 	}
 	var cases []parity.Case
 	clean := func(s string) string { return strings.ReplaceAll(s, root, "{DIR}") }
 	for _, sc := range scenarios {
+		t.Setenv(BinEnv, bin)
+		if sc.dir == "missing" {
+			t.Setenv(BinEnv, filepath.Join(root, "no-such-helper"))
+		}
 		dir := filepath.Join(root, sc.dir)
 		os.MkdirAll(dir, 0o755)
 		os.WriteFile(filepath.Join(dir, "replies"), []byte(strings.Join(sc.replies, "\n")+"\n"), 0o644)
@@ -116,18 +114,18 @@ func TestParityHelpers(t *testing.T) {
 	}
 	// Available and Passthrough
 	for _, c := range []struct {
-		python string
-		args   []string
-		exit   string
-	}{{py, []string{"memory-search", "--model-dir", "m", "find  it"}, ""}, {py, []string{"voice-chat"}, "3"}, {nomod, []string{"memory-search", "q"}, ""},
-		{filepath.Join(root, "no-such-python"), []string{"memory-search", "q"}, ""}} {
-		t.Setenv(PythonEnv, c.python)
+		bin  string
+		args []string
+		exit string
+	}{{bin, []string{"memory-search", "--model-dir", "m", "find  it"}, ""}, {bin, []string{"voice-chat"}, "3"}, {other, []string{"memory-search", "q"}, ""},
+		{filepath.Join(root, "no-such-helper"), []string{"memory-search", "q"}, ""}} {
+		t.Setenv(BinEnv, c.bin)
 		t.Setenv("FAKE_EXIT", c.exit)
 		var stdout, stderr bytes.Buffer
 		code := Passthrough(strings.NewReader(""), &stdout, &stderr, c.args...)
-		cases = append(cases, parity.Case{Fn: "passthrough", In: []any{clean(c.python), c.args, c.exit},
+		cases = append(cases, parity.Case{Fn: "passthrough", In: []any{clean(c.bin), c.args, c.exit},
 			Out: []any{clean(parity.Err(Available())), code, stdout.String(), clean(stderr.String())}})
 	}
-	cases = append(cases, parity.Case{Fn: "scripts", In: map[string]string{"python": fakeScript, "nomodule": noModule}})
+	cases = append(cases, parity.Case{Fn: "scripts", In: map[string]string{"sarina-helpers": fakeScript, "other": notHelper}})
 	parity.Fixture(t, "helpers", cases)
 }

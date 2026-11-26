@@ -3,7 +3,7 @@
 Produces one artifact: a fine-tuned Piper voice model (`.onnx` +
 `.onnx.json`) that sounds like the reference recording(s) in `samples/`.
 That file is then handed to `sarina voice-chat --tts-model` unmodified — see
-`python/sarina_helpers/sarina_helpers/tts.py`. Nothing here is imported by
+`packaging/helpers` (the voice's Piper). Nothing here is imported by
 Sarina, and none of it ships as part of the installed package or the Arch build.
 
 **Privacy**: a voice recording and a voice-clone model are both personal

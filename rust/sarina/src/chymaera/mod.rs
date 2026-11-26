@@ -10,7 +10,7 @@ pub mod firmware;
 /// Go's `TokenEnv`.
 const TOKEN_ENV: &str = "CHYMAERA_CONSOLE_TOKEN";
 /// Go's `SemanticHelperReason`.
-const SEMANTIC_HELPER_REASON: &str = "semantic grouping needs the Python embedding helper";
+const SEMANTIC_HELPER_REASON: &str = "semantic grouping needs the embedding helper";
 
 fn parse(fs: &mut crate::goflag::FlagSet, args: &[String], env: &mut crate::cli::Env) -> Result<(), i32> {
     let r = fs.parse(args, &mut env.stderr);
@@ -75,7 +75,7 @@ pub fn analyze_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
     let mut fs = crate::goflag::FlagSet::new("chymaera-analyze");
     conn_flags(&mut fs);
     fs.int("limit", 100, "number of recent captures to analyse");
-    fs.string("model-dir", "", "embedding model directory (semantic grouping; needs the Python helper, see python/sarina_helpers)");
+    fs.string("model-dir", "", "embedding model directory (semantic grouping; needs the ML helper, sarina-helpers)");
     fs.float("similarity-threshold", 0.75, "semantic grouping threshold");
     if let Err(code) = parse(&mut fs, args, env) {
         return code;
@@ -89,7 +89,7 @@ pub fn analyze_command(env: &mut crate::cli::Env, args: &[String]) -> i32 {
             return 1;
         }
     };
-    let mut reason = "no embedding model given (pass --model-dir; semantic grouping needs the Python embedding helper)".to_string();
+    let mut reason = "no embedding model given (pass --model-dir; semantic grouping needs the embedding helper)".to_string();
     let mut groups = None;
     let model_dir = fs.str("model-dir");
     let mut srv = None;

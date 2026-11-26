@@ -58,7 +58,6 @@ Checked against that recipe on 2026-11-18:
 | `packaging/voice/` | `sarina-voice` → `/usr/bin/sarina-voice` (the spoken-question programs; the image's `labyrinth-ask-sarina` and friends link to it) |
 | `packaging/voiced/` | `sarina-voiced` → `/usr/bin/sarina-voiced` (the voice service) |
 | `go/` | `go build ./cmd/sarina` → `/usr/lib/sarina/sarina`, the rollback copy nothing runs (until ~2026-11-25) |
-| `python/sarina_helpers/pyproject.toml` | the Python helper wheel, the rollback copy (until ~2026-11-25) |
 | `packaging/skills/*/` | → `/usr/share/sarina/skills/` (with their `sections/`) |
 | `packaging/arch/sarina-service.service` | → `/usr/lib/systemd/system/` |
 | `packaging/arch/sarina.sysusers` | → `/usr/lib/sysusers.d/sarina.conf` |

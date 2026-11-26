@@ -10,12 +10,11 @@ import (
 // pipe while the reader was still reading it (CI failed on it, 2026-11-17). Now the client owns its end of the pipe.
 func TestHelperThatDiesReadsAsEOF(t *testing.T) {
 	root := t.TempDir()
-	py := filepath.Join(root, "python")
-	if err := os.WriteFile(py, []byte(fakeScript), 0o755); err != nil {
+	bin := filepath.Join(root, "sarina-helpers")
+	if err := os.WriteFile(bin, []byte(fakeScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv(PythonEnv, py)
-	t.Setenv(PathEnv, "")
+	t.Setenv(BinEnv, bin)
 	dir := filepath.Join(root, "silent")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)

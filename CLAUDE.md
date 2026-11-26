@@ -9,8 +9,7 @@ Sarina is a local-model agent built on the Claude Code agent architecture: she r
 an OpenAI-compatible API, optional on Labyrinth OS (from Agora) and part of LykanOS. The core is **Rust** (`rust/`, the
 binary `sarina-rs`, installed as `/usr/bin/sarina` since 2026-11-18), ported from the clean-room Go core (`go/`), which
 stays in the tree as the reference and rollback copy until about 2026-11-25. Also Rust, each in its own crate: the ML and
-voice helper (`packaging/helpers`, `sarina-helpers`; its Python original `python/sarina_helpers/` is the rollback copy until
-then), the spoken-question programs (`packaging/voice`, `sarina-voice`), the voice service (`packaging/voiced`,
+voice helper (`packaging/helpers`, `sarina-helpers`), the spoken-question programs (`packaging/voice`, `sarina-voice`), the voice service (`packaging/voiced`,
 `sarina-voiced`) and `sarina-tone` (a second binary of `rust/`). It is a fork of
 [ClawCode](https://github.com/HarnessLab/claw-code-agent); keep that attribution intact. Sarina touches every other Artifex
 repository; the integration detail is [`docs/ECOSYSTEM.md`](docs/ECOSYSTEM.md).
@@ -47,8 +46,7 @@ for Sarina: she needs at least 8k (16k recommended).
 The old Python (`sarina/`, its tests and the top-level
 `pyproject.toml`) was deleted on 2026-11-11: nothing installed it, and dead code is
 a security risk (`docs/PROVENANCE.md`). The ML and voice helper speaks a JSON-lines protocol
-(`python/sarina_helpers/PROTOCOL.md`; the core's side is `rust/sarina/src/helpers.rs`); `SARINA_HELPERS=python` goes back
-to the Python package during the rollback week. `tests/` holds only the tests of the voice-training tools in
+(`packaging/helpers/PROTOCOL.md`; the core's side is `rust/sarina/src/helpers.rs`). `tests/` holds only the tests of the voice-training tools in
 `tools/voice_clone/` and of `blackarch_compat/` (`python3 -m unittest discover -s tests` from the repository root); the
 evals are Python too (`evals/run_evals.py`).
 
@@ -151,7 +149,7 @@ rust/
   desktop.rs         application-menu categorisation (reports by default)
   doctor.rs          read-only checkup of the whole setup
   service.rs gui/ runkit.rs   integration API (:8899) and operator GUI (:8765) over gohttpd (Go's HTTP server)
-  helpers.rs         bridge to the ML/voice helper (sarina-helpers; the Python one with SARINA_HELPERS=python)
+  helpers.rs         bridge to the ML/voice helper (sarina-helpers; SARINA_HELPERS_BIN names another)
   forge/             agents Sarina writes, run only inside Limbo guests (docs/AGENT_FORGE.md)
   vault/ daily/      her linked Markdown notes; the day's note (Daily/YYYY-MM-DD.md)
   insight/           what she learns about the person she talks with (`sarina reflect`)
@@ -168,8 +166,8 @@ rust/
   parity/            cli-, service-, gui- and tone-differential.py: Go and Rust side by side
   fuzz/              cargo-fuzz targets (nightly, not part of the normal build)
 go/                  the Go core, the reference until ~2026-11-25 (same package names; notes/ and NOTES.md: its design notes)
-python/sarina_helpers/   the Python ML and voice helper, kept for the rollback week (goes ~2026-11-25)
-packaging/helpers/   sarina-helpers (Rust): the ML and voice helper (serve, memory-search, voice-chat); differential with the Python
+packaging/helpers/   sarina-helpers (Rust): the ML and voice helper (serve, memory-search, voice-chat), PROTOCOL.md; its
+                     differential against the Python it was ported from (read from a pinned commit)
 packaging/voice/     sarina-voice (Rust): labyrinth-ask-sarina, the check-up, the voice client
 packaging/voiced/    sarina-voiced (Rust): the voice service (Chatterbox through ONNX Runtime)
 packaging/arch/      source of truth for the distro's systemd unit + sysusers + PKGBUILD

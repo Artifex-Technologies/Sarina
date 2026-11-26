@@ -1,8 +1,8 @@
-// Package fakehelper is a stand-in for `python -m sarina_helpers`, for Go tests.
+// Package fakehelper is a stand-in for `sarina-helpers`, for Go tests.
 //
-// A test package calls MaybeRun from TestMain and points SARINA_HELPERS_PYTHON
+// A test package calls MaybeRun from TestMain and points SARINA_HELPERS_BIN
 // at its own test binary with SARINA_FAKE_HELPER=1; the binary then behaves as
-// the helper instead of running tests. No Python is needed.
+// the helper instead of running tests.
 package fakehelper
 
 import (
@@ -31,18 +31,10 @@ func MaybeRun() {
 	}
 }
 
-// Run is the fake helper; args are what follows the interpreter name.
-func Run(args []string, in io.Reader, out io.Writer) int {
-	if len(args) > 0 && args[0] == "-P" { // the real interpreter's safe-path flag
-		args = args[1:]
-	}
-	if len(args) < 2 || args[0] != "-m" || args[1] != "sarina_helpers" {
-		fmt.Fprintln(out, "not the helper")
-		return 2
-	}
-	rest := args[2:]
+// Run is the fake helper; args are what follows the program name.
+func Run(rest []string, in io.Reader, out io.Writer) int {
 	if len(rest) == 0 {
-		fmt.Fprintln(out, "usage: python -m sarina_helpers {serve|memory-search|voice-chat} ...")
+		fmt.Fprintln(out, "usage: sarina-helpers {serve|memory-search|voice-chat} ...")
 		return 2
 	}
 	if rest[0] == "serve" {

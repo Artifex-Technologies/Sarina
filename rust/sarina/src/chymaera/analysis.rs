@@ -1,5 +1,5 @@
 //! Go: `chymaera/analysis`: statistics over Argus App captures, from what `capture.list` gives (each record's `meta` JSON;
-//! the .nfc/.sub files stay the app's to parse). Semantic grouping needs an embedding model and is the Python helper's.
+//! the .nfc/.sub files stay the app's to parse). Semantic grouping needs an embedding model and is the embedding helper's.
 
 use crate::goany::Any;
 use crate::pyfmt;

@@ -1,9 +1,7 @@
-// Package helpers runs the optional Python helper (python/sarina_helpers): the
-// original embedding and voice code that needs onnxruntime, faster-whisper and
-// Piper, none of which Go can use. See python/sarina_helpers/PROTOCOL.md.
+// Package helpers runs the optional ML and voice helper, sarina-helpers (packaging/helpers, Rust): embeddings, memory
+// search and voice chat, which need ONNX Runtime, whisper.cpp and Piper. See packaging/helpers/PROTOCOL.md.
 //
-// The Go build never imports Python code: it locates an interpreter, starts
-// `python -m sarina_helpers ...`, and talks to it over pipes.
+// The Go build links none of it: it starts the helper program and talks to it over pipes.
 package helpers
 
 import (
@@ -20,10 +18,10 @@ import (
 	"time"
 )
 
-// Environment variables.
+// Where the helper is.
 const (
-	PythonEnv = "SARINA_HELPERS_PYTHON" // interpreter to use (default: python3, then python, on PATH)
-	PathEnv   = "SARINA_HELPERS_PATH"   // directory holding the sarina_helpers package (added to PYTHONPATH)
+	BinEnv     = "SARINA_HELPERS_BIN"             // another helper program (as given)
+	RustHelper = "/usr/lib/sarina/sarina-helpers" // where the package installs it
 )
 
 // ProtocolVersion is the JSON-lines protocol version this build speaks.
@@ -38,55 +36,32 @@ const MaxAnswerBytes = 64 << 20
 const stderrKeep = 64 << 10
 
 // InstallHint tells the operator how to get the helper.
-const InstallHint = "pip install python/sarina_helpers[ml,voice] (or set " + PythonEnv + " / " + PathEnv + ")"
+const InstallHint = RustHelper + " from the sarina package, with onnxruntime-cpu (or set " + BinEnv + ")"
 
-// Python finds the interpreter.
-func Python() (string, error) {
-	if p := os.Getenv(PythonEnv); p != "" {
-		return p, nil
+// Program is the helper to run: SARINA_HELPERS_BIN when set, else the installed one.
+func Program() string {
+	if p := os.Getenv(BinEnv); p != "" {
+		return p
 	}
-	for _, name := range []string{"python3", "python"} {
-		if p, err := exec.LookPath(name); err == nil {
-			return p, nil
-		}
-	}
-	return "", fmt.Errorf("no Python interpreter found (set %s)", PythonEnv)
+	return RustHelper
 }
 
-// Command builds `python -P -m sarina_helpers args...` with PYTHONPATH adjusted.
-func Command(args ...string) (*exec.Cmd, error) {
-	py, err := Python()
-	if err != nil {
-		return nil, err
-	}
-	// -P: the current folder is not put on the import path, so a sarina_helpers/ folder planted where this runs is not used
-	cmd := exec.Command(py, append([]string{"-P", "-m", "sarina_helpers"}, args...)...)
-	cmd.Env = os.Environ()
-	if dir := os.Getenv(PathEnv); dir != "" {
-		pp := dir
-		if old := os.Getenv("PYTHONPATH"); old != "" {
-			pp = dir + string(os.PathListSeparator) + old
-		}
-		cmd.Env = append(cmd.Env, "PYTHONPATH="+pp)
-	}
-	return cmd, nil
+// Command builds `sarina-helpers args...`.
+func Command(args ...string) *exec.Cmd {
+	return exec.Command(Program(), args...)
 }
 
-// Available reports whether the helper package can be run, with the reason if not.
-// The helper prints its own usage line (and exits 2) when run without arguments,
-// which is how "importable" is told apart from "interpreter ran but no module".
+// Available reports whether the helper runs, with the reason if not. The helper prints its own usage line (and exits 2)
+// when run without arguments.
 func Available() error {
-	cmd, err := Command()
-	if err != nil {
-		return err
-	}
+	cmd := Command()
 	out := &tail{max: stderrKeep}
 	cmd.Stdout, cmd.Stderr = out, out
 	_ = cmd.Run()
-	if strings.Contains(out.String(), "usage: python -m sarina_helpers") {
+	if strings.Contains(out.String(), "usage: sarina-helpers ") {
 		return nil
 	}
-	return fmt.Errorf("the Python helper is not importable: %s", lastLine(out.String()))
+	return fmt.Errorf("the helper does not run: %s", lastLine(out.String()))
 }
 
 func lastLine(s string) string {
@@ -98,18 +73,14 @@ func lastLine(s string) string {
 	return strings.TrimSpace(lines[len(lines)-1])
 }
 
-// Passthrough runs `python -m sarina_helpers args...` wired to the given streams
+// Passthrough runs `sarina-helpers args...` wired to the given streams
 // and returns its exit code. If the helper cannot run, it prints why and returns 1.
 func Passthrough(stdin io.Reader, stdout, stderr io.Writer, args ...string) int {
 	if err := Available(); err != nil {
 		fmt.Fprintf(stderr, "sarina: %v\n  install: %s\n", err, InstallHint)
 		return 1
 	}
-	cmd, err := Command(args...)
-	if err != nil {
-		fmt.Fprintf(stderr, "sarina: %v\n", err)
-		return 1
-	}
+	cmd := Command(args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
 	if err := cmd.Run(); err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
@@ -121,7 +92,7 @@ func Passthrough(stdin io.Reader, stdout, stderr io.Writer, args ...string) int 
 	return 0
 }
 
-// Server is a running `sarina_helpers serve --model-dir D` process.
+// Server is a running `sarina-helpers serve --model-dir D` process.
 type Server struct {
 	cmd     *exec.Cmd
 	in      io.WriteCloser
@@ -155,10 +126,8 @@ func StartServer(modelDir string) (*Server, error) {
 }
 
 func startServer(modelDir string, maxLine int) (*Server, error) {
-	cmd, err := Command("serve", "--model-dir", modelDir)
-	if err != nil {
-		return nil, err
-	}
+	cmd := Command("serve", "--model-dir", modelDir)
+	var err error
 	s := &Server{cmd: cmd, stderr: &tail{max: stderrKeep}, maxLine: maxLine}
 	cmd.Stderr = s.stderr
 	if s.in, err = cmd.StdinPipe(); err != nil {

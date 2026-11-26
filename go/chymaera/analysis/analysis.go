@@ -5,7 +5,7 @@
 // not parse .nfc/.sub files itself; that stays the App's job.
 //
 // Semantic grouping needs an embedding model (onnxruntime) and is NOT done in
-// Go: the caller fills SemanticGroups from the Python helper, or supplies the
+// Go: the caller fills SemanticGroups from the embedding helper, or supplies the
 // reason it is unavailable.
 package analysis
 
@@ -33,7 +33,7 @@ type CaptureAnalysis struct {
 	DuplicateUIDs   []NameList
 	FrequencyGroups []NameList
 	RareFrequencies []string
-	// SemanticGroups are sets of similar captures (names), from the Python helper.
+	// SemanticGroups are sets of similar captures (names), from the embedding helper.
 	SemanticGroups [][]string
 	// SemanticUnavailableReason is shown in the report when non-empty.
 	SemanticUnavailableReason string

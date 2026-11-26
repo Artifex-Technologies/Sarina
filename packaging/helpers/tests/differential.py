@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Sarina's ML and voice helper: the Rust build against the Python package, side by side (docs/RUST_PORT.md
-"The ML and voice helper"). Standard library only; it runs the Python helper under the interpreters that have its extras.
+"""Sarina's ML and voice helper: the Rust build against the Python package it was ported from, side by side
+(docs/RUST_PORT.md "The ML and voice helper"). Standard library only. The Python package left the repository after commit
+PY_REV (below); it is read from that commit (git archive, so the full history is needed) into the work folder and run
+under the interpreters that have its extras.
 
     cargo build --features parity                       # in packaging/helpers
     python3 -I packaging/helpers/tests/differential.py [--only serve|memory|tts|voice|stt]
@@ -42,7 +44,10 @@ from pathlib import Path
 
 HOME = Path.home()
 REPO = Path(__file__).resolve().parents[3]
-HELPERS_PY = REPO / 'python' / 'sarina_helpers'
+#: The last commit with the Python package (python/sarina_helpers), the referee of every comparison here.
+PY_REV = 'de7636c404b504e6d731cc76241d880fad693280'
+#: Where main() puts that package (the folder holding sarina_helpers/).
+HELPERS_PY = Path()
 TTS_DIR = HOME / '.local/share/labyrinth/tts'
 VOICE = TTS_DIR / 'voices/en_US-amy-medium.onnx'
 STT_MODEL = HOME / '.local/share/labyrinth/stt/ggml-base.en.bin'
@@ -703,7 +708,11 @@ def main() -> int:
     ap.add_argument('--keep', action='store_true')
     args = ap.parse_args()
     work = Path(tempfile.mkdtemp(prefix='sarina-helpers-diff-', dir=os.environ.get('DIFF_TMP')))
+    global HELPERS_PY
     try:
+        tree = subprocess.run(['git', '-C', str(REPO), 'archive', PY_REV, 'python/sarina_helpers'], capture_output=True, check=True).stdout
+        subprocess.run(['tar', '-x', '-C', str(work)], input=tree, check=True)
+        HELPERS_PY = work / 'python' / 'sarina_helpers'
         ml_ort = ort_lib(args.ml_python)
         voice_ort = ort_lib(args.voice_python)
         models = make_models(work, args.ml_python)

@@ -1,4 +1,4 @@
-//! Sarina's ML and voice helper in Rust: the port of `python/sarina_helpers` (PROTOCOL.md). One binary, `sarina-helpers`,
+//! Sarina's ML and voice helper in Rust: the port of the Python package `sarina_helpers` (PROTOCOL.md). One binary, `sarina-helpers`,
 //! with the Python module's three modes and the same answers:
 //!
 //! - `serve --model-dir D`: the JSON-lines embedding server desktop-audit and chymaera-analyze start (`serve`)

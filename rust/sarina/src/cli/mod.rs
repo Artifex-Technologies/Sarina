@@ -137,7 +137,7 @@ pub const COMMANDS: &[(&str, &str, Command)] = &[
     ("memory-review-approve", "approve a memory proposal: memory-review-approve <entry_id>", memorycmd::memory_review_approve),
     ("memory-review-list", "list memory proposals awaiting review", memorycmd::memory_review_list),
     ("memory-review-reject", "reject a memory proposal: memory-review-reject <entry_id>", memorycmd::memory_review_reject),
-    ("memory-search", "semantic search over saved sessions (needs the Python helper): memory-search --model-dir D <query...>", crate::helpers::memory_search_command),
+    ("memory-search", "semantic search over saved sessions (needs the ML helper): memory-search --model-dir D <query...>", crate::helpers::memory_search_command),
     ("memory-show", "print the curated-memory block exactly as sessions receive it", memorycmd::memory_show),
     ("memory-status", "show curated memory: paths, usage and entries", memorycmd::memory_status),
     ("note", "drop a quick note into the vault's Inbox (today's note, one line each, with the time): note [--path DIR] TEXT... (or the text on stdin)", crate::vault::tools::note_command),
@@ -161,7 +161,7 @@ pub const COMMANDS: &[(&str, &str, Command)] = &[
     ("vault-search", "search the vault: vault-search [--path DIR] WORDS...", crate::vault::tools::search_command),
     ("vault-tidy", "drop old small talk from the talk log (greetings, thanks, status checks) and her own voice heard back; shows the lines and asks first: vault-tidy [--path VAULT] [--older-than DAYS] [--yes] [--dry-run]", crate::insight::tidy_command),
     ("version", "which build this is: Sarina's version, the commit it was built from, when, and whether the tree had changes (--json)", version::version_command),
-    ("voice-chat", "push-to-talk voice conversation (needs the Python helper): voice-chat --stt-model-dir D --tts-model F", crate::helpers::voice_chat_command),
+    ("voice-chat", "push-to-talk voice conversation (needs the ML helper): voice-chat --stt-model-dir D --tts-model F", crate::helpers::voice_chat_command),
 ];
 
 /// The command `name` runs, if there is one (docs/RUST_PORT.md "The plan for `sarina-rs`").

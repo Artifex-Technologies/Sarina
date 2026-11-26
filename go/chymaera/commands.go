@@ -21,9 +21,9 @@ import (
 // TokenEnv names the environment variable holding the console token.
 const TokenEnv = "CHYMAERA_CONSOLE_TOKEN"
 
-// SemanticHelperReason is shown when --model-dir is given but the Python
-// embedding helper (python/sarina_helpers) cannot be used; the detail follows.
-const SemanticHelperReason = "semantic grouping needs the Python embedding helper"
+// SemanticHelperReason is shown when --model-dir is given but the embedding
+// helper (sarina-helpers) cannot be used; the detail follows.
+const SemanticHelperReason = "semantic grouping needs the embedding helper"
 
 func init() {
 	cli.Register("chymaera-console", "show the Argus App console status and recent captures", consoleCommand)
@@ -107,7 +107,7 @@ func analyzeCommand(env *cli.Env, args []string) int {
 	fs.SetOutput(env.Stderr)
 	cf := addConnFlags(fs, env)
 	limit := fs.Int("limit", 100, "number of recent captures to analyse")
-	modelDir := fs.String("model-dir", "", "embedding model directory (semantic grouping; needs the Python helper, see python/sarina_helpers)")
+	modelDir := fs.String("model-dir", "", "embedding model directory (semantic grouping; needs the ML helper, sarina-helpers)")
 	threshold := fs.Float64("similarity-threshold", 0.75, "semantic grouping threshold")
 	if code, ok := parse(fs, args); !ok {
 		return code
@@ -123,7 +123,7 @@ func analyzeCommand(env *cli.Env, args []string) int {
 		fmt.Fprintln(env.Stdout, err)
 		return 1
 	}
-	reason := "no embedding model given (pass --model-dir; semantic grouping needs the Python embedding helper)"
+	reason := "no embedding model given (pass --model-dir; semantic grouping needs the embedding helper)"
 	var groups [][]string
 	if *modelDir != "" {
 		reason = ""

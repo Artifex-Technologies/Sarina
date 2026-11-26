@@ -1,4 +1,4 @@
-//! `sarina-helpers serve --model-dir D`: the JSON-lines server (python/sarina_helpers/PROTOCOL.md, protocol 1) that
+//! `sarina-helpers serve --model-dir D`: the JSON-lines server (PROTOCOL.md, protocol 1) that
 //! desktop-audit and chymaera-analyze start. One request per line, answered in order; EOF ends it (exit 0). The answers are
 //! the Python's, byte for byte, but for the vectors' last bits when another ONNX Runtime build runs the model.
 //!

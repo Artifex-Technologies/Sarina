@@ -12,18 +12,18 @@ import (
 )
 
 // HelperScorer builds a semantic Scorer for a model directory by starting the
-// Python helper (python/sarina_helpers; ONNX embeddings are Python-only). It
+// ML helper (sarina-helpers, which has the ONNX embeddings). It
 // fails, with the reason, when the helper is not installed or cannot load the
 // model, or when its prototype set differs from this build's (cached scores
 // would then mean something else). Tests replace this variable.
 var HelperScorer = func(modelDir string) (Scorer, error) {
 	srv, err := helpers.StartServer(modelDir)
 	if err != nil {
-		return nil, fmt.Errorf("semantic classification needs the Python helper (%s): %v", helpers.InstallHint, err)
+		return nil, fmt.Errorf("semantic classification needs the ML helper (%s): %v", helpers.InstallHint, err)
 	}
 	if srv.Prototypes != PrototypesFingerprint() {
 		srv.Close()
-		return nil, fmt.Errorf("the Python helper's category prototypes differ from this build's; update python/sarina_helpers")
+		return nil, fmt.Errorf("the ML helper's category prototypes differ from this build's; update sarina-helpers")
 	}
 	return &helperScorer{srv}, nil
 }

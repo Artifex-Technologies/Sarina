@@ -429,7 +429,7 @@ How each corpus is made (the Go side, `go/internal/parity` and each `*parity_tes
   answer: Sarina embeds at most 32 texts at a time, and even 256 texts of a 4096-number model at 24 bytes a number in
   JSON is about 24 MiB, so a real answer never comes near it. The rule for the clients still to come (llm, limbo, mcp,
   helpers): every read from another process gets a bound, in both languages.
-- **The Python helper's pipes are bounded and its failures reported reliably, in Go and Rust (2026-11-12).** Go read an
+- **The ML helper's pipes are bounded and its failures reported reliably, in Go and Rust (2026-11-12).** Go read an
   answer line without a limit and kept all of the helper's error output for its whole life; both now read at most
   `MaxAnswerBytes` (64 MiB) a line (a longer one stops the helper) and keep the last 64 KiB of its error output. Go
   could also name a dying helper's reason before its error output was copied (a race: "helper exited: EOF" instead of
@@ -863,12 +863,11 @@ set), no question, only spaces, `--scores` alone, twice, after the question, OLL
 fresh, stale and a planted pipe, XDG_STATE_HOME, the embedder failing and not answering; `trachtenberg` on every rule,
 a learner's answer right and wrong, bad numbers, the 40-digit wrap, an extra argument, too few. Mutation run 7 of 7.
 
-**2. The helper's commands** (40 cases, `helper_cases`): `memory-search` and `voice-chat` against a stand-in
-interpreter on the case's PATH (it prints the helper's usage when run bare, else logs its arguments and PYTHONPATH and
-answers): no Python, the usual call with standard input passed on, no arguments, the helper failing (exit 3) and killed
-(Go's -1, exit 255), a long answer, the module not importable with and without a reason, only `python` on PATH,
-SARINA_HELPERS_PYTHON absolute, missing and a bare name, SARINA_HELPERS_PATH with and without PYTHONPATH, `-h`, standard
-output closed, and **standard input a terminal**: Go's commands give the helper the process's own files (`env.Stdin` is
+**2. The helper's commands** (32 cases, `helper_cases`): `memory-search` and `voice-chat` against a stand-in
+sarina-helpers (SARINA_HELPERS_BIN; it prints the helper's usage when run bare, else logs its arguments and answers): no
+helper, the usual call with standard input passed on, no arguments, the helper failing (exit 3) and killed (Go's -1, exit
+255), a long answer, a program that is not the helper with and without a reason, SARINA_HELPERS_BIN elsewhere, missing and
+a bare name, `-h`, standard output closed, and **standard input a terminal**: Go's commands give the helper the process's own files (`env.Stdin` is
 `os.Stdin`), so push-to-talk reads the terminal; the Rust commands do the same (`helpers::passthrough_inherit`), not the
 pipes of `passthrough`. voice-chat's `--sarina-bin` given as two words, as `--sarina-bin=`, empty, and a longer flag that
 is not it. On purpose: the binary voice-chat names for each turn is the build's own file, so it is now sarina-rs (the
@@ -915,7 +914,7 @@ an unreadable entry; pacman missing or failing; `--apply` to the default, XDG_DA
 an entry's name, the target a file or read-only; `--remove-generated` (markers empty, in a later group, through a link,
 a pipe, a .txt; no folder, a file, read-only); `--model-dir` with thresholds below, at and above a score, the cache
 (hits, a null label, a score that is not a number, another prototype set, damaged, a pipe at its name, its folder a
-file), `--no-cache`, other prototypes, another protocol, the helper dying, no Python, SARINA_HELPERS_PYTHON; flags.
+file), `--no-cache`, other prototypes, another protocol, the helper dying, no helper, SARINA_HELPERS_BIN; flags.
 Found and fixed in Go and Rust (Go tests that failed before: `go/desktop/planted_test.go`,
 `go/analysiscache/planted_test.go`): a named pipe named *.desktop held the scan and `--remove-generated` for ever;
 **`--apply` wrote an entry through a link planted at its name** (into whatever file it named; now only a regular file
@@ -1124,7 +1123,7 @@ The last Python of Sarina's runtime: `python/sarina_helpers` (about 1,200 lines:
 classifier and Argus capture grouping, speech to text, text to speech, audio I/O, the JSON-lines `serve` protocol) is now
 `sarina-helpers`, a Rust binary in its own crate beside packaging/voice and packaging/voiced, installed as
 `/usr/lib/sarina/sarina-helpers`. The design, the module map and the measurements are in `packaging/helpers/README.md`;
-the protocol is unchanged (`python/sarina_helpers/PROTOCOL.md`).
+the protocol is unchanged (`packaging/helpers/PROTOCOL.md`).
 
 **Who calls what** (grepped in Go and Rust): `serve` from desktop-audit's `--model-dir` (ping, classify) and
 chymaera-analyze's `--model-dir` (ping, group); nothing calls `embed` (kept, as the protocol has it); `memory-search` and
@@ -1139,7 +1138,8 @@ terminal), Piper through ONNX Runtime with espeak-ng's library loaded at run tim
 and the ggml model Super+S uses do: no download). Light: 4.5 MB, a server answers its first request in 0.03 s with 38 MB
 (the Python: 0.13 s, 71 MB) on the stand-in model; aarch64 builds and tests in CI.
 
-**Proof** (`packaging/helpers/tests/differential.py`, the Python under the venvs that have its extras): 340 cases, no
+**Proof** (`packaging/helpers/tests/differential.py`, the Python package read from the last commit that had it and run
+under the venvs that have its extras): 340 cases, no
 difference. serve 264 (byte for byte with the same ONNX Runtime build, then within 6.8e-8 with the system's 1.29:
 tolerance 1e-6, the reasoning is in the script), memory-search 34 (stdout, stderr, status), text to speech 9 (WAVs byte for
 byte; phonemes identical for 1,221 of 1,228 texts, the rest where piper's own espeak-ng build pronounces differently),
@@ -1154,15 +1154,11 @@ memory-search skips pipes, dangling links and files over 256 MiB, and prints an 
 a traceback; voice-chat's speech to text is whisper.cpp (its `--stt-model-dir` names a ggml model) and its "missing" line
 names whisper-cpp and espeak-ng.
 
-**The switch** (made with this commit): the core's `helpers` runs the Rust helper when `/usr/lib/sarina/sarina-helpers` is
-installed (`SARINA_HELPERS_BIN` names another); `SARINA_HELPERS=python` or `SARINA_HELPERS_PYTHON` goes back to the Python
-package. The CLI differential sets `SARINA_HELPERS=python`, since the Go build only knows the Python one.
-
-**The rollback copy:** `python/sarina_helpers` stays in the tree and in both PKGBUILDs (its wheel; `makedepends`
-python-build, -installer, -wheel, -setuptools; the `python` optdepends) until the Go build is deleted, together with the
-core's Python branch (`python()`, `PYTHON_ENV`, `PATH_ENV`) and the texts that still name the Python helper (`INSTALL_HINT`,
-desktop-audit's and chymaera-analyze's "needs the Python helper", their Go-made fixtures in `testdata/parity/helpers.json`
-and the CLI differential's stand-in interpreter cases). Speech to text is whisper.cpp; faster-whisper is not used.
+**The switch** (2026-11-18): the core's `helpers` runs `/usr/lib/sarina/sarina-helpers` (`SARINA_HELPERS_BIN` names
+another). After a week with the Python package as the rollback copy, it left the tree and the packages (2026-11-26), with
+the core's way back to it; Go and Rust both start only `sarina-helpers` since then (the Go fixtures in
+`testdata/parity/helpers.json` and the CLI differential's stand-ins are a stand-in `sarina-helpers`). Speech to text is
+whisper.cpp; faster-whisper is not used.
 
 ## sarina-tone (`rust/sarina/src/tone.rs`, `src/bin/sarina-tone.rs`, 2026-11-18)
 

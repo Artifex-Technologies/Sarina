@@ -1,9 +1,8 @@
 # sarina-helpers
 
-Sarina's ML and voice helper in Rust: the port of the Python package `python/sarina_helpers` (about 1,200 lines). Same
-modes, same command lines, same JSON-lines protocol (`python/sarina_helpers/PROTOCOL.md`, protocol 1), same answers. The
-Rust core starts it instead of the Python one when it is installed (`/usr/lib/sarina/sarina-helpers`); the Python package
-stays installed for the rollback week (below).
+Sarina's ML and voice helper in Rust: the port of the Python package `sarina_helpers` (about 1,200 lines). Same modes,
+same command lines, same JSON-lines protocol ([PROTOCOL.md](PROTOCOL.md), protocol 1), same answers. Sarina's core starts
+it as `/usr/lib/sarina/sarina-helpers` (`SARINA_HELPERS_BIN` names another program).
 
 | Mode | Who calls it | What |
 | --- | --- | --- |
@@ -16,7 +15,8 @@ cd packaging/helpers
 cargo build --release                       # target/release/sarina-helpers (4.5 MB)
 cargo test                                  # the unit tests (no model, no ONNX Runtime needed)
 cargo build --features parity               # also sarina-helpers-parity, the side-by-side driver (never installed)
-# from the repository root, on the processor, nothing recorded or played, no model downloaded:
+# from the repository root (full history: the Python is read from a pinned commit), on the processor, nothing recorded
+# or played, no model downloaded:
 python3 -I packaging/helpers/tests/differential.py [--only serve|memory|tts|voice|stt]
 ```
 
@@ -67,6 +67,8 @@ piper's for 1,221 of 1,228 texts; the rest differ where the two espeak-ng builds
 
 ## How it was proved (`tests/differential.py`)
 
+The Python package left the repository on 2026-11-26; the script reads it from the last commit that had it (`PY_REV`).
+
 No sentence-embedding model is on this computer, so the server and the search run on two stand-ins: a BERT-shaped model
 made by `tests/make_standin_model.py` (WordPiece tokenizer, the three int64 inputs, MatMul, Tanh, LayerNormalization) and
 the Chatterbox voice's token-embedding graph with its GPT-2 tokenizer (already on disk). The Rust build loads the very
@@ -94,11 +96,3 @@ onnxruntime 1.29 with a tolerance of 1e-6 on vector components and scores (measu
   traceback (a model ONNX Runtime cannot load), the Rust prints the exception's text alone (status 1 both).
 - voice-chat: speech to text and its model (above); the "missing" message names the Rust helper's pieces
   (`alsa-utils (arecord/aplay), whisper-cpp (whisper-cli), espeak-ng, onnxruntime`).
-
-## The switch and the rollback week
-
-Installed, the helper is used at once: the core's `helpers` runs `/usr/lib/sarina/sarina-helpers` when it exists.
-`SARINA_HELPERS=python` (or `SARINA_HELPERS_PYTHON=/usr/bin/python3`) goes back to the Python package, which stays
-installed until about 2026-11-25. Then (docs/RUST_PORT.md "The ML and voice helper"): `python/sarina_helpers` and its
-packaging go, `SARINA_HELPERS_PYTHON` / `SARINA_HELPERS_PATH` with them, and the core's texts that name the Python helper
-are rewritten.

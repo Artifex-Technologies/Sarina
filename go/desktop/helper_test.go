@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 func useFakeHelper(t *testing.T, fingerprint string) string {
 	t.Helper()
 	exe, _ := os.Executable()
-	t.Setenv(helpers.PythonEnv, exe)
+	t.Setenv(helpers.BinEnv, exe)
 	t.Setenv(fakehelper.EnvOn, "1")
 	t.Setenv(fakehelper.EnvLabel, "Graphics")
 	t.Setenv(fakehelper.EnvFingerprint, fingerprint)
@@ -59,7 +59,7 @@ func TestHelperWithDifferentPrototypesIsRefused(t *testing.T) {
 func TestHelperModelLoadFailureFallsBack(t *testing.T) {
 	useFakeHelper(t, PrototypesFingerprint())
 	out, _, code := runCmd(t, fakeDeps(), t.TempDir(), "--model-dir", "bad")
-	if code != 0 || !strings.Contains(out, "no model.onnx in bad") || !strings.Contains(out, "Python helper") {
+	if code != 0 || !strings.Contains(out, "no model.onnx in bad") || !strings.Contains(out, "ML helper") {
 		t.Fatalf("code %d\n%s", code, out)
 	}
 }

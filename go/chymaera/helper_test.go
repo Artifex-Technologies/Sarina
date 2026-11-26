@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 
 func TestAnalyzeWithHelperPrintsSemanticGroups(t *testing.T) {
 	exe, _ := os.Executable()
-	t.Setenv(helpers.PythonEnv, exe)
+	t.Setenv(helpers.BinEnv, exe)
 	t.Setenv(fakehelper.EnvOn, "1")
 	log := filepath.Join(t.TempDir(), "log")
 	t.Setenv(fakehelper.EnvLog, log)
@@ -46,12 +46,12 @@ func TestAnalyzeWithHelperPrintsSemanticGroups(t *testing.T) {
 
 func TestAnalyzeHelperLoadFailureKeepsStatisticsAndSaysWhy(t *testing.T) {
 	exe, _ := os.Executable()
-	t.Setenv(helpers.PythonEnv, exe)
+	t.Setenv(helpers.BinEnv, exe)
 	t.Setenv(fakehelper.EnvOn, "1")
 	port, _ := serve(t, "", []any{map[string]any{"type": "nfc", "name": "a.nfc", "meta": `{"uid":"AA"}`}})
 	code, out, errOut := run([]string{"chymaera-analyze", "--port", fmt.Sprint(port), "--model-dir", "bad"}, "", nil)
 	if code != 0 || !strings.Contains(errOut, "no model.onnx in bad") || !strings.Contains(out, "total captures: 1") ||
-		!strings.Contains(out, "Semantic grouping unavailable: semantic grouping needs the Python embedding helper") {
+		!strings.Contains(out, "Semantic grouping unavailable: semantic grouping needs the embedding helper") {
 		t.Fatalf("code %d err %q out %q", code, errOut, out)
 	}
 }

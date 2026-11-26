@@ -8,11 +8,11 @@ import (
 )
 
 func init() {
-	cli.Register("memory-search", "semantic search over saved sessions (needs the Python helper): memory-search --model-dir D <query...>",
+	cli.Register("memory-search", "semantic search over saved sessions (needs the ML helper): memory-search --model-dir D <query...>",
 		func(env *cli.Env, args []string) int {
 			return Passthrough(env.Stdin, env.Stdout, env.Stderr, append([]string{"memory-search"}, args...)...)
 		})
-	cli.Register("voice-chat", "push-to-talk voice conversation (needs the Python helper): voice-chat --stt-model-dir D --tts-model F",
+	cli.Register("voice-chat", "push-to-talk voice conversation (needs the ML helper): voice-chat --stt-model-dir D --tts-model F",
 		voiceChat)
 }
 

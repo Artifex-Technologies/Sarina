@@ -17,9 +17,7 @@ Contents:
   and installs `sarina-tone` (`/usr/bin/sarina-tone`, the Rust build's second program)
   and the optional ML/voice helper `sarina-helpers` (Rust, `packaging/helpers`,
   `/usr/lib/sarina/sarina-helpers`; it needs `onnxruntime-cpu`, and for voice-chat
-  `whisper-cpp`, `espeak-ng` and `alsa-utils`). The Python helper wheel
-  (`python/sarina_helpers`) is still installed for the rollback week
-  (`SARINA_HELPERS=python`).
+  `whisper-cpp`, `espeak-ng` and `alsa-utils`).
 - The distros do not use this PKGBUILD: Labyrinth OS and LykanOS install
   `sarina-git`, built by Labyrinth_OS's recipe (`packages/pkgbuilds/sarina-git`),
   which also builds `sarina-voice` and `sarina-voiced`.

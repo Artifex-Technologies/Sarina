@@ -805,7 +805,7 @@ func TestCommandOnlyCategoryWritesThoseAlone(t *testing.T) {
 
 func TestCommandModelDirUnavailableFallsBackToDeterministic(t *testing.T) {
 	out, _, code := runCmd(t, fakeDeps(), t.TempDir(), "--model-dir", "/some/model")
-	if code != 0 || !strings.Contains(out, "semantic inference unavailable:") || !strings.Contains(out, "Python helper") || !strings.Contains(out, "nmap") {
+	if code != 0 || !strings.Contains(out, "semantic inference unavailable:") || !strings.Contains(out, "ML helper") || !strings.Contains(out, "nmap") {
 		t.Fatal(out)
 	}
 }

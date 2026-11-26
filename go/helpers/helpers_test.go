@@ -16,14 +16,14 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// useFake points the helper at this test binary acting as the Python helper.
+// useFake points the helper at this test binary acting as the helper.
 func useFake(t *testing.T) {
 	t.Helper()
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv(PythonEnv, exe)
+	t.Setenv(BinEnv, exe)
 	t.Setenv(fakehelper.EnvOn, "1")
 }
 
@@ -64,17 +64,19 @@ func TestVoiceChatAddsOwnBinaryUnlessGiven(t *testing.T) {
 }
 
 func TestMissingHelperGivesClearMessage(t *testing.T) {
-	// An interpreter that runs but has no sarina_helpers module: `true`-like behaviour via the test binary without the fake switch.
-	exe, _ := os.Executable()
-	t.Setenv(PythonEnv, exe)
-	t.Setenv(fakehelper.EnvOn, "")
+	// A program that runs but is not the helper (no usage line), and one that is not there.
+	other := filepath.Join(t.TempDir(), "other")
+	if err := os.WriteFile(other, []byte("#!/bin/sh\necho 'something else' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(BinEnv, other)
 	code, _, errOut := run(t, "memory-search", "q")
-	if code != 1 || !strings.Contains(errOut, "not importable") || !strings.Contains(errOut, "install:") {
+	if code != 1 || !strings.Contains(errOut, "the helper does not run: something else") || !strings.Contains(errOut, "install:") {
 		t.Fatalf("code %d err %q", code, errOut)
 	}
-	t.Setenv(PythonEnv, filepath.Join(t.TempDir(), "no-such-python"))
+	t.Setenv(BinEnv, filepath.Join(t.TempDir(), "no-such-helper"))
 	code, _, errOut = run(t, "memory-search", "q")
-	if code != 1 || !strings.Contains(errOut, "not importable") {
+	if code != 1 || !strings.Contains(errOut, "the helper does not run: no output") {
 		t.Fatalf("code %d err %q", code, errOut)
 	}
 }

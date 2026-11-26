@@ -1,4 +1,4 @@
-//! JSON as the Python helper read and wrote it: `json.loads` with CPython's own error messages and positions
+//! JSON as the Python package read and wrote it: `json.loads` with CPython's own error messages and positions
 //! ("Expecting ',' delimiter: line 1 column 7 (char 6)"), and `json.dumps(obj, separators=(',', ':'))` (every character
 //! outside printable ASCII escaped, floats as `repr()` writes them, `NaN` and `Infinity` allowed). `py_str` is Python's
 //! `str()` of a decoded value, which the capture grouping embeds.
